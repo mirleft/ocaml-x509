@@ -87,70 +87,19 @@ type certificate_failure =
 
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
-type key_usage = [
-  | `DigitalSignature
-  | `ContentCommitment
-  | `KeyEncipherment
-  | `DataEncipherment
-  | `KeyAgreement
-  | `KeyCertSign
-  | `CRLSign
-  | `EncipherOnly
-  | `DeciperOnly
-]
-
-type extended_key_usage = [
-  | `Any
-  | `ServerAuth
-  | `ClientAuth
-  | `CodeSigning
-  | `EmailProtection
-  | `IPSecEnd
-  | `IPSecTunnel
-  | `IPSecUser
-  | `TimeStamping
-  | `OCSPSigning
-  | `Other
-]
-
 (* partial: does not deal with other public key types *)
 let cert_type { asn = cert } =
   match cert.tbs_cert.pk_info with
   | PK.RSA _    -> `RSA
 
-let usage_export = Extension.(function
-  | Digital_signature  -> `DigitalSignature
-  | Content_commitment -> `ContentCommitment
-  | Key_encipherment   -> `KeyEncipherment
-  | Data_encipherment  -> `DataEncipherment
-  | Key_agreement      -> `KeyAgreement
-  | Key_cert_sign      -> `KeyCertSign
-  | CRL_sign           -> `CRLSign
-  | Encipher_only      -> `EncipherOnly
-  | Decipher_only      -> `DeciperOnly )
-
 let cert_usage { asn = cert } =
   match extn_key_usage cert with
-  | Some (_, Extension.Key_usage usages) -> Some (List.map usage_export usages)
+  | Some (_, Extension.Key_usage usages) -> Some usages
   | _                                    -> None
-
-(* partial: does not deal with 'Other of OID.t' *)
-let extended_usage_export = Extension.(function
-  | Any              -> `Any
-  | Server_auth      -> `ServerAuth
-  | Client_auth      -> `ClientAuth
-  | Code_signing     -> `CodeSigning
-  | Email_protection -> `EmailProtection
-  | Ipsec_end        -> `IPSecEnd
-  | Ipsec_tunnel     -> `IPSecTunnel
-  | Ipsec_user       -> `IPSecUser
-  | Time_stamping    -> `TimeStamping
-  | Ocsp_signing     -> `OCSPSigning
-  | Other _          -> `Other )
 
 let cert_extended_usage { asn = cert } =
   match extn_ext_key_usage cert with
-  | Some (_, Extension.Ext_key_usage usages) -> Some (List.map extended_usage_export usages)
+  | Some (_, Extension.Ext_key_usage usages) -> Some usages
   | _                                        -> None
 
 
@@ -259,7 +208,7 @@ let validate_ca_extensions { asn = cert } =
   ( match extn_key_usage cert with
     (* When present, conforming CAs SHOULD mark this extension as critical *)
     (* yeah, you wish... *)
-    | Some (_, Key_usage usage) -> List.mem Key_cert_sign usage
+    | Some (_, Key_usage usage) -> List.mem `Key_cert_sign usage
     | _                         -> false ) &&
 
   (* if we require this, we cannot talk to github.com

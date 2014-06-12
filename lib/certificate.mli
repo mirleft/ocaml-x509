@@ -25,35 +25,9 @@ type certificate_failure =
 
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
-type key_usage = [
-  | `DigitalSignature
-  | `ContentCommitment
-  | `KeyEncipherment
-  | `DataEncipherment
-  | `KeyAgreement
-  | `KeyCertSign
-  | `CRLSign
-  | `EncipherOnly
-  | `DeciperOnly
-]
-
-type extended_key_usage = [
-  | `Any
-  | `ServerAuth
-  | `ClientAuth
-  | `CodeSigning
-  | `EmailProtection
-  | `IPSecEnd
-  | `IPSecTunnel
-  | `IPSecUser
-  | `TimeStamping
-  | `OCSPSigning
-  | `Other
-]
-
 val cert_type           : certificate -> key_type
-val cert_usage          : certificate -> key_usage list option
-val cert_extended_usage : certificate -> extended_key_usage list option
+val cert_usage          : certificate -> Asn_grammars.Extension.key_usage list option
+val cert_extended_usage : certificate -> Asn_grammars.Extension.extended_key_usage list option
 
 val verify_chain_of_trust :
   ?host:host -> time:int -> anchors:(certificate list) -> stack
