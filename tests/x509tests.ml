@@ -1,11 +1,10 @@
 open OUnit2
 
-open Testlib
+open X509
+open Certificate
 
-open Tls
-open Tls.X509
-
-open Tls.Certificate
+let cs_mmap file =
+  Unix_cstruct.of_fd Unix.(openfile file [O_RDONLY] 0)
 
 let load file =
   cs_mmap ("./tests/testcertificates/" ^ file ^ ".pem")
