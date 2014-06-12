@@ -191,6 +191,7 @@ let raw_cert_hack { asn ; raw } =
   Cstruct.(sub raw 4 (len raw - (siglen + 4 + 19 + off)))
 
 let validate_signature { asn = trusted } cert =
+  let module A = Asn_grammars.Algorithm in
 
   let tbs_raw = raw_cert_hack cert in
   match trusted.tbs_cert.pk_info with
@@ -205,12 +206,12 @@ let validate_signature { asn = trusted } cert =
           | Some (algo, hash) ->
               let res = Cs.equal hash (Hash.digest algo tbs_raw) in
               match (cert.asn.signature_algo, algo) with
-              | (MD5_RSA   , `MD5   ) -> res
-              | (SHA1_RSA  , `SHA1  ) -> res
-              | (SHA224_RSA, `SHA224) -> res
-              | (SHA256_RSA, `SHA256) -> res
-              | (SHA384_RSA, `SHA384) -> res
-              | (SHA512_RSA, `SHA512) -> res
+              | (A.MD5_RSA   , `MD5   ) -> res
+              | (A.SHA1_RSA  , `SHA1  ) -> res
+              | (A.SHA224_RSA, `SHA224) -> res
+              | (A.SHA256_RSA, `SHA256) -> res
+              | (A.SHA384_RSA, `SHA384) -> res
+              | (A.SHA512_RSA, `SHA512) -> res
               | _                     -> false )
   | _ -> false
 
