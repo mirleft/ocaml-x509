@@ -1,0 +1,12 @@
+# OASIS_START
+# DO NOT EDIT (digest: 8b1b7077cee71644cd155805285e6d69)
+version = "0.0.1"
+description = "X509 support for ocaml"
+requires = "x509 oUnit cstruct.unix"
+archive(byte) = "tests.cma"
+archive(byte, plugin) = "tests.cma"
+archive(native) = "tests.cmxa"
+archive(native, plugin) = "tests.cmxs"
+exists_if = "tests.cma"
+# OASIS_STOP
+
