@@ -64,20 +64,20 @@ let first_cert name =
 let first_certs = [
   ( "first", true,
     [ "bar.foobar.com" ; "foo.foobar.com" ; "foobar.com" ],
-    [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ( "first-basicconstraint-true" , false, [ "ca.foobar.com" ],
-    [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ( "first-keyusage-and-timestamping", true, [ "ext.foobar.com" ],
-    [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], Some [`TimeStamping] ) ;
+    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], Some [`Time_stamping] ) ;
   ( "first-keyusage-any", true, [ "any.foobar.com" ],
-    [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], Some [`TimeStamping; `Any] ) ;
+    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], Some [`Time_stamping; `Any] ) ;
   ( "first-keyusage-nonrep", true, [ "key.foobar.com" ],
-    [ `ContentCommitment ], None ) ;
+    [ `Content_commitment ], None ) ;
   ( "first-unknown-critical-extension", false,
     [ "blafasel.com" ; "foo.foobar.com" ; "foobar.com" ],
-    [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ( "first-unknown-extension", true, [ "foobar.com" ],
-    [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 
 let test_valid_ca_cert server chain valid name ca _ =
@@ -136,9 +136,9 @@ let ca_tests f =
 
 let first_wildcard_certs = [
   ( "first-wildcard-subjaltname",
-    [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ( "first-wildcard",
-    [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 
 let first_wildcard_cert_tests =
@@ -184,27 +184,27 @@ let im_cert name =
 
 let second_certs = [
   ("second", [ "second.foobar.com" ], true,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ("second-any", [ "second.foobar.com" ], true,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], Some [ `Any ] ) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], Some [ `Any ] ) ;
   ("second-subj", [ "second.foobar.com" ; "foobar.com" ; "foo.foobar.com" ], true,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ("second-unknown-noncrit", [ "second.foobar.com" ], true,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ("second-nonrepud", [ "second.foobar.com" ], true,
-   [ `ContentCommitment ], None ) ;
+   [ `Content_commitment ], None ) ;
   ("second-time", [ "second.foobar.com" ], true,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], Some [ `TimeStamping ]) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], Some [ `Time_stamping ]) ;
   ("second-subj-wild", [ "second.foobar.com" ; "foo.foobar.com" ], true,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ("second-bc-true", [ "second.foobar.com" ], false,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ("second-unknown", [ "second.foobar.com" ], false,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ("second-no-cn", [ ], false,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ("second-subjaltemail", [ "second.foobar.com" ], true,
-   [ `DigitalSignature ; `ContentCommitment ; `KeyEncipherment ], None ) ;
+   [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 
 let second_cert name =
