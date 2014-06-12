@@ -1,0 +1,37 @@
+OASISFormat: 0.4
+Name:        ocaml-x509
+Version:     0.0.1
+Synopsis:    X509 support for ocaml
+Authors:     Hannes Mehnert <hannes@mehnert.org>, David Kaloper <david@numm.org>
+Maintainers: David Kaloper <david@numm.org>, Hannes Mehnert <hannes@mehnert.org>
+Homepage:    https://github.com/mirleft/ocaml-x509
+License:     FreeBSD
+Plugins:     META (0.4)
+Description:
+  X509 support for OCaml
+BuildTools:  ocamlbuild
+
+Library "x509"
+  Path            : lib/
+  Modules         : Asn_grammars, Certificate, X509
+  InternalModules : List_ext, Registry
+  BuildDepends    : cstruct, sexplib.syntax, nocrypto, asn1-combinators
+
+Library "tests"
+  Path            : tests/
+  Modules         : X509tests, Unittests
+  Install         : false
+  Build          $: flag(tests)
+  BuildDepends    : x509, oUnit, cstruct.unix
+
+Executable "test_runner"
+  Build          $: flag(tests)
+  Path            : tests/
+  Install         : false
+  CompiledObject  : native
+  MainIs          : unittestrunner.ml
+  BuildDepends    : x509, tests
+
+Test it
+  Command         : $test_runner
+  Run            $: flag(tests)
