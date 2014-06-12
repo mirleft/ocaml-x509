@@ -4,22 +4,6 @@ open Nocrypto
 open Registry
 open Asn_grammars
 
-(* Utils stuff. Could be broken out. *)
-
-let rec filter_map ~f = function
-  | []    -> []
-  | x::xs ->
-      match f x with
-      | None    ->       filter_map ~f xs
-      | Some x' -> x' :: filter_map ~f xs
-
-let rec map_find ~f = function
-  | []    -> None
-  | x::xs ->
-      match f x with
-      | None         -> map_find ~f xs
-      | Some _ as x' -> x'
-
 module Cs = Nocrypto.Common.Cs
 
 (* *** *)
@@ -179,19 +163,19 @@ let issuer_matches_subject { asn = parent } { asn = cert } =
 let is_self_signed cert = issuer_matches_subject cert cert
 
 let subject_common_name cert =
-  map_find cert.tbs_cert.subject
+  List_ext.map_find cert.tbs_cert.subject
            ~f:(function Name.CN n -> Some n | _ -> None)
 
 let common_name_to_string { asn = cert } =
   match subject_common_name cert with
-  | None   -> "NO commonName:" ^ Utils.hexdump_to_str cert.signature_val
+  | None   -> "NO commonName"
   | Some x -> x
 
 let cert_alt_names cert : string list =
   let open Extension in
   match extn_subject_alt_name cert with
     | Some (_, Subject_alt_name names) ->
-       filter_map names ~f:(function General_name.DNS x -> Some x | _ -> None)
+       List_ext.filter_map names ~f:(function General_name.DNS x -> Some x | _ -> None)
     | _                                -> []
 
 let cert_hostnames { asn = cert } : string list =
