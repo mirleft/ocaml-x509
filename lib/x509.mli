@@ -17,11 +17,11 @@ end
 
 module Validator : sig
 
-  type validation = [ `Ok | `Fail of Certificate.certificate_failure ]
   type t
+  type res = [ `Ok | `Fail of Certificate.certificate_failure ]
 
-  val validate : t -> ?host:Certificate.host -> Certificate.stack -> validation
+  val validate : t -> ?host:Certificate.host -> Certificate.stack -> res
 
-  val chain_of_trust : time:int -> Cert.t list -> t
+  val chain_of_trust : ?time:float -> Cert.t list -> t
   val null : t
 end

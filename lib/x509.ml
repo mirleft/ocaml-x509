@@ -122,19 +122,24 @@ end
 
 module Validator = struct
 
-  type validation = [ `Ok | `Fail of Certificate.certificate_failure ]
-  type t = ?host:Certificate.host -> time:int -> Certificate.stack -> validation
+  type res = [ `Ok | `Fail of Certificate.certificate_failure ]
+  type t = ?host:Certificate.host -> Certificate.stack -> res
 
-  let validate t ?host stack = t ?host ~time:0 stack
+  let validate t ?host stack = t ?host stack
 
   (* XXX
-   * Validator just hands off a list of certs. Should be indexed. *)
-  let chain_of_trust ~time cas =
-    let cas = Certificate.valid_cas ~time cas in
-    fun ?host ~time stack ->
-      Certificate.verify_chain_of_trust ?host ~time ~anchors:cas stack
+   * Validator just hands off a list of certs. Should be indexed.
+   * *)
+  (* XXX
+   * Validator validates against time it was *created* at, not at the moment of
+   * validation. This has repercussions to long-lived validators; reconsider.
+   * *)
+  let chain_of_trust ?time cas =
+    let cas = Certificate.valid_cas ?time cas in
+    fun ?host stack ->
+      Certificate.verify_chain_of_trust ?host ?time ~anchors:cas stack
 
-  let null ?host:_ ~time:_ _ = `Ok
+  let null ?host:_ _ = `Ok
 
 end
 
