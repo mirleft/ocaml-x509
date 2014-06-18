@@ -164,10 +164,14 @@ let validate_signature { asn = trusted } cert =
               | _                     -> false )
   | _ -> false
 
-let validate_time now cert =
-(*   let from, till = cert.validity in *)
-(* TODO:  from < now && now < till *)
-  true
+let validate_time time { asn = cert } =
+  match time with
+  | None     -> true
+  | Some now ->
+      let (not_before, not_after) = cert.tbs_cert.validity in
+      let (t1, t2) =
+        Asn.Time.(to_posix_time not_before, to_posix_time not_after) in
+      t1 <= now && now <= t2
 
 let version_matches_extensions { asn = cert } =
   let tbs = cert.tbs_cert in
