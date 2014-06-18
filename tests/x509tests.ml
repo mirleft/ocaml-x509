@@ -29,7 +29,7 @@ let test_invalid_ca name _ =
   ( match Certificate.(asn_of_cert c).tbs_cert.pk_info with
     | PK.RSA pub' when pub = pub' -> ()
     | _                           -> assert_failure "public / private key doesn't match" ) ;
-  assert_equal (List.length (valid_cas ~time:0 [c])) 0
+  assert_equal (List.length (valid_cas [c])) 0
 
 let invalid_ca_tests =
   List.mapi
@@ -48,7 +48,7 @@ let test_valid_ca c _ =
   ( match (asn_of_cert c).tbs_cert.pk_info with
     | PK.RSA pub' when pub = pub' -> ()
     | _                           -> assert_failure "public / private key doesn't match" ) ;
-  assert_equal (List.length (valid_cas ~time:0 [c])) 1
+  assert_equal (List.length (valid_cas [c])) 1
 
 let valid_ca_tests = [
   "valid CA cacert" >:: test_valid_ca cacert ;
@@ -81,7 +81,7 @@ let first_certs = [
 ]
 
 let test_valid_ca_cert server chain valid name ca _ =
-  match valid, verify_chain_of_trust ~time:0 ~host:name ~anchors:ca (server, chain) with
+  match valid, verify_chain_of_trust ~host:name ~anchors:ca (server, chain) with
   | false, `Ok     -> assert_failure "expected to fail, but didn't"
   | false, `Fail _ -> ()
   | true , `Ok     -> ()
@@ -292,8 +292,8 @@ let invalid_tests =
     "2chain" >:: strict_test_valid_ca_cert c [im_cert "cacert" ; cacert] true h [cacert] ;
     "3chain" >:: strict_test_valid_ca_cert c [im_cert "cacert" ; cacert ; cacert] true h [cacert] ;
     "no-chain" >:: strict_test_valid_ca_cert c [im_cert "cacert" ; im_cert "cacert" ; cacert] false h [cacert] ;
-    "not a CA" >:: (fun _ -> assert_equal (List.length (valid_cas ~time:0 [im_cert "cacert"])) 0) ;
-    "not a CA" >:: (fun _ -> assert_equal (List.length (valid_cas ~time:0 [c])) 0) ;
+    "not a CA" >:: (fun _ -> assert_equal (List.length (valid_cas [im_cert "cacert"])) 0) ;
+    "not a CA" >:: (fun _ -> assert_equal (List.length (valid_cas [c])) 0) ;
   ]
 
 let x509_tests =
