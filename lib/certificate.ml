@@ -383,7 +383,7 @@ let rec validate_anchors pathlen cert = function
              | Ok _    -> success
              | Error _ -> validate_anchors pathlen cert xs
 
-let verify_chain_of_trust ?host ~time ~anchors (server, certs) =
+let verify_chain_of_trust ?host ?time ~anchors (server, certs) =
   let res =
     let rec climb pathlen cert = function
       | super :: certs ->
@@ -402,7 +402,7 @@ let verify_chain_of_trust ?host ~time ~anchors (server, certs) =
   in
   lower res
 
-let valid_cas ~time cas =
+let valid_cas ?time cas =
   List.filter
     (fun cert -> is_success @@ is_ca_cert_valid time cert)
     cas
