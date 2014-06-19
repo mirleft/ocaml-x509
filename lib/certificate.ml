@@ -164,10 +164,14 @@ let validate_signature { asn = trusted } cert =
               | _                     -> false )
   | _ -> false
 
-let validate_time now cert =
-(*   let from, till = cert.validity in *)
-(* TODO:  from < now && now < till *)
-  true
+let validate_time time { asn = cert } =
+  match time with
+  | None     -> true
+  | Some now ->
+      let (not_before, not_after) = cert.tbs_cert.validity in
+      let (t1, t2) =
+        Asn.Time.(to_posix_time not_before, to_posix_time not_after) in
+      t1 <= now && now <= t2
 
 let version_matches_extensions { asn = cert } =
   let tbs = cert.tbs_cert in
@@ -379,7 +383,7 @@ let rec validate_anchors pathlen cert = function
              | Ok _    -> success
              | Error _ -> validate_anchors pathlen cert xs
 
-let verify_chain_of_trust ?host ~time ~anchors (server, certs) =
+let verify_chain_of_trust ?host ?time ~anchors (server, certs) =
   let res =
     let rec climb pathlen cert = function
       | super :: certs ->
@@ -398,7 +402,7 @@ let verify_chain_of_trust ?host ~time ~anchors (server, certs) =
   in
   lower res
 
-let valid_cas ~time cas =
+let valid_cas ?time cas =
   List.filter
     (fun cert -> is_success @@ is_ca_cert_valid time cert)
     cas

@@ -1,7 +1,5 @@
 open Asn
 
-type bits = Cstruct.t
-
 let def  x = function None -> x | Some y -> y
 let def' x = fun y -> if y = x then None else Some y
 
@@ -479,9 +477,9 @@ module Extension = struct
       (optional ~label:"authCertSN"     @@ implicit 2 integer)
 
   type priv_key_usage_period =
-    | Interval   of time * time
-    | Not_after  of time
-    | Not_before of time
+    | Interval   of Time.t * Time.t
+    | Not_after  of Time.t
+    | Not_before of Time.t
 
   let priv_key_usage_period =
     let f = function
@@ -520,7 +518,7 @@ module Extension = struct
       (optional ~label:"excludedSubtrees"  @@ implicit 1 (sequence_of subtree))
 
 
-    type cert_policies = [ `Any | `Something of oid ] list
+    type cert_policies = [ `Any | `Something of OID.t ] list
 
     let cert_policies =
       let open ID.Cert_policy in
@@ -739,18 +737,18 @@ type tBSCertificate = {
   serial     : Num.num ;
   signature  : Algorithm.t ;
   issuer     : Name.dn ;
-  validity   : time * time ;
+  validity   : Time.t * Time.t ;
   subject    : Name.dn ;
   pk_info    : PK.t ;
-  issuer_id  : bits option ;
-  subject_id : bits option ;
+  issuer_id  : Cstruct.t option ;
+  subject_id : Cstruct.t option ;
   extensions : (bool * Extension.t) list
 }
 
 type certificate = {
   tbs_cert       : tBSCertificate ;
   signature_algo : Algorithm.t ;
-  signature_val  : bits
+  signature_val  : Cstruct.t
 }
 
 
