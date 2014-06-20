@@ -402,7 +402,7 @@ module Extension = struct
     | `Decipher_only
   ]
 
-  let key_usage = flags [
+  let key_usage = bit_string_flags [
       0, `Digital_signature
     ; 1, `Content_commitment
     ; 2, `Key_encipherment
@@ -465,7 +465,7 @@ module Extension = struct
       (optional ~label:"cA"      bool)
       (optional ~label:"pathLen" int)
 
-  type authority_key_id = Cstruct.t option * gen_names * Num.num option
+  type authority_key_id = Cstruct.t option * gen_names * Z.t option
 
   let authority_key_id =
     map (fun (a, b, c) -> (a, def  [] b, c))
@@ -655,44 +655,43 @@ module PK = struct
   let other_prime_infos =
     sequence_of @@
       (sequence3
-        (required ~label:"prime"       big_natural)
-        (required ~label:"exponent"    big_natural)
-        (required ~label:"coefficient" big_natural))
+        (required ~label:"prime"       integer)
+        (required ~label:"exponent"    integer)
+        (required ~label:"coefficient" integer))
 
   let rsa_private_key =
 
-    (* XXX ditch big_natural parser, use zarith for asn integer *)
-    let f (_, (n, (e, (d, (p, (q, (dp, (dq, (q', _))))))))) =
-      Cstruct.(RSA.priv ~e:(of_string e) ~d:(of_string d) ~n:(of_string n)
-                        ~p:(of_string p) ~q:(of_string q)
-                        ~dp:(of_string dp) ~dq:(of_string dq) ~q':(of_string q'))
+    let f (v, (n, (e, (d, (p, (q, (dp, (dq, (q', other))))))))) =
+      match (v, other) with
+      | (0, None) -> ({ RSA.e; d; n; p; q; dp; dq; q' } : RSA.priv)
+      | _         -> parse_error "multi-prime RSA keys not supported"
 
-    and g priv = assert false (* XXX export from nocrypto *) in (* v.0 *)
+    and g { RSA.e; d; n; p; q; dp; dq; q' } =
+      (0, (n, (e, (d, (p, (q, (dp, (dq, (q', None))))))))) in
 
     map f g @@
     sequence @@
         (required ~label:"version"         int)
-      @ (required ~label:"modulus"         big_natural)  (* n    *)
-      @ (required ~label:"publicExponent"  big_natural)  (* e    *)
-      @ (required ~label:"privateExponent" big_natural)  (* d    *)
-      @ (required ~label:"prime1"          big_natural)  (* p    *)
-      @ (required ~label:"prime2"          big_natural)  (* q    *)
-      @ (required ~label:"exponent1"       big_natural)  (* dp   *)
-      @ (required ~label:"exponent2"       big_natural)  (* dq   *)
-      @ (required ~label:"coefficient"     big_natural)  (* qinv *)
+      @ (required ~label:"modulus"         integer)  (* n    *)
+      @ (required ~label:"publicExponent"  integer)  (* e    *)
+      @ (required ~label:"privateExponent" integer)  (* d    *)
+      @ (required ~label:"prime1"          integer)  (* p    *)
+      @ (required ~label:"prime2"          integer)  (* q    *)
+      @ (required ~label:"exponent1"       integer)  (* dp   *)
+      @ (required ~label:"exponent2"       integer)  (* dq   *)
+      @ (required ~label:"coefficient"     integer)  (* qinv *)
      -@ (optional ~label:"otherPrimeInfos" other_prime_infos)
 
 
   let rsa_public_key =
 
-    (* XXX ditch big_natural parser, use zarith for asn integer *)
-    let f (n, e) = RSA.pub ~n:(Cstruct.of_string n) ~e:(Cstruct.of_string e)
-    and g pub = assert false (* XXX export from nocrypto *) in
+    let f (n, e) = { RSA.n ; e }
+    and g ({ RSA.n; e } : RSA.pub) = (n, e) in
 
     map f g @@
     sequence2
-      (required ~label:"modulus"        big_natural)
-      (required ~label:"publicExponent" big_natural)
+      (required ~label:"modulus"        integer)
+      (required ~label:"publicExponent" integer)
 
   (* For outside uses. *)
   let (rsa_private_of_cstruct, rsa_private_to_cstruct) =
@@ -722,7 +721,7 @@ module PK = struct
     map reparse_pk unparse_pk @@
     sequence2
       (required ~label:"algorithm" Algorithm.identifier)
-      (required ~label:"subjectPK" bit_string')
+      (required ~label:"subjectPK" bit_string_cs)
 
 end
 
@@ -734,7 +733,7 @@ end
 
 type tBSCertificate = {
   version    : [ `V1 | `V2 | `V3 ] ;
-  serial     : Num.num ;
+  serial     : Z.t ;
   signature  : Algorithm.t ;
   issuer     : Name.dn ;
   validity   : Time.t * Time.t ;
@@ -768,7 +767,7 @@ let validity =
     (required ~label:"not before" time)
     (required ~label:"not after"  time)
 
-let unique_identifier = bit_string'
+let unique_identifier = bit_string_cs
 
 let tBSCertificate =
   let f = fun (a, (b, (c, (d, (e, (f, (g, (h, (i, j))))))))) ->
@@ -824,7 +823,7 @@ let certificate =
   sequence3
     (required ~label:"tbsCertificate"     tBSCertificate)
     (required ~label:"signatureAlgorithm" Algorithm.identifier)
-    (required ~label:"signatureValue"     bit_string')
+    (required ~label:"signatureValue"     bit_string_cs)
 
 let (certificate_of_cstruct, certificate_to_cstruct) =
   projections_of der certificate
