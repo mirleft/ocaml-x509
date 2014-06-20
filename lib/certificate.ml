@@ -300,33 +300,26 @@ let validate_public_key_type { asn = cert } = function
               | `RSA , PK.RSA _ -> true
               | _    , _        -> false
 
+let rec split_string delimiter name =
+  let open String in
+  let len = length name in
+  let idx = try index name delimiter with _ -> len in
+  let fst = sub name 0 idx in
+  let idx' = idx + 1 in
+  if idx' <= len then
+    let rt = sub name (idx + 1) (len - idx') in
+    fst :: split_string delimiter rt
+  else
+    [fst]
+
 (* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
   forbidden: multiple dots "..", trailing dot "foo." *)
-(* while I believe the outer try .. is never hit, better keep it around *)
-let rec split_labels name =
-  try
-    let open String in
-    let len = length name in
-    if len = 0 then
-      (* trailing dot *)
-      None
-    else
-      let idx = try index name '.' with _ -> len in
-      (* located first . *)
-      if idx = 0 then
-        (* multiple or starting dot *)
-        None
-      else
-        let lbl = sub name 0 idx in
-        let idx' = idx + 1 in
-        if idx' <= len then
-          let rt = sub name idx' (len - idx') in
-          match split_labels rt with
-          | None    -> None
-          | Some ls -> Some (lbl :: ls)
-        else
-          Some [lbl]
-  with _ -> None
+let split_labels name =
+  let labels = split_string '.' name in
+  if List.exists (fun s -> s = "") labels then
+    None
+  else
+    Some labels
 
 (* we limit our validation to a single '*' character at the beginning (left-most label)! *)
 let rec wildcard_hostname_matches hostname wildcard =
