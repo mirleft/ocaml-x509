@@ -165,11 +165,11 @@ module General_name = struct
    * *)
   let another_name =
     let f = function
-      | (oid, `C1 n) when Registry.Name_extn.is_utf8_id oid -> n
-      | (oid, _    ) -> parse_error_oid "AnotherName: unrecognized oid" oid
-    and g = fun _ ->
-      invalid_arg "can't encode AnotherName extensions, yet."
-    in
+      | (oid, `C1 n) -> (oid, n)
+      | (oid, `C2 _) -> (oid, "")
+    and g = function
+      | (oid, "") -> (oid, `C2 ())
+      | (oid, n ) -> (oid, `C1 n) in
     map f g @@
     sequence2
       (required ~label:"type-id" oid)
@@ -185,7 +185,7 @@ module General_name = struct
       (required ~label:"partyName"    @@ implicit 1 Name.directory_name)
 
   type t =
-    | Other         of string    (* another_name *)
+    | Other         of (OID.t * string) (* another_name *)
     | Rfc_822       of string
     | DNS           of string
     | X400_address  of unit      (* or_address *)
