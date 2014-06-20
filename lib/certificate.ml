@@ -120,18 +120,28 @@ let common_name_to_string { asn = cert } =
   | None   -> "NO commonName"
   | Some x -> x
 
-let cert_alt_names cert : string list =
-  let open Extension in
-  match extn_subject_alt_name cert with
-    | Some (_, Subject_alt_name names) ->
-       List_ext.filter_map names ~f:(function General_name.DNS x -> Some x | _ -> None)
-    | _                                -> []
-
+(* RFC 6125, 6.4.4:
+   Therefore, if and only if the presented identifiers do not include a
+   DNS-ID, SRV-ID, URI-ID, or any application-specific identifier types
+   supported by the client, then the client MAY as a last resort check
+   for a string whose form matches that of a fully qualified DNS domain
+   name in a Common Name field of the subject field (i.e., a CN-ID).  If
+   the client chooses to compare a reference identifier of type CN-ID
+   against that string, it MUST follow the comparison rules for the DNS
+   domain name portion of an identifier of type DNS-ID, SRV-ID, or
+   URI-ID, as described under Section 6.4.1, Section 6.4.2, and
+   Section 6.4.3. *)
 let cert_hostnames { asn = cert } : string list =
-  let alt_names = cert_alt_names cert in
-  match subject_common_name cert with
-    | None   -> alt_names
-    | Some x -> x :: alt_names
+  let open Extension in
+  match extn_subject_alt_name cert, subject_common_name cert with
+    | Some (_, Subject_alt_name names), _     ->
+       List_ext.filter_map
+         names
+         ~f:(function
+              | General_name.DNS x -> Some (String.lowercase x)
+              | _                  -> None)
+    | _                              , Some x -> [String.lowercase x]
+    | _                              , _      -> []
 
 (* XXX should return the tbs_cert blob from the parser, this is insane *)
 let raw_cert_hack { asn ; raw } =
@@ -290,27 +300,57 @@ let validate_public_key_type { asn = cert } = function
               | `RSA , PK.RSA _ -> true
               | _    , _        -> false
 
-let hostname_matches_wildcard should given =
-  let open String in
+(* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
+  forbidden: multiple dots "..", trailing dot "foo." *)
+(* while I believe the outer try .. is never hit, better keep it around *)
+let rec split_labels name =
   try
-    match sub given 0 2, sub given 2 (length given - 2) with
-    | "*.", dn when dn = should -> true
-    | _   , _                   -> false
-  with _ -> false
+    let open String in
+    let len = length name in
+    if len = 0 then
+      (* trailing dot *)
+      None
+    else
+      let idx = try index name '.' with _ -> len in
+      (* located first . *)
+      if idx = 0 then
+        (* multiple or starting dot *)
+        None
+      else
+        let lbl = sub name 0 idx in
+        let idx' = idx + 1 in
+        if idx' <= len then
+          let rt = sub name idx' (len - idx') in
+          match split_labels rt with
+          | None    -> None
+          | Some ls -> Some (lbl :: ls)
+        else
+          Some [lbl]
+  with _ -> None
+
+(* we limit our validation to a single '*' character at the beginning (left-most label)! *)
+let rec wildcard_hostname_matches hostname wildcard =
+  match hostname, wildcard with
+  | [x]  , []               -> true
+  | x::xs, y::ys when x = y -> wildcard_hostname_matches xs ys
+  | _    , _                -> false
+
+let o f g x = f (g x)
 
 let validate_hostname cert host =
   let names = cert_hostnames cert in
   match host with
   | None                  -> true
-  | Some (`Strict name)   -> List.mem name names
+  | Some (`Strict name)   -> List.mem (String.lowercase name) names
   | Some (`Wildcard name) ->
+     let name = String.lowercase name in
      List.mem name names ||
-       try
-         let idx = String.index name '.' + 1 in (* might throw *)
-         let rt = String.sub name idx (String.length name - idx) in
-         List.exists (hostname_matches_wildcard rt) names ||
-           List.exists (hostname_matches_wildcard name) names
-       with _ -> false
+       match split_labels name with
+       | None      -> false
+       | Some lbls ->
+          List.map split_labels names |>
+            List_ext.filter_map ~f:(function Some ("*"::xs) -> Some xs | _ -> None) |>
+            List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
 
 let is_server_cert_valid ?host now cert =
   Printf.printf "verify server certificate %s\n"

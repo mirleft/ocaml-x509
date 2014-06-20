@@ -63,20 +63,20 @@ let first_cert name =
 (* ok, now some real certificates *)
 let first_certs = [
   ( "first", true,
-    [ "bar.foobar.com" ; "foo.foobar.com" ; "foobar.com" ],
+    [ "foo.foobar.com" ; "foobar.com" ], (* commonName: "bar.foobar.com" *)
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ( "first-basicconstraint-true" , false, [ "ca.foobar.com" ],
+  ( "first-basicconstraint-true" , false, [ "ca.foobar.com" ], (* no subjAltName *)
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ( "first-keyusage-and-timestamping", true, [ "ext.foobar.com" ],
+  ( "first-keyusage-and-timestamping", true, [ "ext.foobar.com" ], (* no subjAltName *)
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], Some [`Time_stamping] ) ;
-  ( "first-keyusage-any", true, [ "any.foobar.com" ],
+  ( "first-keyusage-any", true, [ "any.foobar.com" ], (* no subjAltName *)
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], Some [`Time_stamping; `Any] ) ;
-  ( "first-keyusage-nonrep", true, [ "key.foobar.com" ],
+  ( "first-keyusage-nonrep", true, [ "key.foobar.com" ],  (* no subjAltName *)
     [ `Content_commitment ], None ) ;
-  ( "first-unknown-critical-extension", false,
-    [ "blafasel.com" ; "foo.foobar.com" ; "foobar.com" ],
+  ( "first-unknown-critical-extension", false, (* commonName: "blafasel.com" *)
+    [ "foo.foobar.com" ; "foobar.com" ],
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ( "first-unknown-extension", true, [ "foobar.com" ],
+  ( "first-unknown-extension", true, [ "foobar.com" ],  (* no subjAltName *)
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 
@@ -159,11 +159,11 @@ let first_wildcard_cert_ca_test (ca, x) =
         List.mapi (fun i cn ->
                    "wildcard certificate CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i
                    >:: wildcard_test_valid_ca_cert c [] true cn [ca])
-                  [ "foo.foobar.com" ; "bar.foobar.com" ; "foobar.com" ; "www.foobar.com" ] @
+                  [ "foo.foobar.com" ; "bar.foobar.com" ; "www.foobar.com" ] @
         List.mapi (fun i cn ->
                    "wildcard certificate CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i
                    >:: wildcard_test_valid_ca_cert c [] false cn [ca])
-                  [ "foo.foo.foobar.com" ; "bar.fbar.com" ; "com" ; "foobar.com.bla" ]
+                  [ "foo.foo.foobar.com" ; "bar.fbar.com" ; "foobar.com" ; "com" ; "foobar.com.bla" ]
        )
     first_wildcard_certs)
 
@@ -183,27 +183,27 @@ let im_cert name =
   Cert.of_pem_cstruct1 (load ("intermediate/" ^ name))
 
 let second_certs = [
-  ("second", [ "second.foobar.com" ], true,
+  ("second", [ "second.foobar.com" ], true, (* no subjAltName *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ("second-any", [ "second.foobar.com" ], true,
+  ("second-any", [ "second.foobar.com" ], true, (* no subjAltName *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], Some [ `Any ] ) ;
-  ("second-subj", [ "second.foobar.com" ; "foobar.com" ; "foo.foobar.com" ], true,
+  ("second-subj", [ "foobar.com" ; "foo.foobar.com" ], true, (* commonName: "second.foobar.com" *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ("second-unknown-noncrit", [ "second.foobar.com" ], true,
+  ("second-unknown-noncrit", [ "second.foobar.com" ], true, (* no subjAltName *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ("second-nonrepud", [ "second.foobar.com" ], true,
+  ("second-nonrepud", [ "second.foobar.com" ], true, (* no subjAltName *)
    [ `Content_commitment ], None ) ;
-  ("second-time", [ "second.foobar.com" ], true,
+  ("second-time", [ "second.foobar.com" ], true, (* no subjAltName *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], Some [ `Time_stamping ]) ;
-  ("second-subj-wild", [ "second.foobar.com" ; "foo.foobar.com" ], true,
+  ("second-subj-wild", [ "foo.foobar.com" ], true, (* commonName: "second.foobar.com" *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ("second-bc-true", [ "second.foobar.com" ], false,
+  ("second-bc-true", [ "second.foobar.com" ], false, (* no subjAltName *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ("second-unknown", [ "second.foobar.com" ], false,
+  ("second-unknown", [ "second.foobar.com" ], false, (* no subjAltName *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ("second-no-cn", [ ], false,
+  ("second-no-cn", [ ], false, (* no subjAltName *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ("second-subjaltemail", [ "second.foobar.com" ], true,
+  ("second-subjaltemail", [ ], false, (* email in subjAltName, do not use CN *)
    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 
@@ -228,11 +228,11 @@ let second_cert_ca_test (cavalid, ca, x) =
               ("verification CA " ^ x ^ " cn blablbalbala" >:: strict_test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
               ("verification CA " ^ x ^ " cn blablbalbala" >:: wildcard_test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
               List.mapi (fun i cn ->
-                         "certificate verification testing using CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i
+                         "strict certificate verification testing using CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i
                          >:: strict_test_valid_ca_cert c chain (cavalid && imvalid && valid) cn [ca])
                         cns @
               List.mapi (fun i cn ->
-                         "certificate verification testing using CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i
+                         "wildcard certificate verification testing using CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i
                          >:: wildcard_test_valid_ca_cert c chain (cavalid && imvalid && valid) cn [ca])
                         cns)
              second_certs)
@@ -257,11 +257,11 @@ let second_wildcard_cert_ca_test (cavalid, ca, x) =
         List.mapi (fun i cn ->
                    "wildcard certificate verification CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i
                    >:: wildcard_test_valid_ca_cert c chain (cavalid && imvalid) cn [ca])
-                  [ "a.foobar.com" ; "foo.foobar.com" ; "foobar.foobar.com" ; "foobar.com" ; "www.foobar.com" ] @
+                  [ "a.foobar.com" ; "foo.foobar.com" ; "foobar.foobar.com" ; "www.foobar.com" ] @
         List.mapi (fun i cn ->
                    "wildcard certificate verification CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i
                    >:: wildcard_test_valid_ca_cert c chain false cn [ca])
-                  [ "a.b.foobar.com" ; "f.foobar.com.com" ; "f.f.f." ; "foobar.com.uk" ; "foooo.bar.com" ])
+                  [ "a.b.foobar.com" ; "f.foobar.com.com" ; "f.f.f." ; "foobar.com.uk" ; "foooo.bar.com" ; "foobar.com" ])
        intermediate_cas)
 
 let second_no_cn_cert_ca_test (cavalid, ca, x) =
