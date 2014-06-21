@@ -97,22 +97,22 @@ module Name = struct
     let open Registry in
 
     let a_f = function
-      | (oid, x ) when oid = domain_component              -> DC           x 
-      | (oid, x ) when oid = X520.common_name              -> CN           x 
-      | (oid, x ) when oid = X520.serial_number            -> Serialnumber x 
-      | (oid, x ) when oid = X520.country_name             -> C            x 
-      | (oid, x ) when oid = X520.locality_name            -> L            x 
-      | (oid, x ) when oid = X520.state_or_province_name   -> SP           x 
-      | (oid, x ) when oid = X520.organization_name        -> O            x 
-      | (oid, x ) when oid = X520.organizational_unit_name -> OU           x 
-      | (oid, x ) when oid = X520.title                    -> T            x 
-      | (oid, x ) when oid = X520.dn_qualifier             -> DNQ          x 
-      | (oid, x ) when oid = PKCS9.email                   -> Mail         x 
-      | (oid, x ) when oid = X520.given_name               -> Given_name   x 
-      | (oid, x ) when oid = X520.surname                  -> Surname      x 
-      | (oid, x ) when oid = X520.initials                 -> Initials     x 
-      | (oid, x ) when oid = X520.pseudonym                -> Pseudonym    x 
-      | (oid, x ) when oid = X520.generation_qualifier     -> Generation   x 
+      | (oid, x ) when oid = domain_component              -> DC           x
+      | (oid, x ) when oid = X520.common_name              -> CN           x
+      | (oid, x ) when oid = X520.serial_number            -> Serialnumber x
+      | (oid, x ) when oid = X520.country_name             -> C            x
+      | (oid, x ) when oid = X520.locality_name            -> L            x
+      | (oid, x ) when oid = X520.state_or_province_name   -> SP           x
+      | (oid, x ) when oid = X520.organization_name        -> O            x
+      | (oid, x ) when oid = X520.organizational_unit_name -> OU           x
+      | (oid, x ) when oid = X520.title                    -> T            x
+      | (oid, x ) when oid = X520.dn_qualifier             -> DNQ          x
+      | (oid, x ) when oid = PKCS9.email                   -> Mail         x
+      | (oid, x ) when oid = X520.given_name               -> Given_name   x
+      | (oid, x ) when oid = X520.surname                  -> Surname      x
+      | (oid, x ) when oid = X520.initials                 -> Initials     x
+      | (oid, x ) when oid = X520.pseudonym                -> Pseudonym    x
+      | (oid, x ) when oid = X520.generation_qualifier     -> Generation   x
       | (oid, x)                                           -> Other (oid, x)
 
     and a_g = function
