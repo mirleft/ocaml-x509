@@ -35,3 +35,12 @@ Executable "test_runner"
 Test it
   Command         : $test_runner
   Run            $: flag(tests)
+
+
+Document api
+  Title: Documentation and API reference
+  Type: ocamlbuild (0.3)
+  BuildTools+: ocamldoc
+  XOcamlbuildPath: doc
+  XOcamlbuildModules: lib/X509, lib/Certificate
+  Install: false
