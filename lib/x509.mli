@@ -30,20 +30,20 @@ module PK : sig
   val of_pem_cstruct1 : Cstruct.t -> t
 end
 
-(** The validator for a certificate chain *)
-module Validator : sig
-  (** abstract validator type *)
+(** The authenticator for a certificate chain *)
+module Authenticator : sig
+  (** abstract authenticator type *)
   type t
 
-  (** result of a validation, either [`Ok] or [`Fail] with a reason *)
+  (** result of an authentication, either [`Ok] or [`Fail] with a reason *)
   type res = [ `Ok | `Fail of Certificate.certificate_failure ]
 
-  (** [validate validator ?host stack] is [result], where the given [validator] verifies the certificate [stack], given an optional [host] name. *)
-  val validate : t -> ?host:Certificate.host -> Certificate.stack -> res
+  (** [authenticate authenticator ?host stack] is [result], where the given [authenticator] verifies the certificate [stack], given an optional [host] name. *)
+  val authenticate : t -> ?host:Certificate.host -> Certificate.stack -> res
 
-  (** [chain_of_trust ?time trust_anchors] is [validator], which uses the given [time] and set of [trust_anchors] to verify the certificate chain. This is an implementation of the algorithm in RFC5280. *)
+  (** [chain_of_trust ?time trust_anchors] is [authenticator], which uses the given [time] and set of [trust_anchors] to verify the certificate chain. This is an implementation of the algorithm in RFC5280. *)
   val chain_of_trust : ?time:float -> Cert.t list -> t
 
-  (** [null] is [validator], which always returns [`Ok]. For testing purposes only. *)
+  (** [null] is [authenticator], which always returns [`Ok]. For testing purposes only. *)
   val null : t
 end
