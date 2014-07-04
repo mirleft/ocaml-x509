@@ -120,19 +120,19 @@ module PK = struct
     o (exactly_one ~what:"RSA keys") of_pem_cstruct
 end
 
-module Validator = struct
+module Authenticator = struct
 
   type res = [ `Ok | `Fail of Certificate.certificate_failure ]
   type t = ?host:Certificate.host -> Certificate.stack -> res
 
-  let validate t ?host stack = t ?host stack
+  let authenticate t ?host stack = t ?host stack
 
   (* XXX
-   * Validator just hands off a list of certs. Should be indexed.
+   * Authenticator just hands off a list of certs. Should be indexed.
    * *)
   (* XXX
-   * Validator validates against time it was *created* at, not at the moment of
-   * validation. This has repercussions to long-lived validators; reconsider.
+   * Authenticator authenticates against time it was *created* at, not at the moment of
+   * authentication. This has repercussions to long-lived authenticators; reconsider.
    * *)
   let chain_of_trust ?time cas =
     let cas = Certificate.valid_cas ?time cas in
