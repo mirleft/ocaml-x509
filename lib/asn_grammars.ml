@@ -4,7 +4,6 @@ let def  x = function None -> x | Some y -> y
 let def' x = fun y -> if y = x then None else Some y
 
 (* Error out on trailing bytes. *)
-(* XXX Is there a place where we need bytes after an ASN structure? *)
 let decode_strict codec cs =
   match decode codec cs with
   | Some (a, cs') when Cstruct.len cs' = 0 -> Some a
@@ -24,6 +23,18 @@ let compare_unordered_lists cmp l1 l2 =
 
 let parse_error_oid msg oid =
   parse_error @@ msg ^ ": " ^ OID.to_string oid
+
+let (case_of, case_of_2) =
+  let hash_of_assoc xs =
+    let ht = Hashtbl.create 16 in
+    List.iter (fun (k, v) -> Hashtbl.add ht k v) xs ; ht
+  in
+  ((fun xs ~default ->
+      let ht = hash_of_assoc xs in
+      fun a -> try Hashtbl.find ht a with Not_found -> default a),
+   (fun xs ~default ->
+      let ht = hash_of_assoc xs in
+      fun (a, b) -> (try Hashtbl.find ht a with Not_found -> default a) b))
 
 (*
  * A way to parse by propagating (and contributing to) exceptions, so those can
@@ -96,24 +107,24 @@ module Name = struct
   let name =
     let open Registry in
 
-    let a_f = function
-      | (oid, x ) when oid = domain_component              -> DC           x
-      | (oid, x ) when oid = X520.common_name              -> CN           x
-      | (oid, x ) when oid = X520.serial_number            -> Serialnumber x
-      | (oid, x ) when oid = X520.country_name             -> C            x
-      | (oid, x ) when oid = X520.locality_name            -> L            x
-      | (oid, x ) when oid = X520.state_or_province_name   -> SP           x
-      | (oid, x ) when oid = X520.organization_name        -> O            x
-      | (oid, x ) when oid = X520.organizational_unit_name -> OU           x
-      | (oid, x ) when oid = X520.title                    -> T            x
-      | (oid, x ) when oid = X520.dn_qualifier             -> DNQ          x
-      | (oid, x ) when oid = PKCS9.email                   -> Mail         x
-      | (oid, x ) when oid = X520.given_name               -> Given_name   x
-      | (oid, x ) when oid = X520.surname                  -> Surname      x
-      | (oid, x ) when oid = X520.initials                 -> Initials     x
-      | (oid, x ) when oid = X520.pseudonym                -> Pseudonym    x
-      | (oid, x ) when oid = X520.generation_qualifier     -> Generation   x
-      | (oid, x)                                           -> Other (oid, x)
+    let a_f = case_of_2 [
+      (domain_component              , fun x -> DC           x) ;
+      (X520.common_name              , fun x -> CN           x) ;
+      (X520.serial_number            , fun x -> Serialnumber x) ;
+      (X520.country_name             , fun x -> C            x) ;
+      (X520.locality_name            , fun x -> L            x) ;
+      (X520.state_or_province_name   , fun x -> SP           x) ;
+      (X520.organization_name        , fun x -> O            x) ;
+      (X520.organizational_unit_name , fun x -> OU           x) ;
+      (X520.title                    , fun x -> T            x) ;
+      (X520.dn_qualifier             , fun x -> DNQ          x) ;
+      (PKCS9.email                   , fun x -> Mail         x) ;
+      (X520.given_name               , fun x -> Given_name   x) ;
+      (X520.surname                  , fun x -> Surname      x) ;
+      (X520.initials                 , fun x -> Initials     x) ;
+      (X520.pseudonym                , fun x -> Pseudonym    x) ;
+      (X520.generation_qualifier     , fun x -> Generation   x) ]
+      ~default:(fun oid x -> Other (oid, x))
 
     and a_g = function
       | DC           x   -> (domain_component              , x )
@@ -312,38 +323,42 @@ module Algorithm = struct
 
     let unit = Some (`C1 ()) in
 
-    let f = function
-      | (oid, Some (`C2 oid')) when oid = ANSI_X9_62.ec_pub_key -> EC_pub oid'
-      | (oid, _) when oid = PKCS1.rsa_encryption  -> RSA
+    let f = case_of_2 [
 
-      | (oid, _) when oid = PKCS1.md2_rsa_encryption       -> MD2_RSA
-      | (oid, _) when oid = PKCS1.md4_rsa_encryption       -> MD4_RSA
-      | (oid, _) when oid = PKCS1.md5_rsa_encryption       -> MD5_RSA
-      | (oid, _) when oid = PKCS1.ripemd160_rsa_encryption -> RIPEMD160_RSA
-      | (oid, _) when oid = PKCS1.sha1_rsa_encryption      -> SHA1_RSA
-      | (oid, _) when oid = PKCS1.sha256_rsa_encryption    -> SHA256_RSA
-      | (oid, _) when oid = PKCS1.sha384_rsa_encryption    -> SHA384_RSA
-      | (oid, _) when oid = PKCS1.sha512_rsa_encryption    -> SHA512_RSA
-      | (oid, _) when oid = PKCS1.sha224_rsa_encryption    -> SHA224_RSA
+      (ANSI_X9_62.ec_pub_key , function
+        | Some (`C2 oid) -> EC_pub oid
+        | _              -> parse_error "EC: no params") ;
 
-      | (oid, _) when oid = ANSI_X9_62.ecdsa_sha1   -> ECDSA_SHA1
-      | (oid, _) when oid = ANSI_X9_62.ecdsa_sha224 -> ECDSA_SHA224
-      | (oid, _) when oid = ANSI_X9_62.ecdsa_sha256 -> ECDSA_SHA256
-      | (oid, _) when oid = ANSI_X9_62.ecdsa_sha384 -> ECDSA_SHA384
-      | (oid, _) when oid = ANSI_X9_62.ecdsa_sha512 -> ECDSA_SHA512
+      (PKCS1.rsa_encryption , fun _ -> RSA) ;
 
-      | (oid, _) when oid = md2        -> MD2
-      | (oid, _) when oid = md4        -> MD4
-      | (oid, _) when oid = md5        -> MD5
-      | (oid, _) when oid = sha1       -> SHA1
-      | (oid, _) when oid = sha256     -> SHA256
-      | (oid, _) when oid = sha384     -> SHA384
-      | (oid, _) when oid = sha512     -> SHA512
-      | (oid, _) when oid = sha224     -> SHA224
-      | (oid, _) when oid = sha512_224 -> SHA512_224
-      | (oid, _) when oid = sha512_256 -> SHA512_256
+      (PKCS1.md2_rsa_encryption       , fun _ -> MD2_RSA      ) ;
+      (PKCS1.md4_rsa_encryption       , fun _ -> MD4_RSA      ) ;
+      (PKCS1.md5_rsa_encryption       , fun _ -> MD5_RSA      ) ;
+      (PKCS1.ripemd160_rsa_encryption , fun _ -> RIPEMD160_RSA) ;
+      (PKCS1.sha1_rsa_encryption      , fun _ -> SHA1_RSA     ) ;
+      (PKCS1.sha256_rsa_encryption    , fun _ -> SHA256_RSA   ) ;
+      (PKCS1.sha384_rsa_encryption    , fun _ -> SHA384_RSA   ) ;
+      (PKCS1.sha512_rsa_encryption    , fun _ -> SHA512_RSA   ) ;
+      (PKCS1.sha224_rsa_encryption    , fun _ -> SHA224_RSA   ) ;
 
-      | (oid, _) -> parse_error_oid "unexpected params or unknown algorithm" oid
+      (ANSI_X9_62.ecdsa_sha1   , fun _ -> ECDSA_SHA1  ) ;
+      (ANSI_X9_62.ecdsa_sha224 , fun _ -> ECDSA_SHA224) ;
+      (ANSI_X9_62.ecdsa_sha256 , fun _ -> ECDSA_SHA256) ;
+      (ANSI_X9_62.ecdsa_sha384 , fun _ -> ECDSA_SHA384) ;
+      (ANSI_X9_62.ecdsa_sha512 , fun _ -> ECDSA_SHA512) ;
+
+      (md2        , fun _ -> MD2       ) ;
+      (md4        , fun _ -> MD4       ) ;
+      (md5        , fun _ -> MD5       ) ;
+      (sha1       , fun _ -> SHA1      ) ;
+      (sha256     , fun _ -> SHA256    ) ;
+      (sha384     , fun _ -> SHA384    ) ;
+      (sha512     , fun _ -> SHA512    ) ;
+      (sha224     , fun _ -> SHA224    ) ;
+      (sha512_224 , fun _ -> SHA512_224) ;
+      (sha512_256 , fun _ -> SHA512_256) ]
+
+      ~default:(fun oid _ -> parse_error_oid "unknown algorithm" oid)
 
     and g = function
       | EC_pub id     -> (ANSI_X9_62.ec_pub_key, Some (`C2 id))
@@ -430,18 +445,20 @@ module Extension = struct
 
   let ext_key_usage =
     let open ID.Extended_usage in
-    let f = function
-      | oid when oid = any              -> `Any
-      | oid when oid = server_auth      -> `Server_auth
-      | oid when oid = client_auth      -> `Client_auth
-      | oid when oid = code_signing     -> `Code_signing
-      | oid when oid = email_protection -> `Email_protection
-      | oid when oid = ipsec_end_system -> `Ipsec_end
-      | oid when oid = ipsec_tunnel     -> `Ipsec_tunnel
-      | oid when oid = ipsec_user       -> `Ipsec_user
-      | oid when oid = time_stamping    -> `Time_stamping
-      | oid when oid = ocsp_signing     -> `Ocsp_signing
-      | oid                             -> `Other oid
+
+    let f = case_of [
+      (any              , `Any             ) ;
+      (server_auth      , `Server_auth     ) ;
+      (client_auth      , `Client_auth     ) ;
+      (code_signing     , `Code_signing    ) ;
+      (email_protection , `Email_protection) ;
+      (ipsec_end_system , `Ipsec_end       ) ;
+      (ipsec_tunnel     , `Ipsec_tunnel    ) ;
+      (ipsec_user       , `Ipsec_user      ) ;
+      (time_stamping    , `Time_stamping   ) ;
+      (ocsp_signing     , `Ocsp_signing    ) ]
+      ~default:(fun oid -> `Other oid)
+
     and g = function
       | `Any              -> any
       | `Server_auth      -> server_auth
@@ -583,38 +600,39 @@ module Extension = struct
 
   (* XXX 4.2.1.4. - cert policies! ( and other x509 extensions ) *)
 
-  let reparse_extension_exn = function
-    | (oid, cs) when oid = ID.subject_alternative_name ->
-        Subject_alt_name (gen_names_of_cs cs)
+  let reparse_extension_exn = case_of_2 [
 
-    | (oid, cs) when oid = ID.issuer_alternative_name ->
-        Issuer_alt_name (gen_names_of_cs cs)
+    (ID.subject_alternative_name, fun cs ->
+      Subject_alt_name (gen_names_of_cs cs)) ;
 
-    | (oid, cs) when oid = ID.authority_key_identifier ->
-        Authority_key_id (auth_key_id_of_cs cs)
+    (ID.issuer_alternative_name, fun cs ->
+      Issuer_alt_name (gen_names_of_cs cs)) ;
 
-    | (oid, cs) when oid = ID.subject_key_identifier ->
-        Subject_key_id (subj_key_id_of_cs cs)
+    (ID.authority_key_identifier, fun cs ->
+      Authority_key_id (auth_key_id_of_cs cs)) ;
 
-    | (oid, cs) when oid = ID.key_usage ->
-        Key_usage (key_usage_of_cs cs)
+    (ID.subject_key_identifier, fun cs ->
+      Subject_key_id (subj_key_id_of_cs cs)) ;
 
-    | (oid, cs) when oid = ID.basic_constraints ->
-        Basic_constraints (basic_constr_of_cs cs)
+    (ID.key_usage, fun cs ->
+      Key_usage (key_usage_of_cs cs)) ;
 
-    | (oid, cs) when oid = ID.extended_key_usage ->
-        Ext_key_usage (e_key_usage_of_cs cs)
+    (ID.basic_constraints, fun cs ->
+      Basic_constraints (basic_constr_of_cs cs));
 
-    | (oid, cs) when oid = ID.private_key_usage_period ->
-        Priv_key_period (pr_key_peri_of_cs cs)
+    (ID.extended_key_usage, fun cs ->
+      Ext_key_usage (e_key_usage_of_cs cs)) ;
 
-    | (oid, cs) when oid = ID.name_constraints ->
-        Name_constraints (name_con_of_cs cs)
+    (ID.private_key_usage_period, fun cs ->
+      Priv_key_period (pr_key_peri_of_cs cs)) ;
 
-    | (oid, cs) when oid = ID.certificate_policies_2 ->
-        Policies (cert_pol_of_cs cs)
+    (ID.name_constraints, fun cs ->
+      Name_constraints (name_con_of_cs cs)) ;
 
-    | (oid, cs) -> Unsupported (oid, cs)
+    (ID.certificate_policies_2, fun cs ->
+      Policies (cert_pol_of_cs cs))
+    ]
+    ~default:(fun oid cs -> Unsupported (oid, cs))
 
   let unparse_extension = function
     | Subject_alt_name  x -> (ID.subject_alternative_name, gen_names_to_cs    x)
