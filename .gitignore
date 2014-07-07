@@ -4,8 +4,6 @@ setup.log
 Makefile
 log
 
-main.ml
 *.native
 *.byte
-mir-*-*
-*-*.xl
+*.docdir
