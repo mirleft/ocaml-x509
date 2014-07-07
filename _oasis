@@ -1,15 +1,15 @@
 OASISFormat: 0.4
 Name:        ocaml-x509
-Version:     0.0.1
+Version:     0.1.1
 Synopsis:    X509 support for ocaml
 Authors:     Hannes Mehnert <hannes@mehnert.org>, David Kaloper <david@numm.org>
 Maintainers: David Kaloper <david@numm.org>, Hannes Mehnert <hannes@mehnert.org>
 Homepage:    https://github.com/mirleft/ocaml-x509
 License:     FreeBSD
-Plugins:     META (0.4)
+Plugins:     META (0.4), DevFiles (0.4)
+BuildTools:  ocamlbuild
 Description:
   X509 support for OCaml
-BuildTools:  ocamlbuild
 
 Library "x509"
   Path            : lib/
@@ -35,7 +35,6 @@ Executable "test_runner"
 Test it
   Command         : $test_runner
   Run            $: flag(tests)
-
 
 Document api
   Title: Documentation and API reference
