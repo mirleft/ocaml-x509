@@ -1,7 +1,6 @@
 _build/
 setup.data
 setup.log
-Makefile
 log
 
 *.native
