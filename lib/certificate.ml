@@ -1,6 +1,7 @@
 open Sexplib.Conv
 open Nocrypto
 
+open X509_common
 open Registry
 open Asn_grammars
 
@@ -300,22 +301,10 @@ let validate_public_key_type { asn = cert } = function
               | `RSA , PK.RSA _ -> true
               | _    , _        -> false
 
-let rec split_string delimiter name =
-  let open String in
-  let len = length name in
-  let idx = try index name delimiter with _ -> len in
-  let fst = sub name 0 idx in
-  let idx' = idx + 1 in
-  if idx' <= len then
-    let rt = sub name idx' (len - idx') in
-    fst :: split_string delimiter rt
-  else
-    [fst]
-
 (* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
   forbidden: multiple dots "..", trailing dot "foo." *)
 let split_labels name =
-  let labels = split_string '.' name in
+  let labels = String_ext.split '.' name in
   if List.exists (fun s -> s = "") labels then
     None
   else
