@@ -307,7 +307,7 @@ let rec split_string delimiter name =
   let fst = sub name 0 idx in
   let idx' = idx + 1 in
   if idx' <= len then
-    let rt = sub name (idx + 1) (len - idx') in
+    let rt = sub name idx' (len - idx') in
     fst :: split_string delimiter rt
   else
     [fst]
