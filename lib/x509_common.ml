@@ -1,18 +1,19 @@
 
 module String_ext = struct
 
-  let rec split delimiter name =
-    let rec doit len off acc =
+  let split delimiter name =
+    let len = String.length name in
+    let rec doit off acc =
       let open String in
       let idx = try index_from name off delimiter with _ -> len in
       let fst = sub name off (idx - off) in
       let idx' = idx + 1 in
       if idx' <= len then
-        doit len idx' (fst :: acc)
+        doit idx' (fst :: acc)
       else
         fst :: acc
     in
-    List.rev (doit (String.length name) 0 [])
+    List.rev (doit 0 [])
 
 end
 
