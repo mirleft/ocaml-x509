@@ -1,7 +1,7 @@
 
 module String_ext = struct
 
-  let rec split delimiter name =
+  let split delimiter name =
     let rec doit len off acc =
       let open String in
       let idx = try index_from name off delimiter with _ -> len in
