@@ -82,9 +82,9 @@ let first_certs = [
 
 let test_valid_ca_cert server chain valid name ca _ =
   match valid, verify_chain_of_trust ~host:name ~anchors:ca (server, chain) with
-  | false, `Ok     -> assert_failure "expected to fail, but didn't"
+  | false, `Ok _   -> assert_failure "expected to fail, but didn't"
   | false, `Fail _ -> ()
-  | true , `Ok     -> ()
+  | true , `Ok _   -> ()
   | true , `Fail c -> assert_failure ("valid certificate " ^ certificate_failure_to_string c)
 
 let strict_test_valid_ca_cert server chain valid name ca =
