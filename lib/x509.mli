@@ -36,7 +36,7 @@ module Authenticator : sig
   type t
 
   (** result of an authentication, either [`Ok] or [`Fail] with a reason *)
-  type res = [ `Ok | `Fail of Certificate.certificate_failure ]
+  type res = [ `Ok of Certificate.certificate | `Fail of Certificate.certificate_failure ]
 
   (** [authenticate authenticator ?host stack] is [result], where the given [authenticator] verifies the certificate [stack], given an optional [host] name. *)
   val authenticate : t -> ?host:Certificate.host -> Certificate.stack -> res

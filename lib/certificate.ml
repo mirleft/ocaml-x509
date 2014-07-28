@@ -25,7 +25,7 @@ module Control = struct
   let fail err = Error err
 
   let lower = function
-    | Ok _      -> `Ok
+    | Ok x      -> `Ok x
     | Error err -> `Fail err
 
   let is_success = function Ok _ -> true | _ -> false
@@ -402,7 +402,7 @@ let parse_stack css =
 let rec validate_anchors pathlen cert = function
   | []    -> fail NoTrustAnchor
   | x::xs -> match signs pathlen x cert with
-             | Ok _    -> success
+             | Ok _    -> Ok x
              | Error _ -> validate_anchors pathlen cert xs
 
 let verify_chain_of_trust ?host ?time ~anchors (server, certs) =
