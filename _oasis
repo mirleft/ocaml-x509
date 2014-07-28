@@ -1,6 +1,6 @@
 OASISFormat: 0.4
 Name:        ocaml-x509
-Version:     0.1.1
+Version:     0.2.0
 Synopsis:    X509 support for OCaml
 Authors:     Hannes Mehnert <hannes@mehnert.org>, David Kaloper <david@numm.org>
 Maintainers: David Kaloper <david@numm.org>, Hannes Mehnert <hannes@mehnert.org>
