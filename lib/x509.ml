@@ -122,7 +122,7 @@ end
 
 module Authenticator = struct
 
-  type res = [ `Ok | `Fail of Certificate.certificate_failure ]
+  type res = [ `Ok of Certificate.certificate | `Fail of Certificate.certificate_failure ]
   type t = ?host:Certificate.host -> Certificate.stack -> res
 
   let authenticate t ?host stack = t ?host stack
@@ -139,7 +139,7 @@ module Authenticator = struct
     fun ?host stack ->
       Certificate.verify_chain_of_trust ?host ?time ~anchors:cas stack
 
-  let null ?host:_ _ = `Ok
+  let null ?host:_ (c, _) = `Ok c
 
 end
 
