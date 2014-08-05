@@ -4,7 +4,7 @@ let o f g x = f (g x)
 module Cs = struct
 
   open Cstruct
-  include Nocrypto.Common.Cs
+  include Nocrypto.Uncommon.Cs
 
   let begins_with cs target =
     let l1 = len cs and l2 = len target in
@@ -104,7 +104,7 @@ end
 
 module PK = struct
 
-  type t = Nocrypto.RSA.priv
+  type t = Nocrypto.Rsa.priv
 
   let of_pem_cstruct cs =
     List.fold_left (fun pks -> function

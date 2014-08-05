@@ -682,10 +682,10 @@ module PK = struct
 
     let f (v, (n, (e, (d, (p, (q, (dp, (dq, (q', other))))))))) =
       match (v, other) with
-      | (0, None) -> ({ RSA.e; d; n; p; q; dp; dq; q' } : RSA.priv)
+      | (0, None) -> ({ Rsa.e; d; n; p; q; dp; dq; q' } : Rsa.priv)
       | _         -> parse_error "multi-prime RSA keys not supported"
 
-    and g { RSA.e; d; n; p; q; dp; dq; q' } =
+    and g { Rsa.e; d; n; p; q; dp; dq; q' } =
       (0, (n, (e, (d, (p, (q, (dp, (dq, (q', None))))))))) in
 
     map f g @@
@@ -704,8 +704,8 @@ module PK = struct
 
   let rsa_public_key =
 
-    let f (n, e) = { RSA.n ; e }
-    and g ({ RSA.n; e } : RSA.pub) = (n, e) in
+    let f (n, e) = { Rsa.n ; e }
+    and g ({ Rsa.n; e } : Rsa.pub) = (n, e) in
 
     map f g @@
     sequence2
@@ -722,7 +722,7 @@ module PK = struct
   (* ... *)
 
   type t =
-    | RSA    of RSA.pub
+    | RSA    of Rsa.pub
     | EC_pub of OID.t
 
   let rsa_pub_of_cs, rsa_pub_to_cs = project_exn rsa_public_key

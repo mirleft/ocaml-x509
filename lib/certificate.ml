@@ -5,7 +5,7 @@ open X509_common
 open Registry
 open Asn_grammars
 
-module Cs = Nocrypto.Common.Cs
+module Cs = Nocrypto.Uncommon.Cs
 
 (* *** *)
 
@@ -158,7 +158,7 @@ let validate_signature { asn = trusted } cert =
 
   | PK.RSA issuing_key ->
 
-    ( match RSA.PKCS1.verify issuing_key cert.asn.signature_val with
+    ( match Rsa.PKCS1.verify issuing_key cert.asn.signature_val with
       | None           -> false
       | Some signature ->
           match pkcs1_digest_info_of_cstruct signature with
