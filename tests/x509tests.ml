@@ -24,7 +24,7 @@ let invalid_cas = [
 
 let test_invalid_ca name _ =
   let c = cert name in
-  let pub = Nocrypto.RSA.pub_of_priv priv in
+  let pub = Nocrypto.Rsa.pub_of_priv priv in
   let open Asn_grammars in
   ( match Certificate.(asn_of_cert c).tbs_cert.pk_info with
     | PK.RSA pub' when pub = pub' -> ()
@@ -43,7 +43,7 @@ let cacert_ext_ku = cert "cacert-ext-usage"
 let cacert_v1 = cert "cacert-v1"
 
 let test_valid_ca c _ =
-  let pub = Nocrypto.RSA.pub_of_priv priv in
+  let pub = Nocrypto.Rsa.pub_of_priv priv in
   let open Asn_grammars in
   ( match (asn_of_cert c).tbs_cert.pk_info with
     | PK.RSA pub' when pub = pub' -> ()

@@ -21,7 +21,7 @@ end
 (** A parser for unencrypted private RSA keys certificates in PEM format *)
 module PK : sig
   (** The private RSA key type *)
-  type t = Nocrypto.RSA.priv
+  type t = Nocrypto.Rsa.priv
 
   (** [of_pem_cstruct pem] is [t list], where all private keys of [pem] are extracted *)
   val of_pem_cstruct  : Cstruct.t -> t list
