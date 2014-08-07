@@ -47,6 +47,10 @@ val cert_usage          : certificate -> Asn_grammars.Extension.key_usage list o
 (** [cert_extended_usage certificate] is [extended_key_usage], the extended key usage extensions of the [certificate] *)
 val cert_extended_usage : certificate -> Asn_grammars.Extension.extended_key_usage list option
 
+(** [cert_hostnames certficate] is [hostnames], the list of hostnames mentioned in the [certifcate] *)
+val cert_hostnames      : certificate -> string list
+
+
 (** [verify_chain_of_trust ?host ?time ~anchors stack] is [validation_result], where the certificate [stack] is verified using the algorithm from RFC5280: The validity period of the given certificates is checked against the [time]. The X509v3 extensions of the [stack] are checked, then a chain of trust from some [anchors] to the server certificate is validated. Also, the server certificate is checked to contain the given [hostname] in its subject alternative name extension (or common name if subject alternative name is not present), either using wildcard or strict matching as described in RFC6125. The returned certificate is the trust anchor. *)
 val verify_chain_of_trust :
   ?host:host -> ?time:float -> anchors:(certificate list) -> stack
