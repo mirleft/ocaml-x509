@@ -1,4 +1,5 @@
 (trunk):
+* expose Certificate.cert_hostnames
 * Certificate.verify_chain_of_trust and X509.authenticate both return now
   [ `Ok of certificate | `Fail of certificate_failure ], where [certificate] is the trust anchor
 
