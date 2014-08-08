@@ -310,29 +310,31 @@ let split_labels name =
   else
     Some labels
 
-(* we limit our validation to a single '*' character at the beginning (left-most label)! *)
-let rec wildcard_hostname_matches hostname wildcard =
-  match hostname, wildcard with
-  | [x]  , []               -> true
-  | x::xs, y::ys when x = y -> wildcard_hostname_matches xs ys
-  | _    , _                -> false
-
 let o f g x = f (g x)
 
-let validate_hostname cert host =
+(* we limit our validation to a single '*' character at the beginning (left-most label)! *)
+let wildcard_matches host cert =
+  let rec wildcard_hostname_matches hostname wildcard =
+    match hostname, wildcard with
+    | [x]  , []               -> true
+    | x::xs, y::ys when x = y -> wildcard_hostname_matches xs ys
+    | _    , _                -> false
+  in
   let names = cert_hostnames cert in
+    match split_labels host with
+    | None      -> false
+    | Some lbls ->
+       List.map split_labels names |>
+         List_ext.filter_map ~f:(function Some ("*"::xs) -> Some xs | _ -> None) |>
+         List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
+
+let validate_hostname cert host =
   match host with
   | None                  -> true
-  | Some (`Strict name)   -> List.mem (String.lowercase name) names
-  | Some (`Wildcard name) ->
-     let name = String.lowercase name in
-     List.mem name names ||
-       match split_labels name with
-       | None      -> false
-       | Some lbls ->
-          List.map split_labels names |>
-            List_ext.filter_map ~f:(function Some ("*"::xs) -> Some xs | _ -> None) |>
-            List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
+  | Some (`Strict name)   -> List.mem (String.lowercase name) (cert_hostnames cert)
+  | Some (`Wildcard name) -> let name = String.lowercase name in
+                             List.mem name (cert_hostnames cert) ||
+                               wildcard_matches name cert
 
 let is_server_cert_valid ?host now cert =
   Printf.printf "verify server certificate %s\n"
