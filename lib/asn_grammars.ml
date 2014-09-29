@@ -322,79 +322,90 @@ module Algorithm = struct
   let identifier =
     let open Registry in
 
-    let unit = Some (`C1 ()) in
+    let f =
+      let none x = function
+        | None -> x
+        | _    -> parse_error "Algorithm: expected no parameters"
+      and null x = function
+        | Some (`C1 ()) -> x
+        | _             -> parse_error "Algorithm: expected null parameters"
+      and oid f = function
+        | Some (`C2 id) -> f id
+        | _             -> parse_error "Algorithm: expected parameter OID" in
+      case_of_2 [
 
-    let f = case_of_2 [
+      (ANSI_X9_62.ec_pub_key, oid (fun id -> EC_pub id)) ;
 
-      (ANSI_X9_62.ec_pub_key , function
-        | Some (`C2 oid) -> EC_pub oid
-        | _              -> parse_error "EC: no params") ;
+      (PKCS1.rsa_encryption          , null RSA          ) ;
+      (PKCS1.md2_rsa_encryption      , null MD2_RSA      ) ;
+      (PKCS1.md4_rsa_encryption      , null MD4_RSA      ) ;
+      (PKCS1.md5_rsa_encryption      , null MD5_RSA      ) ;
+      (PKCS1.ripemd160_rsa_encryption, null RIPEMD160_RSA) ;
+      (PKCS1.sha1_rsa_encryption     , null SHA1_RSA     ) ;
+      (PKCS1.sha256_rsa_encryption   , null SHA256_RSA   ) ;
+      (PKCS1.sha384_rsa_encryption   , null SHA384_RSA   ) ;
+      (PKCS1.sha512_rsa_encryption   , null SHA512_RSA   ) ;
+      (PKCS1.sha224_rsa_encryption   , null SHA224_RSA   ) ;
 
-      (PKCS1.rsa_encryption , fun _ -> RSA) ;
+      (ANSI_X9_62.ecdsa_sha1         , none ECDSA_SHA1   ) ;
+      (ANSI_X9_62.ecdsa_sha224       , none ECDSA_SHA224 ) ;
+      (ANSI_X9_62.ecdsa_sha256       , none ECDSA_SHA256 ) ;
+      (ANSI_X9_62.ecdsa_sha384       , none ECDSA_SHA384 ) ;
+      (ANSI_X9_62.ecdsa_sha512       , none ECDSA_SHA512 ) ;
 
-      (PKCS1.md2_rsa_encryption       , fun _ -> MD2_RSA      ) ;
-      (PKCS1.md4_rsa_encryption       , fun _ -> MD4_RSA      ) ;
-      (PKCS1.md5_rsa_encryption       , fun _ -> MD5_RSA      ) ;
-      (PKCS1.ripemd160_rsa_encryption , fun _ -> RIPEMD160_RSA) ;
-      (PKCS1.sha1_rsa_encryption      , fun _ -> SHA1_RSA     ) ;
-      (PKCS1.sha256_rsa_encryption    , fun _ -> SHA256_RSA   ) ;
-      (PKCS1.sha384_rsa_encryption    , fun _ -> SHA384_RSA   ) ;
-      (PKCS1.sha512_rsa_encryption    , fun _ -> SHA512_RSA   ) ;
-      (PKCS1.sha224_rsa_encryption    , fun _ -> SHA224_RSA   ) ;
-
-      (ANSI_X9_62.ecdsa_sha1   , fun _ -> ECDSA_SHA1  ) ;
-      (ANSI_X9_62.ecdsa_sha224 , fun _ -> ECDSA_SHA224) ;
-      (ANSI_X9_62.ecdsa_sha256 , fun _ -> ECDSA_SHA256) ;
-      (ANSI_X9_62.ecdsa_sha384 , fun _ -> ECDSA_SHA384) ;
-      (ANSI_X9_62.ecdsa_sha512 , fun _ -> ECDSA_SHA512) ;
-
-      (md2        , fun _ -> MD2       ) ;
-      (md4        , fun _ -> MD4       ) ;
-      (md5        , fun _ -> MD5       ) ;
-      (sha1       , fun _ -> SHA1      ) ;
-      (sha256     , fun _ -> SHA256    ) ;
-      (sha384     , fun _ -> SHA384    ) ;
-      (sha512     , fun _ -> SHA512    ) ;
-      (sha224     , fun _ -> SHA224    ) ;
-      (sha512_224 , fun _ -> SHA512_224) ;
-      (sha512_256 , fun _ -> SHA512_256) ]
+      (md2                           , null MD2          ) ;
+      (md4                           , null MD4          ) ;
+      (md5                           , null MD5          ) ;
+      (sha1                          , null SHA1         ) ;
+      (sha256                        , null SHA256       ) ;
+      (sha384                        , null SHA384       ) ;
+      (sha512                        , null SHA512       ) ;
+      (sha224                        , null SHA224       ) ;
+      (sha512_224                    , null SHA512_224   ) ;
+      (sha512_256                    , null SHA512_256   ) ]
 
       ~default:(fun oid _ -> parse_error_oid "unknown algorithm" oid)
 
-    and g = function
-      | EC_pub id     -> (ANSI_X9_62.ec_pub_key, Some (`C2 id))
-      | RSA           -> (PKCS1.rsa_encryption           , unit)
-      | MD2_RSA       -> (PKCS1.md2_rsa_encryption       , unit)
-      | MD4_RSA       -> (PKCS1.md4_rsa_encryption       , unit)
-      | MD5_RSA       -> (PKCS1.md5_rsa_encryption       , unit)
-      | RIPEMD160_RSA -> (PKCS1.ripemd160_rsa_encryption , unit)
-      | SHA1_RSA      -> (PKCS1.sha1_rsa_encryption      , unit)
-      | SHA256_RSA    -> (PKCS1.sha256_rsa_encryption    , unit)
-      | SHA384_RSA    -> (PKCS1.sha384_rsa_encryption    , unit)
-      | SHA512_RSA    -> (PKCS1.sha512_rsa_encryption    , unit)
-      | SHA224_RSA    -> (PKCS1.sha224_rsa_encryption    , unit)
-      | ECDSA_SHA1    -> (ANSI_X9_62.ecdsa_sha1          , unit)
-      | ECDSA_SHA224  -> (ANSI_X9_62.ecdsa_sha224        , unit)
-      | ECDSA_SHA256  -> (ANSI_X9_62.ecdsa_sha256        , unit)
-      | ECDSA_SHA384  -> (ANSI_X9_62.ecdsa_sha384        , unit)
-      | ECDSA_SHA512  -> (ANSI_X9_62.ecdsa_sha512        , unit)
-      | MD2           -> (md2                            , unit)
-      | MD4           -> (md4                            , unit)
-      | MD5           -> (md5                            , unit)
-      | SHA1          -> (sha1                           , unit)
-      | SHA256        -> (sha256                         , unit)
-      | SHA384        -> (sha384                         , unit)
-      | SHA512        -> (sha512                         , unit)
-      | SHA224        -> (sha224                         , unit)
-      | SHA512_224    -> (sha512_224                     , unit)
-      | SHA512_256    -> (sha512_256                     , unit)
+    and g =
+      let none    = None
+      and null    = Some (`C1 ())
+      and oid  id = Some (`C2 id) in
+      function
+      | EC_pub id     -> (ANSI_X9_62.ec_pub_key , oid id)
+
+      | RSA           -> (PKCS1.rsa_encryption           , null)
+      | MD2_RSA       -> (PKCS1.md2_rsa_encryption       , null)
+      | MD4_RSA       -> (PKCS1.md4_rsa_encryption       , null)
+      | MD5_RSA       -> (PKCS1.md5_rsa_encryption       , null)
+      | RIPEMD160_RSA -> (PKCS1.ripemd160_rsa_encryption , null)
+      | SHA1_RSA      -> (PKCS1.sha1_rsa_encryption      , null)
+      | SHA256_RSA    -> (PKCS1.sha256_rsa_encryption    , null)
+      | SHA384_RSA    -> (PKCS1.sha384_rsa_encryption    , null)
+      | SHA512_RSA    -> (PKCS1.sha512_rsa_encryption    , null)
+      | SHA224_RSA    -> (PKCS1.sha224_rsa_encryption    , null)
+
+      | ECDSA_SHA1    -> (ANSI_X9_62.ecdsa_sha1          , none)
+      | ECDSA_SHA224  -> (ANSI_X9_62.ecdsa_sha224        , none)
+      | ECDSA_SHA256  -> (ANSI_X9_62.ecdsa_sha256        , none)
+      | ECDSA_SHA384  -> (ANSI_X9_62.ecdsa_sha384        , none)
+      | ECDSA_SHA512  -> (ANSI_X9_62.ecdsa_sha512        , none)
+
+      | MD2           -> (md2                            , null)
+      | MD4           -> (md4                            , null)
+      | MD5           -> (md5                            , null)
+      | SHA1          -> (sha1                           , null)
+      | SHA256        -> (sha256                         , null)
+      | SHA384        -> (sha384                         , null)
+      | SHA512        -> (sha512                         , null)
+      | SHA224        -> (sha224                         , null)
+      | SHA512_224    -> (sha512_224                     , null)
+      | SHA512_256    -> (sha512_256                     , null)
     in
 
     map f g @@
     sequence2
       (required ~label:"algorithm" oid)
-      (optional ~label:"params"
-        (choice2 null oid))
+      (optional ~label:"params" (choice2 null oid))
 
 end
 
