@@ -176,18 +176,21 @@ module General_name = struct
    * Cross-check. NSS seems to accept *all* oids here and just assumes UTF8.
    * *)
   let another_name =
+    let open Registry in
     let f = function
-      | (oid, `C1 n) -> (oid, n)
-      | (oid, `C2 _) -> (oid, "")
+      | (oid, `C1 n) when Name_extn.is_utf8_id oid -> (oid, n)
+      | (oid, `C2 n) -> (oid, n)
+      | (oid, `C3 _) -> (oid, "")
     and g = function
-      | (oid, "") -> (oid, `C2 ())
-      | (oid, n ) -> (oid, `C1 n) in
+      | (oid, "") -> (oid, `C3 ())
+      | (oid, n ) when Name_extn.is_utf8_id oid -> (oid, `C1 n)
+      | (oid, n ) -> (oid, `C2 n) in
     map f g @@
     sequence2
       (required ~label:"type-id" oid)
       (required ~label:"value" @@
         explicit 0
-          (choice2 utf8_string null))
+          (choice3 utf8_string ia5_string null))
 
   and or_address = null (* Horrible crap, need to fill it. *)
 

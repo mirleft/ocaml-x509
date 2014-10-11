@@ -254,6 +254,8 @@ module Name_extn = struct
 
   (* rfc6120 *)
   let xmpp_addr = id_other_name <| 5
+  (* rfc4985 *)
+  let srv_name = id_other_name <| 7 (* an IA5String _Service.Name *)
 
   let venezuela   = base 2 16 <| 862
   let venezuela_1 = venezuela <| 2 <| 1
