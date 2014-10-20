@@ -178,7 +178,7 @@ module General_name = struct
   let another_name =
     let open Registry in
     let f = function
-      | (oid, `C1 n) when Name_extn.is_utf8_id oid -> (oid, n)
+      | (oid, `C1 n) -> (oid, n)
       | (oid, `C2 n) -> (oid, n)
       | (oid, `C3 _) -> (oid, "")
     and g = function
