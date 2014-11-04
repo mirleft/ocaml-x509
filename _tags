@@ -40,3 +40,6 @@ true: annot, bin_annot
 <tests/*.ml{,i,y}>: use_tests
 <tests/*.ml{,i,y}>: use_x509
 # OASIS_STOP
+
+"random": -traverse
+"random": not_hygienic

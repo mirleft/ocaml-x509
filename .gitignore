@@ -6,3 +6,5 @@ log
 *.native
 *.byte
 *.docdir
+
+/random
