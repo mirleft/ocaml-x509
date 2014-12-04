@@ -224,6 +224,7 @@ let validate_ca_extensions { asn = cert } =
     (* When present, conforming CAs SHOULD mark this extension as critical *)
     (* yeah, you wish... *)
     | Some (_, Key_usage usage) -> List.mem `Key_cert_sign usage
+    | None                      -> true (* CA Cert does not include any key usage extensions *)
     | _                         -> false ) &&
 
   (* if we require this, we cannot talk to github.com
