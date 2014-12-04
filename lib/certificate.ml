@@ -204,7 +204,19 @@ let validate_path_len pathlen { asn = cert } =
   | `V3, Some (_ , Basic_constraints (true, Some n)) -> n >= pathlen
   | _                                                -> false
 
-let validate_ca_extensions { asn = cert } =
+let cacert_fingerprints =
+  List.map
+    Uncommon.Cs.of_hex
+    [ "FF2A65CFF1149C7430101E0F65A07EC19183A3B633EF4A6510890DAD18316B3A" (* class 1 from 2003 *) ;
+      "4EDDE9E55CA453B388887CAA25D5C5C5BCCF2891D73B87495808293D5FAC83C8" (* class 3 from 2011 *) ;
+    ]
+
+let is_cacert raw =
+  let fp = Hash.digest `SHA256 raw in
+  List.exists (fun x -> Cs.equal x fp) cacert_fingerprints
+
+let validate_ca_extensions { asn ; raw } =
+  let cert = asn in
   let open Extension in
   (* comments from RFC5280 *)
   (* 4.2.1.9 Basic Constraints *)
@@ -224,7 +236,7 @@ let validate_ca_extensions { asn = cert } =
     (* When present, conforming CAs SHOULD mark this extension as critical *)
     (* yeah, you wish... *)
     | Some (_, Key_usage usage) -> List.mem `Key_cert_sign usage
-    | None                      -> true (* CA Cert does not include any key usage extensions *)
+    | None when is_cacert raw   -> true (* CA Cert does not include any key usage extensions *)
     | _                         -> false ) &&
 
   (* if we require this, we cannot talk to github.com
