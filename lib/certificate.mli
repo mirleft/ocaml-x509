@@ -62,6 +62,10 @@ val verify_chain_of_trust :
 (** [valid_cas ?time certificates] is [valid_certificates] which has filtered out those certificates which validity period does not contain [time]. Furthermore, X509v3 extensions are checked (basic constraints must be true). *)
 val valid_cas : ?time:float -> certificate list -> certificate list
 
+val trust_fingerprint :
+  ?host:host -> ?time:float -> server_fingerprint:Cstruct.t -> stack
+  -> [ `Ok of certificate | `Fail of certificate_failure ]
+
 (** [common_name_to_string certificate] is [common_name] which is the extracted common name from the subject *)
 val common_name_to_string         : certificate -> string
 

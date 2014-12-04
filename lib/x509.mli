@@ -44,6 +44,9 @@ module Authenticator : sig
   (** [chain_of_trust ?time trust_anchors] is [authenticator], which uses the given [time] and set of [trust_anchors] to verify the certificate chain. This is an implementation of the algorithm in RFC5280. *)
   val chain_of_trust : ?time:float -> Cert.t list -> t
 
+  (** [server_fingerprint ?time server_fingerprint] is an [authenticator] which uses the given [time] to verify the certificate chain - if successful the SHA256 fingerprint of the server certificate is checked. *)
+  val server_fingerprint : ?time:float -> server_fingerprint:Cstruct.t -> t
+
   (** [null] is [authenticator], which always returns [`Ok]. For testing purposes only. *)
   val null : t
 end

@@ -431,6 +431,27 @@ let valid_cas ?time cas =
     (fun cert -> is_success @@ is_ca_cert_valid time cert)
     cas
 
+let trust_fingerprint ?host ?time ~server_fingerprint (server, certs) =
+  let res =
+    let rec climb pathlen cert = function
+      | super :: certs ->
+          signs pathlen super cert >>= fun () ->
+          climb (succ pathlen) super certs
+      | [] ->
+        if Cs.equal
+            (Hash.digest `SHA256 server.raw)
+            server_fingerprint
+        then
+          Ok server
+        else
+          fail InvalidCertificate
+    in
+    is_server_cert_valid ?host time server >>= fun () ->
+    iter_m (is_cert_valid time) certs      >>= fun () ->
+    climb 0 server certs
+  in
+  lower res
+
 let certificate_failure_to_string = function
   | InvalidCertificate      -> "Invalid Certificate"
   | InvalidSignature        -> "Invalid Signature"
