@@ -139,6 +139,10 @@ module Authenticator = struct
     fun ?host stack ->
       Certificate.verify_chain_of_trust ?host ?time ~anchors:cas stack
 
+  let server_fingerprint ?time ~server_fingerprint =
+    fun ?host stack ->
+      Certificate.trust_fingerprint ?host ?time ~server_fingerprint stack
+
   let null ?host:_ (c, _) = `Ok c
 
 end
