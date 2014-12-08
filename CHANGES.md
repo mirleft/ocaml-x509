@@ -1,3 +1,6 @@
+master
+* server_fingerprint authenticator which validates the server certificate based on a provided server_name * fingerprint list
+
 0.2.0 (2014-10-30):
 * expose Certificate.cert_hostnames, wildcard_matches
 * Certificate.verify_chain_of_trust and X509.authenticate both return now

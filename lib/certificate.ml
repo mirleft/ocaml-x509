@@ -444,20 +444,24 @@ let valid_cas ?time cas =
     (fun cert -> is_success @@ is_ca_cert_valid time cert)
     cas
 
-let trust_fingerprint ?host ?time ~server_fingerprint (server, certs) =
+let trust_fingerprint ?host ?time ~hash ~fingerprints (server, certs) =
   let res =
     let rec climb pathlen cert = function
       | super :: certs ->
           signs pathlen super cert >>= fun () ->
           climb (succ pathlen) super certs
       | [] ->
-        if Cs.equal
-            (Hash.digest `SHA256 server.raw)
-            server_fingerprint
-        then
-          Ok server
-        else
-          fail InvalidCertificate
+        match host with
+        | None   -> fail InvalidServerName
+        | Some (`Wildcard x)
+        | Some (`Strict x) ->
+          match
+            (try Some (List.find (fun (n, _) -> n = x) fingerprints)
+             with Not_found -> None),
+            Hash.digest hash server.raw
+          with
+          | Some (_, fp), digest when Cs.equal fp digest -> Ok server
+          | _ -> fail InvalidCertificate
     in
     is_server_cert_valid ?host time server >>= fun () ->
     iter_m (is_cert_valid time) certs      >>= fun () ->

@@ -13,6 +13,11 @@ module Cs = struct
   let ends_with cs target =
     let l1 = len cs and l2 = len target in
     l1 >= l2 && equal (sub cs (l1 - l2) l2) target
+
+  let hex_to_cs = of_hex
+
+  let dotted_hex_to_cs =
+    o hex_to_cs (String.map (function ':' -> ' ' | x -> x))
 end
 
 module Pem = struct
@@ -139,9 +144,9 @@ module Authenticator = struct
     fun ?host stack ->
       Certificate.verify_chain_of_trust ?host ?time ~anchors:cas stack
 
-  let server_fingerprint ?time ~server_fingerprint =
+  let server_fingerprint ?time ~hash ~fingerprints =
     fun ?host stack ->
-      Certificate.trust_fingerprint ?host ?time ~server_fingerprint stack
+      Certificate.trust_fingerprint ?host ?time ~hash ~fingerprints stack
 
   let null ?host:_ (c, _) = `Ok c
 

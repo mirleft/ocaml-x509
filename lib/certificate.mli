@@ -59,12 +59,13 @@ val verify_chain_of_trust :
   ?host:host -> ?time:float -> anchors:(certificate list) -> stack
   -> [ `Ok of certificate | `Fail of certificate_failure ]
 
+(** [trust_fingerprint ?time hash fingerprints stack] is [validation_result], where the certificate [stack] is verified (using same RFC5280 algorithm). Instead of trust anchors, a map from hostname to fingerprint is provided, where the certificate is checked against. Lookup in the fingerprint list is based on the provided host. If no host is provided, [validation_result] is [`Fail]. *)
+val trust_fingerprint :
+  ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash -> fingerprints:(string * Cstruct.t) list -> stack
+  -> [ `Ok of certificate | `Fail of certificate_failure ]
+
 (** [valid_cas ?time certificates] is [valid_certificates] which has filtered out those certificates which validity period does not contain [time]. Furthermore, X509v3 extensions are checked (basic constraints must be true). *)
 val valid_cas : ?time:float -> certificate list -> certificate list
-
-val trust_fingerprint :
-  ?host:host -> ?time:float -> server_fingerprint:Cstruct.t -> stack
-  -> [ `Ok of certificate | `Fail of certificate_failure ]
 
 (** [common_name_to_string certificate] is [common_name] which is the extracted common name from the subject *)
 val common_name_to_string         : certificate -> string

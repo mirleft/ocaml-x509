@@ -1,5 +1,10 @@
 (** Modules for X509 (RFC5280) handling *)
 
+module Cs : sig
+  val hex_to_cs : string -> Cstruct.t
+  val dotted_hex_to_cs : string -> Cstruct.t
+end
+
 (** A parser for PEM files *)
 module Pem : sig
   (** [parse pem] is [(name * data) list], in which the [pem] is parsed into its components, each surrounded by [BEGIN name] and [END name]. The actual [data] is base64 decoded. *)
@@ -44,8 +49,8 @@ module Authenticator : sig
   (** [chain_of_trust ?time trust_anchors] is [authenticator], which uses the given [time] and set of [trust_anchors] to verify the certificate chain. This is an implementation of the algorithm in RFC5280. *)
   val chain_of_trust : ?time:float -> Cert.t list -> t
 
-  (** [server_fingerprint ?time server_fingerprint] is an [authenticator] which uses the given [time] to verify the certificate chain - if successful the SHA256 fingerprint of the server certificate is checked. *)
-  val server_fingerprint : ?time:float -> server_fingerprint:Cstruct.t -> t
+  (** [server_fingerprint ?time hash fingerprints] is an [authenticator] which uses the given [time] to verify the certificate chain - if successful the [hash] of the server certificate is checked against the entry in the fingerprint list. *)
+  val server_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash -> fingerprints:(string * Cstruct.t) list -> t
 
   (** [null] is [authenticator], which always returns [`Ok]. For testing purposes only. *)
   val null : t
