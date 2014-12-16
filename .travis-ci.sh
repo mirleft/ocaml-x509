@@ -1,5 +1,4 @@
-# OPAM packages needed to build tests.
-OPAM_PACKAGES="cstruct sexplib ctypes nocrypto asn1-combinators oUnit"
+#!/bin/sh
 
 case "$OCAML_VERSION" in
     4.01.0) ppa=avsm/ocaml41+opam12 ;;
@@ -18,7 +17,10 @@ opam init git://github.com/ocaml/opam-repository >/dev/null 2>&1
 opam pin -n add nocrypto git://github.com/mirleft/ocaml-nocrypto.git
 opam pin -n add asn1-combinators git://github.com/mirleft/ocaml-asn1-combinators.git
 
-opam install ${OPAM_PACKAGES}
+opam pin -n add x509 .
+
+opam install --deps-only x509
+opam install oUnit
 
 eval `opam config env`
 ocaml setup.ml -configure --enable-tests
