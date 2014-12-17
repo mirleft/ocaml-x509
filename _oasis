@@ -19,7 +19,7 @@ Library "x509"
 
 Library "tests"
   Path            : tests/
-  Modules         : X509tests, Unittests
+  Modules         : Regression, X509tests, Unittests
   Install         : false
   Build          $: flag(tests)
   BuildDepends    : x509, oUnit, cstruct.unix
