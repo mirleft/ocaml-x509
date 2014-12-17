@@ -302,4 +302,5 @@ let x509_tests =
   first_wildcard_cert_tests @ (ca_tests first_wildcard_cert_ca_test) @
   second_cert_tests @ (im_ca_tests second_cert_ca_test) @ (im_ca_tests second_wildcard_cert_ca_test) @
   (im_ca_tests second_no_cn_cert_ca_test) @
-  invalid_tests
+  invalid_tests @
+  Regression.regression_tests
