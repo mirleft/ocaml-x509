@@ -1,5 +1,6 @@
-master
-* server_fingerprint authenticator which validates the server certificate based on a provided server_name * fingerprint list
+0.2.1 (2014-12-21):
+* server_fingerprint authenticator which validates the server certificate based on a hash algorithm and (server_name * fingerprint) list instead of a set of trust anchors
+* whitelist CAcert certificates (which do not include mandatory X.509v3 KeyUsage extension)
 
 0.2.0 (2014-10-30):
 * expose Certificate.cert_hostnames, wildcard_matches
