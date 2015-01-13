@@ -73,18 +73,20 @@ let parse cs =
   | Some asn -> Some { asn ; raw = cs }
 
 type certificate_failure =
-  | InvalidCertificate
-  | InvalidSignature
-  | CertificateExpired
-  | InvalidExtensions
-  | InvalidPathlen
-  | SelfSigned
+  | InvalidFingerprint of certificate
+  | InvalidSignature of certificate * certificate
+  | CertificateExpired of certificate
+  | InvalidExtensions of certificate
+  | InvalidVersion of certificate
+  | InvalidPathlen of certificate
+  | SelfSigned of certificate
   | NoTrustAnchor
-  | InvalidInput
-  | InvalidServerExtensions
-  | InvalidServerName
-  | InvalidCA
-  with sexp
+  | InvalidServerExtensions of certificate
+  | InvalidServerName of certificate
+  | NoServerName
+  | InvalidCA of certificate
+  | IssuerSubjectMismatch of certificate * certificate
+  | AuthorityKeyIdSubjectKeyIdMismatch of certificate * certificate
 
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
@@ -276,17 +278,15 @@ let validate_server_extensions { asn = cert } =
 
 
 let is_cert_valid now cert =
-    Printf.printf "verify intermediate certificate %s\n"
-                  (common_name_to_string cert);
     match
       validate_time now cert,
       version_matches_extensions cert,
       validate_ca_extensions cert
     with
     | (true, true, true) -> success
-    | (false, _, _)      -> fail CertificateExpired
-    | (_, false, _)      -> fail InvalidExtensions
-    | (_, _, false)      -> fail InvalidExtensions
+    | (false, _, _)      -> fail (CertificateExpired cert)
+    | (_, false, _)      -> fail (InvalidVersion cert)
+    | (_, _, false)      -> fail (InvalidExtensions cert)
 
 let valid_trust_anchor_extensions cert =
   match cert.asn.tbs_cert.version with
@@ -302,11 +302,11 @@ let is_ca_cert_valid now cert =
     valid_trust_anchor_extensions cert
   with
   | (true, true, true, true, true) -> success
-  | (false, _, _, _, _)            -> fail InvalidCA
-  | (_, false, _, _, _)            -> fail InvalidExtensions
-  | (_, _, false, _, _)            -> fail InvalidSignature
-  | (_, _, _, false, _)            -> fail CertificateExpired
-  | (_, _, _, _, false)            -> fail InvalidExtensions
+  | (false, _, _, _, _)            -> fail (InvalidCA cert)
+  | (_, false, _, _, _)            -> fail (InvalidVersion cert)
+  | (_, _, false, _, _)            -> fail (InvalidSignature (cert, cert))
+  | (_, _, _, false, _)            -> fail (CertificateExpired cert)
+  | (_, _, _, _, false)            -> fail (InvalidExtensions cert)
 
 let validate_public_key_type { asn = cert } = function
   | None   -> true
@@ -350,8 +350,6 @@ let validate_hostname cert host =
                                wildcard_matches name cert
 
 let is_server_cert_valid ?host now cert =
-  Printf.printf "verify server certificate %s\n"
-                (common_name_to_string cert);
   match
     validate_time now cert,
     validate_hostname cert host,
@@ -359,10 +357,10 @@ let is_server_cert_valid ?host now cert =
     validate_server_extensions cert
   with
   | (true, true, true, true) -> success
-  | (false, _, _, _)         -> fail CertificateExpired
-  | (_, false, _, _)         -> fail InvalidServerName
-  | (_, _, false, _)         -> fail InvalidServerExtensions
-  | (_, _, _, false)         -> fail InvalidServerExtensions
+  | (false, _, _, _)         -> fail (CertificateExpired cert)
+  | (_, false, _, _)         -> fail (InvalidServerName cert)
+  | (_, _, false, _)         -> fail (InvalidVersion cert)
+  | (_, _, _, false)         -> fail (InvalidServerExtensions cert)
 
 
 let ext_authority_matches_subject { asn = trusted } { asn = cert } =
@@ -378,10 +376,6 @@ let ext_authority_matches_subject { asn = trusted } { asn = cert } =
   | _, _                                       -> false
 
 let signs pathlen trusted cert =
-  Printf.printf "verifying relation of %s -> %s (pathlen %d)\n"
-                (common_name_to_string trusted)
-                (common_name_to_string cert)
-                pathlen;
   match
     issuer_matches_subject trusted cert,
     ext_authority_matches_subject trusted cert,
@@ -389,17 +383,13 @@ let signs pathlen trusted cert =
     validate_path_len pathlen trusted
   with
   | (true, true, true, true) -> success
-  | (false, _, _, _)         -> fail InvalidCertificate
-  | (_, false, _, _)         -> fail InvalidExtensions
-  | (_, _, false, _)         -> fail InvalidSignature
-  | (_, _, _, false)         -> fail InvalidPathlen
+  | (false, _, _, _)         -> fail (IssuerSubjectMismatch (trusted, cert))
+  | (_, false, _, _)         -> fail (AuthorityKeyIdSubjectKeyIdMismatch (trusted, cert))
+  | (_, _, false, _)         -> fail (InvalidSignature (trusted, cert))
+  | (_, _, _, false)         -> fail (InvalidPathlen trusted)
 
 
 let issuer trusted cert =
-  (* first have to find issuer of ``c`` in ``trusted`` *)
-  Printf.printf "looking for issuer of %s (%d CAs)\n"
-                (common_name_to_string cert)
-                (List.length trusted);
   List.filter (fun p -> issuer_matches_subject p cert) trusted
 
 let parse_stack css =
@@ -428,7 +418,7 @@ let verify_chain_of_trust ?host ?time ~anchors (server, certs) =
           climb (succ pathlen) super certs
       | [] ->
           match List.filter (validate_time time) (issuer anchors cert) with
-          | [] when is_self_signed cert -> fail SelfSigned
+          | [] when is_self_signed cert -> fail (SelfSigned cert)
           | []                          -> fail NoTrustAnchor
           | anchors                     ->
              validate_anchors pathlen cert anchors
@@ -452,7 +442,7 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints (server, certs) =
           climb (succ pathlen) super certs
       | [] ->
         match host with
-        | None   -> fail InvalidServerName
+        | None   -> fail NoServerName
         | Some (`Wildcard x)
         | Some (`Strict x) ->
           match
@@ -461,7 +451,7 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints (server, certs) =
             Hash.digest hash server.raw
           with
           | Some (_, fp), digest when Cs.equal fp digest -> Ok server
-          | _ -> fail InvalidCertificate
+          | _ -> fail (InvalidFingerprint server)
     in
     is_server_cert_valid ?host time server >>= fun () ->
     iter_m (is_cert_valid time) certs      >>= fun () ->
@@ -470,17 +460,20 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints (server, certs) =
   lower res
 
 let certificate_failure_to_string = function
-  | InvalidCertificate      -> "Invalid Certificate"
-  | InvalidSignature        -> "Invalid Signature"
-  | CertificateExpired      -> "Certificate Expired"
-  | InvalidExtensions       -> "Invalid Extensions"
-  | InvalidPathlen          -> "Invalid Pathlength"
-  | SelfSigned              -> "Self Signed Certificate"
-  | NoTrustAnchor           -> "No Trust Anchor"
-  | InvalidInput            -> "Invalid Input"
-  | InvalidServerExtensions -> "Invalid Server Certificate Extensions"
-  | InvalidServerName       -> "Invalid Server Certificate Name"
-  | InvalidCA               -> "Invalid CA"
+  | InvalidFingerprint c -> "Invalid Fingerprint: " ^ (common_name_to_string c)
+  | InvalidSignature (t, c) -> "Invalid Signature: (" ^ (common_name_to_string t) ^ " does not validate " ^ (common_name_to_string c) ^ ")"
+  | CertificateExpired c -> "Certificate Expired: " ^ (common_name_to_string c)
+  | InvalidExtensions c -> "Invalid (intermediate CA/CA) extensions: " ^ (common_name_to_string c)
+  | InvalidVersion c -> "Invalid X.509 version given the extensions: " ^ (common_name_to_string c)
+  | InvalidPathlen c -> "Invalid Pathlength: " ^ (common_name_to_string c)
+  | SelfSigned c -> "Self Signed Certificate: " ^ (common_name_to_string c)
+  | NoTrustAnchor -> "No Trust Anchor"
+  | InvalidServerExtensions c -> "Invalid Server Extensions: " ^ (common_name_to_string c)
+  | InvalidServerName c -> "Invalid Server Certificate Name: " ^ (common_name_to_string c)
+  | InvalidCA c -> "Invalid CA (issuer does not match subject): " ^ (common_name_to_string c)
+  | IssuerSubjectMismatch (t, c) -> "Issuer of " ^ (common_name_to_string c) ^ " does not match subject of " ^ (common_name_to_string t)
+  | AuthorityKeyIdSubjectKeyIdMismatch (t, c) -> "Authority Key ID extension of " ^ (common_name_to_string c) ^ " does not match Subject Key ID extension of " ^ (common_name_to_string t)
+  | NoServerName -> "No server name given (required for fingerprint verification)"
 
 (* RFC5246 says 'root certificate authority MAY be omitted' *)
 
@@ -519,13 +512,3 @@ do not forget about 'authority information access' (private internet extension -
  *)
 
 (* Future TODO: anything with subject_id and issuer_id ? seems to be not used by anybody *)
-
-(* - test setup (ACM CCS'12):
-            self-signed cert with requested commonName,
-            self-signed cert with other commonName,
-            valid signed cert with other commonName
-   - also of interest: international domain names, wildcards *)
-
-(* alternative approach: interface and implementation for certificate pinning *)
-(* alternative approach': notary system / perspectives *)
-(* alternative approach'': static list of trusted certificates *)
