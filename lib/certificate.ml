@@ -411,22 +411,24 @@ let rec validate_anchors pathlen cert = function
              | Ok _    -> Ok x
              | Error _ -> validate_anchors pathlen cert xs
 
+let verify_chain ?host ?time (server, certs) =
+  let rec climb pathlen cert = function
+    | super :: certs ->
+      signs pathlen super cert >>= fun () ->
+      climb (succ pathlen) super certs
+    | [] -> Ok (pathlen, cert)
+  in
+  is_server_cert_valid ?host time server >>= fun () ->
+  iter_m (is_cert_valid time) certs      >>= fun () ->
+  climb 0 server certs
+
 let verify_chain_of_trust ?host ?time ~anchors (server, certs) =
   let res =
-    let rec climb pathlen cert = function
-      | super :: certs ->
-          signs pathlen super cert >>= fun () ->
-          climb (succ pathlen) super certs
-      | [] ->
-          match List.filter (validate_time time) (issuer anchors cert) with
-          | [] when is_self_signed cert -> fail (SelfSigned cert)
-          | []                          -> fail NoTrustAnchor
-          | anchors                     ->
-             validate_anchors pathlen cert anchors
-    in
-    is_server_cert_valid ?host time server >>= fun () ->
-    iter_m (is_cert_valid time) certs      >>= fun () ->
-    climb 0 server certs
+    verify_chain ?host ?time (server, certs) >>= fun (pathlen, cert) ->
+    match List.filter (validate_time time) (issuer anchors cert) with
+    | [] when is_self_signed cert -> fail (SelfSigned cert)
+    | []                          -> fail NoTrustAnchor
+    | anchors                     -> validate_anchors pathlen cert anchors
   in
   lower res
 
@@ -442,23 +444,23 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints (server, certs) =
     match fp, fingerprint with
     | f, f' when Cs.equal f f' -> Ok server
     | _ -> fail (InvalidFingerprint server)
+  and cert_fp = Hash.digest hash server.raw
   in
+
   let res =
-    let rec climb pathlen cert = function
-      | super :: certs ->
-          signs pathlen super cert >>= fun () ->
-          climb (succ pathlen) super certs
-      | [] ->
-        match host with
-        | None   -> fail NoServerName
-        | Some (`Wildcard x)
-        | Some (`Strict x) ->
-          let cert_fp = Hash.digest hash server.raw in
-          verify_fingerprint x cert_fp fingerprints
-    in
-    is_server_cert_valid ?host time server >>= fun () ->
-    iter_m (is_cert_valid time) certs      >>= fun () ->
-    climb 0 server certs
+    match host with
+    | None -> fail NoServerName
+    | Some (`Wildcard x)
+    | Some (`Strict x) -> Ok x >>= fun name ->
+    match certs with
+    | [] ->
+      ( match validate_time time server, validate_hostname server host with
+        | true , true  -> verify_fingerprint name cert_fp fingerprints
+        | false, _     -> fail (CertificateExpired server)
+        | _    , false -> fail (InvalidServerName server) )
+    | _ ->
+      verify_chain ?host ?time (server, certs) >>= fun _ ->
+      verify_fingerprint name cert_fp fingerprints
   in
   lower res
 
