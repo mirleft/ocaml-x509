@@ -1,3 +1,7 @@
+(trunk):
+* more detailed error messages (type certificate_failure modified)
+* no longer Printf.printf debug messages
+
 0.2.1 (2014-12-21):
 * server_fingerprint authenticator which validates the server certificate based on a hash algorithm and (server_name * fingerprint) list instead of a set of trust anchors
 * whitelist CAcert certificates (which do not include mandatory X.509v3 KeyUsage extension)
