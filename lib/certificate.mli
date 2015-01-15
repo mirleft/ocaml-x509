@@ -23,7 +23,6 @@ val asn_of_cert : certificate -> Asn_grammars.certificate
 
 (** possible failures while validating a certificate chain *)
 type certificate_failure =
-  | InvalidFingerprint of certificate
   | InvalidSignature of certificate * certificate
   | CertificateExpired of certificate
   | InvalidExtensions of certificate
@@ -33,10 +32,12 @@ type certificate_failure =
   | NoTrustAnchor
   | InvalidServerExtensions of certificate
   | InvalidServerName of certificate
-  | NoServerName
   | InvalidCA of certificate
   | IssuerSubjectMismatch of certificate * certificate
   | AuthorityKeyIdSubjectKeyIdMismatch of certificate * certificate
+  | NoServerName
+  | ServerNameNotPresent
+  | InvalidFingerprint of certificate
 
 (** variant of different public key types of a certificate *)
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
