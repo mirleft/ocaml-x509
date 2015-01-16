@@ -73,7 +73,6 @@ let parse cs =
   | Some asn -> Some { asn ; raw = cs }
 
 type certificate_failure =
-  | InvalidFingerprint of certificate
   | InvalidSignature of certificate * certificate
   | CertificateExpired of certificate
   | InvalidExtensions of certificate
@@ -83,10 +82,12 @@ type certificate_failure =
   | NoTrustAnchor
   | InvalidServerExtensions of certificate
   | InvalidServerName of certificate
-  | NoServerName
   | InvalidCA of certificate
   | IssuerSubjectMismatch of certificate * certificate
   | AuthorityKeyIdSubjectKeyIdMismatch of certificate * certificate
+  | NoServerName
+  | ServerNameNotPresent
+  | InvalidFingerprint of certificate
 
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
@@ -410,22 +411,24 @@ let rec validate_anchors pathlen cert = function
              | Ok _    -> Ok x
              | Error _ -> validate_anchors pathlen cert xs
 
+let verify_chain ?host ?time (server, certs) =
+  let rec climb pathlen cert = function
+    | super :: certs ->
+      signs pathlen super cert >>= fun () ->
+      climb (succ pathlen) super certs
+    | [] -> Ok (pathlen, cert)
+  in
+  is_server_cert_valid ?host time server >>= fun () ->
+  iter_m (is_cert_valid time) certs      >>= fun () ->
+  climb 0 server certs
+
 let verify_chain_of_trust ?host ?time ~anchors (server, certs) =
   let res =
-    let rec climb pathlen cert = function
-      | super :: certs ->
-          signs pathlen super cert >>= fun () ->
-          climb (succ pathlen) super certs
-      | [] ->
-          match List.filter (validate_time time) (issuer anchors cert) with
-          | [] when is_self_signed cert -> fail (SelfSigned cert)
-          | []                          -> fail NoTrustAnchor
-          | anchors                     ->
-             validate_anchors pathlen cert anchors
-    in
-    is_server_cert_valid ?host time server >>= fun () ->
-    iter_m (is_cert_valid time) certs      >>= fun () ->
-    climb 0 server certs
+    verify_chain ?host ?time (server, certs) >>= fun (pathlen, cert) ->
+    match List.filter (validate_time time) (issuer anchors cert) with
+    | [] when is_self_signed cert -> fail (SelfSigned cert)
+    | []                          -> fail NoTrustAnchor
+    | anchors                     -> validate_anchors pathlen cert anchors
   in
   lower res
 
@@ -435,27 +438,29 @@ let valid_cas ?time cas =
     cas
 
 let trust_fingerprint ?host ?time ~hash ~fingerprints (server, certs) =
+  let verify_fingerprint name fingerprint fingerprints =
+    (try Ok (List.find (fun (n, _) -> n = name) fingerprints)
+     with Not_found -> fail ServerNameNotPresent) >>= fun (_, fp) ->
+    match fp, fingerprint with
+    | f, f' when Cs.equal f f' -> Ok server
+    | _ -> fail (InvalidFingerprint server)
+  and cert_fp = Hash.digest hash server.raw
+  in
+
   let res =
-    let rec climb pathlen cert = function
-      | super :: certs ->
-          signs pathlen super cert >>= fun () ->
-          climb (succ pathlen) super certs
+    match host with
+    | None -> fail NoServerName
+    | Some (`Wildcard name)
+    | Some (`Strict name) ->
+      match certs with
       | [] ->
-        match host with
-        | None   -> fail NoServerName
-        | Some (`Wildcard x)
-        | Some (`Strict x) ->
-          match
-            (try Some (List.find (fun (n, _) -> n = x) fingerprints)
-             with Not_found -> None),
-            Hash.digest hash server.raw
-          with
-          | Some (_, fp), digest when Cs.equal fp digest -> Ok server
-          | _ -> fail (InvalidFingerprint server)
-    in
-    is_server_cert_valid ?host time server >>= fun () ->
-    iter_m (is_cert_valid time) certs      >>= fun () ->
-    climb 0 server certs
+        ( match validate_time time server, validate_hostname server host with
+          | true , true  -> verify_fingerprint name cert_fp fingerprints
+          | false, _     -> fail (CertificateExpired server)
+          | _    , false -> fail (InvalidServerName server) )
+      | _ ->
+        verify_chain ?host ?time (server, certs) >>= fun _ ->
+        verify_fingerprint name cert_fp fingerprints
   in
   lower res
 
@@ -474,6 +479,7 @@ let certificate_failure_to_string = function
   | IssuerSubjectMismatch (t, c) -> "Issuer of " ^ (common_name_to_string c) ^ " does not match subject of " ^ (common_name_to_string t)
   | AuthorityKeyIdSubjectKeyIdMismatch (t, c) -> "Authority Key ID extension of " ^ (common_name_to_string c) ^ " does not match Subject Key ID extension of " ^ (common_name_to_string t)
   | NoServerName -> "No server name given (required for fingerprint verification)"
+  | ServerNameNotPresent -> "Given server name not in fingerprint list"
 
 (* RFC5246 says 'root certificate authority MAY be omitted' *)
 
