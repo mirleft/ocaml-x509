@@ -450,17 +450,17 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints (server, certs) =
   let res =
     match host with
     | None -> fail NoServerName
-    | Some (`Wildcard x)
-    | Some (`Strict x) -> Ok x >>= fun name ->
-    match certs with
-    | [] ->
-      ( match validate_time time server, validate_hostname server host with
-        | true , true  -> verify_fingerprint name cert_fp fingerprints
-        | false, _     -> fail (CertificateExpired server)
-        | _    , false -> fail (InvalidServerName server) )
-    | _ ->
-      verify_chain ?host ?time (server, certs) >>= fun _ ->
-      verify_fingerprint name cert_fp fingerprints
+    | Some (`Wildcard name)
+    | Some (`Strict name) ->
+      match certs with
+      | [] ->
+        ( match validate_time time server, validate_hostname server host with
+          | true , true  -> verify_fingerprint name cert_fp fingerprints
+          | false, _     -> fail (CertificateExpired server)
+          | _    , false -> fail (InvalidServerName server) )
+      | _ ->
+        verify_chain ?host ?time (server, certs) >>= fun _ ->
+        verify_fingerprint name cert_fp fingerprints
   in
   lower res
 
