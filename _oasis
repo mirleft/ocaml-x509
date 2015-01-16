@@ -16,6 +16,7 @@ Library "x509"
   Modules         : Asn_grammars, Certificate, X509
   InternalModules : X509_common, Registry
   BuildDepends    : cstruct, sexplib.syntax, nocrypto, asn1-combinators
+  ByteOpt         : -w A-4-33-40-41-42-43-34-44
 
 Library "tests"
   Path            : tests/

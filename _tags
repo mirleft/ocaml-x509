@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 0077151cf9e2ceec30d4a6da667fa60d)
+# DO NOT EDIT (digest: 862ad284ea88267fe385aa6936c5bcda)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -16,6 +16,8 @@ true: annot, bin_annot
 "_darcs": not_hygienic
 # Library x509
 "lib/x509.cmxs": use_x509
+<lib/x509.{cma,cmxa}>: oasis_library_x509_byte
+<lib/*.ml{,i,y}>: oasis_library_x509_byte
 <lib/*.ml{,i,y}>: pkg_asn1-combinators
 <lib/*.ml{,i,y}>: pkg_cstruct
 <lib/*.ml{,i,y}>: pkg_nocrypto

@@ -743,7 +743,7 @@ module PK = struct
 
   let reparse_pk = function
     | (Algorithm.RSA      , cs) -> RSA (rsa_pub_of_cs cs)
-    | (Algorithm.EC_pub id, cs) -> EC_pub id
+    | (Algorithm.EC_pub id, _)  -> EC_pub id
     | _ -> parse_error "unknown public key algorithm"
 
   let unparse_pk = function
