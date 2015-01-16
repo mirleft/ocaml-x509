@@ -92,16 +92,16 @@ type certificate_failure =
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
 (* partial: does not deal with other public key types *)
-let cert_type { asn = cert } =
+let cert_type { asn = cert ; _ } =
   match cert.tbs_cert.pk_info with
   | PK.RSA _    -> `RSA
 
-let cert_usage { asn = cert } =
+let cert_usage { asn = cert ; _ } =
   match extn_key_usage cert with
   | Some (_, Extension.Key_usage usages) -> Some usages
   | _                                    -> None
 
-let cert_extended_usage { asn = cert } =
+let cert_extended_usage { asn = cert ; _ } =
   match extn_ext_key_usage cert with
   | Some (_, Extension.Ext_key_usage usages) -> Some usages
   | _                                        -> None
@@ -110,7 +110,7 @@ let cert_extended_usage { asn = cert } =
 (* TODO RFC 5280: A certificate MUST NOT include more than
                   one instance of a particular extension. *)
 
-let issuer_matches_subject { asn = parent } { asn = cert } =
+let issuer_matches_subject { asn = parent ; _ } { asn = cert ; _ } =
   Name.equal parent.tbs_cert.subject cert.tbs_cert.issuer
 
 let is_self_signed cert = issuer_matches_subject cert cert
@@ -119,7 +119,7 @@ let subject_common_name cert =
   List_ext.map_find cert.tbs_cert.subject
            ~f:(function Name.CN n -> Some n | _ -> None)
 
-let common_name_to_string { asn = cert } =
+let common_name_to_string { asn = cert ; _ } =
   match subject_common_name cert with
   | None   -> "NO commonName"
   | Some x -> x
@@ -135,7 +135,7 @@ let common_name_to_string { asn = cert } =
    domain name portion of an identifier of type DNS-ID, SRV-ID, or
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
-let cert_hostnames { asn = cert } : string list =
+let cert_hostnames { asn = cert ; _ } : string list =
   let open Extension in
   match extn_subject_alt_name cert, subject_common_name cert with
     | Some (_, Subject_alt_name names), _     ->
@@ -153,7 +153,7 @@ let raw_cert_hack { asn ; raw } =
   let off    = if siglen > 128 then 1 else 0 in
   Cstruct.(sub raw 4 (len raw - (siglen + 4 + 19 + off)))
 
-let validate_signature { asn = trusted } cert =
+let validate_signature { asn = trusted ; _ } cert =
   let module A = Asn_grammars.Algorithm in
 
   let tbs_raw = raw_cert_hack cert in
@@ -161,7 +161,7 @@ let validate_signature { asn = trusted } cert =
 
   | PK.RSA issuing_key ->
 
-    ( match Rsa.PKCS1.verify issuing_key cert.asn.signature_val with
+    ( match Rsa.PKCS1.verify ~key:issuing_key cert.asn.signature_val with
       | None           -> false
       | Some signature ->
           match pkcs1_digest_info_of_cstruct signature with
@@ -178,7 +178,7 @@ let validate_signature { asn = trusted } cert =
               | _                     -> false )
   | _ -> false
 
-let validate_time time { asn = cert } =
+let validate_time time { asn = cert ; _ } =
   match time with
   | None     -> true
   | Some now ->
@@ -187,14 +187,14 @@ let validate_time time { asn = cert } =
         Asn.Time.(to_posix_time not_before, to_posix_time not_after) in
       t1 <= now && now <= t2
 
-let version_matches_extensions { asn = cert } =
+let version_matches_extensions { asn = cert ; _ } =
   let tbs = cert.tbs_cert in
   match tbs.version, tbs.extensions with
   | (`V1 | `V2), [] -> true
   | (`V1 | `V2), _  -> false
   | `V3        , _  -> true
 
-let validate_path_len pathlen { asn = cert } =
+let validate_path_len pathlen { asn = cert ; _ } =
   (* X509 V1/V2 certificates do not contain X509v3 extensions! *)
   (* thus, we cannot check the path length. this will only ever happen for trust anchors: *)
   (* intermediate CAs are checked by is_cert_valid, which checks that the CA extensions are there *)
@@ -264,7 +264,7 @@ let validate_ca_extensions { asn ; raw } =
       | (crit, _)                   -> not crit )
     cert.tbs_cert.extensions
 
-let validate_server_extensions { asn = cert } =
+let validate_server_extensions { asn = cert ; _ } =
   let open Extension in
   List.for_all (function
       | (_, Basic_constraints (true, _))  -> false
@@ -309,12 +309,6 @@ let is_ca_cert_valid now cert =
   | (_, _, _, false, _)            -> fail (CertificateExpired cert)
   | (_, _, _, _, false)            -> fail (InvalidExtensions cert)
 
-let validate_public_key_type { asn = cert } = function
-  | None   -> true
-  | Some x -> match x, cert.tbs_cert.pk_info with
-              | `RSA , PK.RSA _ -> true
-              | _    , _        -> false
-
 (* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
   forbidden: multiple dots "..", trailing dot "foo." *)
 let split_labels name =
@@ -330,7 +324,7 @@ let o f g x = f (g x)
 let wildcard_matches host cert =
   let rec wildcard_hostname_matches hostname wildcard =
     match hostname, wildcard with
-    | [x]  , []               -> true
+    | [_]  , []               -> true
     | x::xs, y::ys when x = y -> wildcard_hostname_matches xs ys
     | _    , _                -> false
   in
@@ -364,7 +358,7 @@ let is_server_cert_valid ?host now cert =
   | (_, _, _, false)         -> fail (InvalidServerExtensions cert)
 
 
-let ext_authority_matches_subject { asn = trusted } { asn = cert } =
+let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
   let open Extension in
   match
     extn_authority_key_id cert, extn_subject_key_id trusted
