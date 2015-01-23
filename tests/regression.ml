@@ -13,12 +13,12 @@ let jc = cert "jabber.ccc.de"
 let cacert = cert "cacert"
 
 let test_jc_jc _ =
-  match verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[jc] (Some (jc, [])) with
+  match verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[jc] [jc] with
   | `Fail NoTrustAnchor -> ()
   | _                   -> assert_failure ("something went wrong with jc_jc")
 
 let test_jc_ca _ =
-  match verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[cacert] (Some (jc, [cacert])) with
+  match verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[cacert] [jc ; cacert] with
   | `Ok _ -> ()
   | _     -> assert_failure ("something went wrong with jc_ca")
 

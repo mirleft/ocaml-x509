@@ -44,7 +44,7 @@ module Authenticator : sig
   type res = [ `Ok of Certificate.certificate option | `Fail of Certificate.certificate_failure ]
 
   (** [authenticate authenticator ?host stack] is [result], where the given [authenticator] verifies the certificate [stack], given an optional [host] name. *)
-  val authenticate : t -> ?host:Certificate.host -> Certificate.stack option -> res
+  val authenticate : t -> ?host:Certificate.host -> Certificate.certificate list -> res
 
   (** [chain_of_trust ?time trust_anchors] is [authenticator], which uses the given [time] and set of [trust_anchors] to verify the certificate chain. This is an implementation of the algorithm in RFC5280. *)
   val chain_of_trust : ?time:float -> Cert.t list -> t

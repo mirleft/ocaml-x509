@@ -388,17 +388,9 @@ let signs pathlen trusted cert =
 let issuer trusted cert =
   List.filter (fun p -> issuer_matches_subject p cert) trusted
 
-let parse_stack css =
-  let rec loop certs = function
-    | [] ->
-      ( match List.rev certs with
-        | []              -> None
-        | server :: certs -> Some (server, certs ) )
-    | cs :: css ->
-        match parse cs with
-        | None      -> None
-        | Some cert -> loop (cert :: certs) css in
-  loop [] css
+let parse_stack = function
+  | c :: cs -> Some (c, cs)
+  | [] -> None
 
 let rec validate_anchors pathlen cert = function
   | []    -> fail NoTrustAnchor
@@ -417,7 +409,8 @@ let verify_chain ?host ?time (server, certs) =
   iter_m (is_cert_valid time) certs      >>= fun () ->
   climb 0 server certs
 
-let verify_chain_of_trust ?host ?time ~anchors = function
+let verify_chain_of_trust ?host ?time ~anchors certs =
+  match parse_stack certs with
   | None -> `Fail NoCertificate
   | Some (server, certs) ->
     let res =
@@ -434,9 +427,10 @@ let valid_cas ?time cas =
     (fun cert -> is_success @@ is_ca_cert_valid time cert)
     cas
 
-let trust_fingerprint ?host ?time ~hash ~fingerprints = function
-  | None -> `Fail NoCertificate
-  | Some (server, certs) ->
+let trust_fingerprint ?host ?time ~hash ~fingerprints =
+  function
+  | [] -> `Fail NoCertificate
+  | server::_ ->
     let verify_fingerprint name fingerprint fingerprints =
       (try Ok (List.find (fun (n, _) -> n = name) fingerprints)
        with Not_found -> fail ServerNameNotPresent) >>= fun (_, fp) ->
@@ -451,15 +445,10 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints = function
       | None -> fail NoServerName
       | Some (`Wildcard name)
       | Some (`Strict name) ->
-        match certs with
-        | [] ->
-          ( match validate_time time server, validate_hostname server host with
-            | true , true  -> verify_fingerprint name cert_fp fingerprints
-            | false, _     -> fail (CertificateExpired server)
-            | _    , false -> fail (InvalidServerName server) )
-        | _ ->
-          verify_chain ?host ?time (server, certs) >>= fun _ ->
-          verify_fingerprint name cert_fp fingerprints
+        match validate_time time server, validate_hostname server host with
+        | true , true  -> verify_fingerprint name cert_fp fingerprints
+        | false, _     -> fail (CertificateExpired server)
+        | _    , false -> fail (InvalidServerName server)
     in
     lower res
 
