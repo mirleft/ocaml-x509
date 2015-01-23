@@ -62,9 +62,6 @@ let sexp_of_certificate _ = Sexplib.Sexp.Atom "-SOME-CERTIFICATE-"
 let cs_of_cert  { raw ; _ } = raw
 let asn_of_cert { asn ; _ } = asn
 
-type stack = certificate * certificate list
-  with sexp
-
 type host = [ `Strict of string | `Wildcard of string ]
 
 let parse cs =
@@ -388,10 +385,6 @@ let signs pathlen trusted cert =
 let issuer trusted cert =
   List.filter (fun p -> issuer_matches_subject p cert) trusted
 
-let parse_stack = function
-  | c :: cs -> Some (c, cs)
-  | [] -> None
-
 let rec validate_anchors pathlen cert = function
   | []    -> fail NoTrustAnchor
   | x::xs -> match signs pathlen x cert with
@@ -409,10 +402,9 @@ let verify_chain ?host ?time (server, certs) =
   iter_m (is_cert_valid time) certs      >>= fun () ->
   climb 0 server certs
 
-let verify_chain_of_trust ?host ?time ~anchors certs =
-  match parse_stack certs with
-  | None -> `Fail NoCertificate
-  | Some (server, certs) ->
+let verify_chain_of_trust ?host ?time ~anchors = function
+  | [] -> `Fail NoCertificate
+  | server :: certs ->
     let res =
       verify_chain ?host ?time (server, certs) >>= fun (pathlen, cert) ->
       match List.filter (validate_time time) (issuer anchors cert) with
