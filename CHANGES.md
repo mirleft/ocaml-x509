@@ -1,6 +1,7 @@
 (trunk):
 * more detailed error messages (type certificate_failure modified)
 * no longer Printf.printf debug messages
+* API change: X509.authenticate receives an optional certificate stack and returns an optional trust anchor [ `Ok of certificate option | `Fail of error ]
 
 0.2.1 (2014-12-21):
 * server_fingerprint authenticator which validates the server certificate based on a hash algorithm and (server_name * fingerprint) list instead of a set of trust anchors
