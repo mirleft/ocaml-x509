@@ -146,7 +146,7 @@ module Authenticator = struct
     fun ?host certificates ->
       Certificate.trust_fingerprint ?host ?time ~hash ~fingerprints certificates
 
-  let null ?host _ = `Ok None
+  let null ?host:_ _ = `Ok None
 
 end
 
