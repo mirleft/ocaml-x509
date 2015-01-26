@@ -130,8 +130,6 @@ module Authenticator = struct
   type res = [ `Ok of Certificate.certificate option | `Fail of Certificate.certificate_failure ]
   type t = ?host:Certificate.host -> Certificate.certificate list -> res
 
-  let authenticate t ?host stack = t ?host stack
-
   (* XXX
    * Authenticator just hands off a list of certs. Should be indexed.
    * *)
