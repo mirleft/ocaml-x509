@@ -3,17 +3,11 @@
 (** abstract type of a certificate *)
 type certificate
 
-(** a stack of certificates: the server certificate and a list of intermediate certificates *)
-type stack = certificate * certificate list
-
 (** strict or wildcard matching of a server name *)
 type host = [ `Strict of string | `Wildcard of string ]
 
 (** [parse cstruct] is [certificate option] where the [cstruct] is parsed to a high-level [certificate] or failure *)
 val parse       : Cstruct.t -> certificate option
-
-(** [parse_stact cstructs] is [stack option] where the [cstructs] are parsed to high-level [certificates] or failure *)
-val parse_stack : Cstruct.t list -> stack option
 
 (** [cs_of_cert certificate] is [cstruct] the binary representation of the [certificate]. *)
 val cs_of_cert  : certificate -> Cstruct.t
@@ -38,6 +32,7 @@ type certificate_failure =
   | NoServerName
   | ServerNameNotPresent
   | InvalidFingerprint of certificate
+  | NoCertificate
 
 (** variant of different public key types of a certificate *)
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
@@ -58,15 +53,15 @@ val cert_hostnames      : certificate -> string list
 val wildcard_matches    : string -> certificate -> bool
 
 
-(** [verify_chain_of_trust ?host ?time ~anchors stack] is [validation_result], where the certificate [stack] is verified using the algorithm from RFC5280: The validity period of the given certificates is checked against the [time]. The X509v3 extensions of the [stack] are checked, then a chain of trust from some [anchors] to the server certificate is validated. Also, the server certificate is checked to contain the given [hostname] in its subject alternative name extension (or common name if subject alternative name is not present), either using wildcard or strict matching as described in RFC6125. The returned certificate is the trust anchor. *)
+(** [verify_chain_of_trust ?host ?time ~anchors certificates] is [validation_result], where the [certificates] are verified using the algorithm from RFC5280: The validity period of the given certificates is checked against the [time]. The X509v3 extensions of the [stack] are checked, then a chain of trust from some [anchors] to the server certificate is validated. Also, the server certificate is checked to contain the given [hostname] in its subject alternative name extension (or common name if subject alternative name is not present), either using wildcard or strict matching as described in RFC6125. The returned certificate is the trust anchor. *)
 val verify_chain_of_trust :
-  ?host:host -> ?time:float -> anchors:(certificate list) -> stack
-  -> [ `Ok of certificate | `Fail of certificate_failure ]
+  ?host:host -> ?time:float -> anchors:(certificate list) -> certificate list
+  -> [ `Ok of certificate option | `Fail of certificate_failure ]
 
-(** [trust_fingerprint ?time hash fingerprints stack] is [validation_result], where the certificate [stack] is verified (using same RFC5280 algorithm). Instead of trust anchors, a map from hostname to fingerprint is provided, where the certificate is checked against. Lookup in the fingerprint list is based on the provided host. If no host is provided, [validation_result] is [`Fail]. *)
+(** [trust_fingerprint ?time hash fingerprints certificates] is [validation_result], where only the head of  [certificates] is verified against the given [fingerprints] map (hostname to fingerprint). Lookup in the fingerprint list is based on the provided [host]. If no host is provided, [validation_result] is [`Fail]. *)
 val trust_fingerprint :
-  ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash -> fingerprints:(string * Cstruct.t) list -> stack
-  -> [ `Ok of certificate | `Fail of certificate_failure ]
+  ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash -> fingerprints:(string * Cstruct.t) list -> certificate list
+  -> [ `Ok of certificate option | `Fail of certificate_failure ]
 
 (** [valid_cas ?time certificates] is [valid_certificates] which has filtered out those certificates which validity period does not contain [time]. Furthermore, X509v3 extensions are checked (basic constraints must be true). *)
 val valid_cas : ?time:float -> certificate list -> certificate list
