@@ -1,7 +1,7 @@
 (** Certificate validation as described in RFC5280 and RFC6125. *)
 
 (** abstract type of a certificate *)
-type certificate
+type certificate with sexp
 
 (** strict or wildcard matching of a server name *)
 type host = [ `Strict of string | `Wildcard of string ]
@@ -33,6 +33,7 @@ type certificate_failure =
   | ServerNameNotPresent
   | InvalidFingerprint of certificate
   | NoCertificate
+with sexp
 
 (** variant of different public key types of a certificate *)
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]

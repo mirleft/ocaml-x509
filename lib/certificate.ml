@@ -57,7 +57,9 @@ type certificate = {
 
 (* XXX Revisit this - would be lovely to dump the full ASN tree. *)
 let certificate_of_sexp _ = failwith "can't parse cert from sexps"
-let sexp_of_certificate _ = Sexplib.Sexp.Atom "-SOME-CERTIFICATE-"
+let sexp_of_certificate cert = Sexplib.Sexp.List
+    [ Sexplib.Sexp.Atom "CERTIFICATE" ;
+      Sexplib.Sexp.Atom (Cstruct.to_string (Hash.digest `SHA256 cert.raw)) ]
 
 let cs_of_cert  { raw ; _ } = raw
 let asn_of_cert { asn ; _ } = asn
@@ -86,6 +88,7 @@ type certificate_failure =
   | ServerNameNotPresent
   | InvalidFingerprint of certificate
   | NoCertificate
+with sexp
 
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
