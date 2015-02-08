@@ -39,7 +39,10 @@ end
 module Authenticator : sig
 
   (** Authentication decision, either [`Ok] with trust anchor or [`Fail] with a reason *)
-  type res = [ `Ok of Certificate.certificate option | `Fail of Certificate.certificate_failure ]
+  type res = [
+    `Ok   of Certificate.certificate option
+  | `Fail of Certificate.certificate_failure
+  ]
 
   (** An authenticator is a function taking a hostname and a certificate stack
       to an authentication decision. *)

@@ -127,7 +127,11 @@ end
 
 module Authenticator = struct
 
-  type res = [ `Ok of Certificate.certificate option | `Fail of Certificate.certificate_failure ]
+  type res = [
+    `Ok   of Certificate.certificate option
+  | `Fail of Certificate.certificate_failure
+  ]
+
   type t = ?host:Certificate.host -> Certificate.certificate list -> res
 
   (* XXX
