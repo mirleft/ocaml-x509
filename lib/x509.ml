@@ -148,5 +148,14 @@ module Authenticator = struct
 
   let null ?host:_ _ = `Ok None
 
+  open Sexplib
+
+  let t_of_sexp = function
+    | Sexp.Atom "NULL" -> null
+    | sexp ->
+        Conv.of_sexp_error "Authenticator.t_of_sexp: atom 'NULL' needed" sexp
+
+  let sexp_of_t _ = Sexp.Atom "NULL"
+
 end
 
