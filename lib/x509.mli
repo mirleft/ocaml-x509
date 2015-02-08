@@ -39,11 +39,15 @@ end
 module Authenticator : sig
 
   (** Authentication decision, either [`Ok] with trust anchor or [`Fail] with a reason *)
-  type res = [ `Ok of Certificate.certificate option | `Fail of Certificate.certificate_failure ]
+  type res = [
+    `Ok   of Certificate.certificate option
+  | `Fail of Certificate.certificate_failure
+  ]
 
   (** An authenticator is a function taking a hostname and a certificate stack
       to an authentication decision. *)
   type t = ?host:Certificate.host -> Certificate.certificate list -> res
+    with sexp
 
   (** [chain_of_trust ?time trust_anchors] is [authenticator], which uses the given [time] and set of [trust_anchors] to verify the certificate chain. This is an implementation of the algorithm in RFC5280. *)
   val chain_of_trust : ?time:float -> Cert.t list -> t
