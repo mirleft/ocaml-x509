@@ -35,11 +35,17 @@ type certificate_failure =
   | NoCertificate
 with sexp
 
+(** variant of public keys *)
+type pubkey = [ `RSA of Nocrypto.Rsa.pub ]
+
+(** [cert_pubkey certificate] is [pubkey], the public key of the [certificate] *)
+val cert_pubkey         : certificate -> pubkey option
+
 (** variant of different public key types of a certificate *)
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
 (** [cert_type certificate] is [key_type], the public key type of the [certificate] *)
-val cert_type           : certificate -> key_type
+val cert_type           : certificate -> key_type option
 
 (** [cert_usage certificate] is [key_usage], the key usage extensions of the [certificate] *)
 val cert_usage          : certificate -> Asn_grammars.Extension.key_usage list option

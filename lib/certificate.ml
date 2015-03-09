@@ -90,12 +90,19 @@ type certificate_failure =
   | NoCertificate
 with sexp
 
+type pubkey = [ `RSA of Nocrypto.Rsa.pub ]
+
+let cert_pubkey { asn = cert ; _ } =
+  match cert.tbs_cert.pk_info with
+  | PK.RSA pk -> Some (`RSA pk)
+  | _         -> None
+
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
-(* partial: does not deal with other public key types *)
-let cert_type { asn = cert ; _ } =
-  match cert.tbs_cert.pk_info with
-  | PK.RSA _    -> `RSA
+let cert_type c =
+  match cert_pubkey c with
+  | Some (`RSA _) -> Some `RSA
+  | _ -> None
 
 let cert_usage { asn = cert ; _ } =
   match extn_key_usage cert with
