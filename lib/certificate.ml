@@ -121,7 +121,7 @@ let cert_extended_usage { asn = cert ; _ } =
 
 let supports_extended_usage c u =
   match cert_extended_usage c with
-  | Some x -> List.mem u x
+  | Some x -> List.mem `Any x || List.mem u x
   | None   -> false
 
 
