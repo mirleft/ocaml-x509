@@ -184,7 +184,7 @@ let wildcard_matches host cert =
          List_ext.filter_map ~f:(function Some ("*"::xs) -> Some xs | _ -> None) |>
          List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
 
-let validate_hostname cert = function
+let supports_hostname cert = function
   | `Strict name   -> List.mem (String.lowercase name) (cert_hostnames cert)
   | `Wildcard name -> let name = String.lowercase name in
                              List.mem name (cert_hostnames cert) ||
@@ -192,7 +192,7 @@ let validate_hostname cert = function
 
 let maybe_validate_hostname cert = function
   | None   -> true
-  | Some x -> validate_hostname cert x
+  | Some x -> supports_hostname cert x
 
 (* TODO RFC 5280: A certificate MUST NOT include more than
                   one instance of a particular extension. *)
