@@ -44,14 +44,14 @@ val cert_pubkey         : certificate -> pubkey option
 (** variant of different public key types of a certificate *)
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
-(** [cert_type certificate] is [key_type], the public key type of the [certificate] *)
-val cert_type           : certificate -> key_type option
+(** [supports_keytype certificate key_type] is [result], whether public key of the [certificate] matches the given [key_type] *)
+val supports_keytype        : certificate -> key_type -> bool
 
-(** [cert_usage certificate] is [key_usage], the key usage extensions of the [certificate] *)
-val cert_usage          : certificate -> Asn_grammars.Extension.key_usage list option
+(** [supports_usage certificate key_usage] is [result], whether the [certificate] supports the requested [key_usage] *)
+val supports_usage          : certificate -> Asn_grammars.Extension.key_usage -> bool
 
-(** [cert_extended_usage certificate] is [extended_key_usage], the extended key usage extensions of the [certificate] *)
-val cert_extended_usage : certificate -> Asn_grammars.Extension.extended_key_usage list option
+(** [supports_extended_usage certificate extended_key_usage] is [result], whether the [certificate] supports the requested [extended_key_usage] *)
+val supports_extended_usage : certificate -> Asn_grammars.Extension.extended_key_usage -> bool
 
 (** [cert_hostnames certficate] is [hostnames], the list of hostnames mentioned in the [certifcate] *)
 val cert_hostnames      : certificate -> string list

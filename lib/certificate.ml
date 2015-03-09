@@ -99,20 +99,30 @@ let cert_pubkey { asn = cert ; _ } =
 
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
-let cert_type c =
-  match cert_pubkey c with
-  | Some (`RSA _) -> Some `RSA
-  | _ -> None
+let supports_keytype c t =
+  match cert_pubkey c, t with
+  | Some (`RSA _), `RSA -> true
+  | _ -> false
 
 let cert_usage { asn = cert ; _ } =
   match extn_key_usage cert with
   | Some (_, Extension.Key_usage usages) -> Some usages
   | _                                    -> None
 
+let supports_usage c u =
+  match cert_usage c with
+  | Some x -> List.mem u x
+  | None   -> false
+
 let cert_extended_usage { asn = cert ; _ } =
   match extn_ext_key_usage cert with
   | Some (_, Extension.Ext_key_usage usages) -> Some usages
   | _                                        -> None
+
+let supports_extended_usage c u =
+  match cert_extended_usage c with
+  | Some x -> List.mem u x
+  | None   -> false
 
 
 (* TODO RFC 5280: A certificate MUST NOT include more than
