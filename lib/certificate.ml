@@ -109,20 +109,20 @@ let cert_usage { asn = cert ; _ } =
   | Some (_, Extension.Key_usage usages) -> Some usages
   | _                                    -> None
 
-let supports_usage c u =
+let supports_usage ?(not_present = false) c u =
   match cert_usage c with
   | Some x -> List.mem u x
-  | None   -> false
+  | None   -> not_present
 
 let cert_extended_usage { asn = cert ; _ } =
   match extn_ext_key_usage cert with
   | Some (_, Extension.Ext_key_usage usages) -> Some usages
   | _                                        -> None
 
-let supports_extended_usage c u =
+let supports_extended_usage ?(not_present = false) c u =
   match cert_extended_usage c with
   | Some x -> List.mem u x
-  | None   -> false
+  | None   -> not_present
 
 
 (* TODO RFC 5280: A certificate MUST NOT include more than

@@ -47,11 +47,11 @@ type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 (** [supports_keytype certificate key_type] is [result], whether public key of the [certificate] matches the given [key_type] *)
 val supports_keytype        : certificate -> key_type -> bool
 
-(** [supports_usage certificate key_usage] is [result], whether the [certificate] supports the requested [key_usage] *)
-val supports_usage          : certificate -> Asn_grammars.Extension.key_usage -> bool
+(** [supports_usage ?not_present certificate key_usage] is [result], whether the [certificate] supports the requested [key_usage] *)
+val supports_usage          : ?not_present:bool -> certificate -> Asn_grammars.Extension.key_usage -> bool
 
 (** [supports_extended_usage certificate extended_key_usage] is [result], whether the [certificate] supports the requested [extended_key_usage] *)
-val supports_extended_usage : certificate -> Asn_grammars.Extension.extended_key_usage -> bool
+val supports_extended_usage : ?not_present:bool -> certificate -> Asn_grammars.Extension.extended_key_usage -> bool
 
 (** [cert_hostnames certficate] is [hostnames], the list of hostnames mentioned in the [certifcate] *)
 val cert_hostnames      : certificate -> string list
