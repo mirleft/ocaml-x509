@@ -125,14 +125,6 @@ let supports_extended_usage ?(not_present = false) c u =
   | None   -> not_present
 
 
-(* TODO RFC 5280: A certificate MUST NOT include more than
-                  one instance of a particular extension. *)
-
-let issuer_matches_subject { asn = parent ; _ } { asn = cert ; _ } =
-  Name.equal parent.tbs_cert.subject cert.tbs_cert.issuer
-
-let is_self_signed cert = issuer_matches_subject cert cert
-
 let subject_common_name cert =
   List_ext.map_find cert.tbs_cert.subject
            ~f:(function Name.CN n -> Some n | _ -> None)
@@ -164,6 +156,51 @@ let cert_hostnames { asn = cert ; _ } : string list =
               | _                  -> None)
     | _                              , Some x -> [String.lowercase x]
     | _                              , _      -> []
+
+(* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
+  forbidden: multiple dots "..", trailing dot "foo." *)
+let split_labels name =
+  let labels = String_ext.split '.' name in
+  if List.exists (fun s -> s = "") labels then
+    None
+  else
+    Some labels
+
+let o f g x = f (g x)
+
+(* we limit our validation to a single '*' character at the beginning (left-most label)! *)
+let wildcard_matches host cert =
+  let rec wildcard_hostname_matches hostname wildcard =
+    match hostname, wildcard with
+    | [_]  , []               -> true
+    | x::xs, y::ys when x = y -> wildcard_hostname_matches xs ys
+    | _    , _                -> false
+  in
+  let names = cert_hostnames cert in
+    match split_labels host with
+    | None      -> false
+    | Some lbls ->
+       List.map split_labels names |>
+         List_ext.filter_map ~f:(function Some ("*"::xs) -> Some xs | _ -> None) |>
+         List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
+
+let validate_hostname cert = function
+  | `Strict name   -> List.mem (String.lowercase name) (cert_hostnames cert)
+  | `Wildcard name -> let name = String.lowercase name in
+                             List.mem name (cert_hostnames cert) ||
+                               wildcard_matches name cert
+
+let maybe_validate_hostname cert = function
+  | None   -> true
+  | Some x -> validate_hostname cert x
+
+(* TODO RFC 5280: A certificate MUST NOT include more than
+                  one instance of a particular extension. *)
+
+let issuer_matches_subject { asn = parent ; _ } { asn = cert ; _ } =
+  Name.equal parent.tbs_cert.subject cert.tbs_cert.issuer
+
+let is_self_signed cert = issuer_matches_subject cert cert
 
 (* XXX should return the tbs_cert blob from the parser, this is insane *)
 let raw_cert_hack { asn ; raw } =
@@ -327,45 +364,10 @@ let is_ca_cert_valid now cert =
   | (_, _, _, false, _)            -> fail (CertificateExpired cert)
   | (_, _, _, _, false)            -> fail (InvalidExtensions cert)
 
-(* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
-  forbidden: multiple dots "..", trailing dot "foo." *)
-let split_labels name =
-  let labels = String_ext.split '.' name in
-  if List.exists (fun s -> s = "") labels then
-    None
-  else
-    Some labels
-
-let o f g x = f (g x)
-
-(* we limit our validation to a single '*' character at the beginning (left-most label)! *)
-let wildcard_matches host cert =
-  let rec wildcard_hostname_matches hostname wildcard =
-    match hostname, wildcard with
-    | [_]  , []               -> true
-    | x::xs, y::ys when x = y -> wildcard_hostname_matches xs ys
-    | _    , _                -> false
-  in
-  let names = cert_hostnames cert in
-    match split_labels host with
-    | None      -> false
-    | Some lbls ->
-       List.map split_labels names |>
-         List_ext.filter_map ~f:(function Some ("*"::xs) -> Some xs | _ -> None) |>
-         List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
-
-let validate_hostname cert host =
-  match host with
-  | None                  -> true
-  | Some (`Strict name)   -> List.mem (String.lowercase name) (cert_hostnames cert)
-  | Some (`Wildcard name) -> let name = String.lowercase name in
-                             List.mem name (cert_hostnames cert) ||
-                               wildcard_matches name cert
-
 let is_server_cert_valid ?host now cert =
   match
     validate_time now cert,
-    validate_hostname cert host,
+    maybe_validate_hostname cert host,
     version_matches_extensions cert,
     validate_server_extensions cert
   with
@@ -457,7 +459,7 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints =
       | None -> fail NoServerName
       | Some (`Wildcard name)
       | Some (`Strict name) ->
-        match validate_time time server, validate_hostname server host with
+        match validate_time time server, maybe_validate_hostname server host with
         | true , true  -> verify_fingerprint name cert_fp fingerprints
         | false, _     -> fail (CertificateExpired server)
         | _    , false -> fail (InvalidServerName server)

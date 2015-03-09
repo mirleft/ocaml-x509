@@ -56,9 +56,8 @@ val supports_extended_usage : ?not_present:bool -> certificate -> Asn_grammars.E
 (** [cert_hostnames certficate] is [hostnames], the list of hostnames mentioned in the [certifcate] *)
 val cert_hostnames      : certificate -> string list
 
-(** [wildcard_matches hostname certificate] is [result], depending on whether the certificate contains a wildcard name which the hostname matches. *)
-val wildcard_matches    : string -> certificate -> bool
-
+(** [validate_hostname certificate host] is [result], whether the [certificate] is valid for the requested [host] *)
+val validate_hostname   : certificate -> host -> bool
 
 (** [verify_chain_of_trust ?host ?time ~anchors certificates] is [validation_result], where the [certificates] are verified using the algorithm from RFC5280: The validity period of the given certificates is checked against the [time]. The X509v3 extensions of the [stack] are checked, then a chain of trust from some [anchors] to the server certificate is validated. Also, the server certificate is checked to contain the given [hostname] in its subject alternative name extension (or common name if subject alternative name is not present), either using wildcard or strict matching as described in RFC6125. The returned certificate is the trust anchor. *)
 val verify_chain_of_trust :
