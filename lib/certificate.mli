@@ -35,24 +35,29 @@ type certificate_failure =
   | NoCertificate
 with sexp
 
+(** variant of public keys *)
+type pubkey = [ `RSA of Nocrypto.Rsa.pub ]
+
+(** [cert_pubkey certificate] is [pubkey], the public key of the [certificate] *)
+val cert_pubkey         : certificate -> pubkey option
+
 (** variant of different public key types of a certificate *)
 type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
-(** [cert_type certificate] is [key_type], the public key type of the [certificate] *)
-val cert_type           : certificate -> key_type
+(** [supports_keytype certificate key_type] is [result], whether public key of the [certificate] matches the given [key_type] *)
+val supports_keytype        : certificate -> key_type -> bool
 
-(** [cert_usage certificate] is [key_usage], the key usage extensions of the [certificate] *)
-val cert_usage          : certificate -> Asn_grammars.Extension.key_usage list option
+(** [supports_usage ?not_present certificate key_usage] is [result], whether the [certificate] supports the requested [key_usage] *)
+val supports_usage          : ?not_present:bool -> certificate -> Asn_grammars.Extension.key_usage -> bool
 
-(** [cert_extended_usage certificate] is [extended_key_usage], the extended key usage extensions of the [certificate] *)
-val cert_extended_usage : certificate -> Asn_grammars.Extension.extended_key_usage list option
+(** [supports_extended_usage certificate extended_key_usage] is [result], whether the [certificate] supports the requested [extended_key_usage] *)
+val supports_extended_usage : ?not_present:bool -> certificate -> Asn_grammars.Extension.extended_key_usage -> bool
 
 (** [cert_hostnames certficate] is [hostnames], the list of hostnames mentioned in the [certifcate] *)
 val cert_hostnames      : certificate -> string list
 
-(** [wildcard_matches hostname certificate] is [result], depending on whether the certificate contains a wildcard name which the hostname matches. *)
-val wildcard_matches    : string -> certificate -> bool
-
+(** [supports_hostname certificate host] is [result], whether the [certificate] is valid for the requested [host] *)
+val supports_hostname   : certificate -> host -> bool
 
 (** [verify_chain_of_trust ?host ?time ~anchors certificates] is [validation_result], where the [certificates] are verified using the algorithm from RFC5280: The validity period of the given certificates is checked against the [time]. The X509v3 extensions of the [stack] are checked, then a chain of trust from some [anchors] to the server certificate is validated. Also, the server certificate is checked to contain the given [hostname] in its subject alternative name extension (or common name if subject alternative name is not present), either using wildcard or strict matching as described in RFC6125. The returned certificate is the trust anchor. *)
 val verify_chain_of_trust :
