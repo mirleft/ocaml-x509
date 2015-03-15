@@ -62,7 +62,6 @@ let sexp_of_certificate cert = Sexplib.Sexp.List
       Sexplib.Sexp.Atom (Cstruct.to_string (Hash.digest `SHA256 cert.raw)) ]
 
 let cs_of_cert  { raw ; _ } = raw
-let asn_of_cert { asn ; _ } = asn
 
 type host = [ `Strict of string | `Wildcard of string ]
 
@@ -104,6 +103,8 @@ let supports_keytype c t =
   | Some (`RSA _), `RSA -> true
   | _ -> false
 
+type key_usage = Extension.key_usage
+
 let cert_usage { asn = cert ; _ } =
   match extn_key_usage cert with
   | Some (_, Extension.Key_usage usages) -> Some usages
@@ -113,6 +114,8 @@ let supports_usage ?(not_present = false) c u =
   match cert_usage c with
   | Some x -> List.mem u x
   | None   -> not_present
+
+type extended_key_usage = Extension.extended_key_usage
 
 let cert_extended_usage { asn = cert ; _ } =
   match extn_ext_key_usage cert with
@@ -441,7 +444,8 @@ let valid_cas ?time cas =
     (fun cert -> is_success @@ is_ca_cert_valid time cert)
     cas
 
-let trust_fingerprint ?host ?time ~hash ~fingerprints =
+let trust_fingerprint : ?host:host -> ?time:float -> hash:Hash.hash -> fingerprints:(string * Cstruct.t) list -> certificate list -> [ `Ok of certificate option | `Fail of certificate_failure ] =
+  fun ?host ?time ~hash ~fingerprints ->
   function
   | [] -> `Fail NoCertificate
   | server::_ ->
@@ -465,6 +469,9 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints =
         | _    , false -> fail (InvalidServerName server)
     in
     lower res
+
+let pkcs1_digest_info_of_cstruct : Cstruct.t -> (Hash.hash * Cstruct.t) option = Asn_grammars.pkcs1_digest_info_of_cstruct
+let pkcs1_digest_info_to_cstruct : (Hash.hash * Cstruct.t) -> Cstruct.t = Asn_grammars.pkcs1_digest_info_to_cstruct
 
 let certificate_failure_to_string = function
   | InvalidFingerprint c -> "Invalid Fingerprint: " ^ (common_name_to_string c)
