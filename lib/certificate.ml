@@ -445,24 +445,21 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints =
   function
   | [] -> `Fail NoCertificate
   | server::_ ->
-    let verify_fingerprint name fingerprint fingerprints =
-      (try Ok (List.find (fun (n, _) -> n = name) fingerprints)
-       with Not_found -> fail ServerNameNotPresent) >>= fun (_, fp) ->
-      match fp, fingerprint with
-      | f, f' when Cs.equal f f' -> Ok None
-      | _ -> fail (InvalidFingerprint server)
-    and cert_fp = Hash.digest hash server.raw
+    let verify_fingerprint server fingerprints =
+      let cert_fp = Hash.digest hash server.raw in
+      (try Ok (List.find (fun (_, fp) -> Cs.equal fp cert_fp) fingerprints)
+       with Not_found -> fail (InvalidFingerprint server)) >>= fun (name, _) ->
+      if maybe_validate_hostname server (Some (`Wildcard name)) then
+        Ok None
+      else
+        fail ServerNameNotPresent
     in
 
     let res =
-      match host with
-      | None -> fail NoServerName
-      | Some (`Wildcard name)
-      | Some (`Strict name) ->
-        match validate_time time server, maybe_validate_hostname server host with
-        | true , true  -> verify_fingerprint name cert_fp fingerprints
-        | false, _     -> fail (CertificateExpired server)
-        | _    , false -> fail (InvalidServerName server)
+      match validate_time time server, maybe_validate_hostname server host with
+      | true , true  -> verify_fingerprint server fingerprints
+      | false, _     -> fail (CertificateExpired server)
+      | _    , false -> fail (InvalidServerName server)
     in
     lower res
 
