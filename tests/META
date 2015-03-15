@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: 99d99f4d8e0e7ee849747cf121706f26)
-version = "0.2.1"
+# DO NOT EDIT (digest: 9bfc25b50ca98c7a78511aa815fcb675)
+version = "0.3.0"
 description = "X509 support for OCaml"
 requires = "x509 oUnit cstruct.unix"
 archive(byte) = "tests.cma"

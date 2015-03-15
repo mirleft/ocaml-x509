@@ -1,7 +1,6 @@
 open OUnit2
 
 open X509
-open Certificate
 
 let cs_mmap file =
   Unix_cstruct.of_fd Unix.(openfile file [O_RDONLY] 0)
@@ -10,10 +9,10 @@ let load file =
   cs_mmap ("./tests/testcertificates/" ^ file ^ ".pem")
 
 let priv =
-  PK.of_pem_cstruct1 (load "private/cakey")
+  Parser.PK.of_pem_cstruct1 (load "private/cakey")
 
 let cert name =
-  Cert.of_pem_cstruct1 (load name)
+  Parser.Cert.of_pem_cstruct1 (load name)
 
 let invalid_cas = [
   "cacert-basicconstraint-ca-false";
@@ -22,14 +21,16 @@ let invalid_cas = [
   "cacert-ext-usage-timestamping"
 ]
 
+let pub_matches_priv c =
+  let pub = Nocrypto.Rsa.pub_of_priv priv in
+  match Certificate.cert_pubkey c with
+  | Some (`RSA pub') when pub = pub' -> ()
+  | _ -> assert_failure "public / private key doesn't match"
+
 let test_invalid_ca name _ =
   let c = cert name in
-  let pub = Nocrypto.Rsa.pub_of_priv priv in
-  let open Asn_grammars in
-  ( match Certificate.(asn_of_cert c).tbs_cert.pk_info with
-    | PK.RSA pub' when pub = pub' -> ()
-    | _                           -> assert_failure "public / private key doesn't match" ) ;
-  assert_equal (List.length (valid_cas [c])) 0
+  pub_matches_priv c ;
+  assert_equal (List.length (Certificate.valid_cas [c])) 0
 
 let invalid_ca_tests =
   List.mapi
@@ -43,12 +44,8 @@ let cacert_ext_ku = cert "cacert-ext-usage"
 let cacert_v1 = cert "cacert-v1"
 
 let test_valid_ca c _ =
-  let pub = Nocrypto.Rsa.pub_of_priv priv in
-  let open Asn_grammars in
-  ( match (asn_of_cert c).tbs_cert.pk_info with
-    | PK.RSA pub' when pub = pub' -> ()
-    | _                           -> assert_failure "public / private key doesn't match" ) ;
-  assert_equal (List.length (valid_cas [c])) 1
+  pub_matches_priv c ;
+  assert_equal (List.length (Certificate.valid_cas [c])) 1
 
 let valid_ca_tests = [
   "valid CA cacert" >:: test_valid_ca cacert ;
@@ -58,7 +55,7 @@ let valid_ca_tests = [
 ]
 
 let first_cert name =
-  Cert.of_pem_cstruct1 (load ("first/" ^ name))
+  Parser.Cert.of_pem_cstruct1 (load ("first/" ^ name))
 
 (* ok, now some real certificates *)
 let first_certs = [
@@ -81,11 +78,11 @@ let first_certs = [
 ]
 
 let test_valid_ca_cert server chain valid name ca _ =
-  match valid, verify_chain_of_trust ~host:name ~anchors:ca (server :: chain) with
+  match valid, Certificate.verify_chain_of_trust ~host:name ~anchors:ca (server :: chain) with
   | false, `Ok _   -> assert_failure "expected to fail, but didn't"
   | false, `Fail _ -> ()
   | true , `Ok _   -> ()
-  | true , `Fail c -> assert_failure ("valid certificate " ^ certificate_failure_to_string c)
+  | true , `Fail c -> assert_failure ("valid certificate " ^ Certificate.certificate_failure_to_string c)
 
 let strict_test_valid_ca_cert server chain valid name ca =
   test_valid_ca_cert server chain valid (`Strict name) ca
@@ -94,13 +91,13 @@ let wildcard_test_valid_ca_cert server chain valid name ca =
   test_valid_ca_cert server chain valid (`Wildcard name) ca
 
 let test_cert c usages extusage _ =
-  ( if List.for_all (fun u -> supports_usage c u) usages then
+  ( if List.for_all (fun u -> Certificate.supports_usage c u) usages then
       ()
     else
       assert_failure "key usage is different" ) ;
   ( match extusage with
     | None -> ()
-    | Some x when List.for_all (fun u -> supports_extended_usage c u) x -> ()
+    | Some x when List.for_all (fun u -> Certificate.supports_extended_usage c u) x -> ()
     | _ -> assert_failure "extended key usage is broken" )
 
 let first_cert_tests =
@@ -181,7 +178,7 @@ let intermediate_cas = [
 ]
 
 let im_cert name =
-  Cert.of_pem_cstruct1 (load ("intermediate/" ^ name))
+  Parser.Cert.of_pem_cstruct1 (load ("intermediate/" ^ name))
 
 let second_certs = [
   ("second", [ "second.foobar.com" ], true, (* no subjAltName *)
@@ -209,7 +206,7 @@ let second_certs = [
 ]
 
 let second_cert name =
-  Cert.of_pem_cstruct1 (load ("intermediate/second/" ^ name))
+  Parser.Cert.of_pem_cstruct1 (load ("intermediate/second/" ^ name))
 
 let second_cert_tests =
   List.mapi
@@ -293,8 +290,8 @@ let invalid_tests =
     "2chain" >:: strict_test_valid_ca_cert c [im_cert "cacert" ; cacert] true h [cacert] ;
     "3chain" >:: strict_test_valid_ca_cert c [im_cert "cacert" ; cacert ; cacert] true h [cacert] ;
     "no-chain" >:: strict_test_valid_ca_cert c [im_cert "cacert" ; im_cert "cacert" ; cacert] false h [cacert] ;
-    "not a CA" >:: (fun _ -> assert_equal (List.length (valid_cas [im_cert "cacert"])) 0) ;
-    "not a CA" >:: (fun _ -> assert_equal (List.length (valid_cas [c])) 0) ;
+    "not a CA" >:: (fun _ -> assert_equal (List.length (Certificate.valid_cas [im_cert "cacert"])) 0) ;
+    "not a CA" >:: (fun _ -> assert_equal (List.length (Certificate.valid_cas [c])) 0) ;
   ]
 
 let x509_tests =
