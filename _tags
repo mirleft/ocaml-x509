@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 862ad284ea88267fe385aa6936c5bcda)
+# DO NOT EDIT (digest: 4f31bcbed40dfe70f948f1aa122a3608)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -16,6 +16,12 @@ true: annot, bin_annot
 "_darcs": not_hygienic
 # Library x509
 "lib/x509.cmxs": use_x509
+"lib/certificate.cmx": for-pack(X509)
+"lib/parser.cmx": for-pack(X509)
+"lib/authenticator.cmx": for-pack(X509)
+"lib/x509_common.cmx": for-pack(X509)
+"lib/registry.cmx": for-pack(X509)
+"lib/asn_grammars.cmx": for-pack(X509)
 <lib/x509.{cma,cmxa}>: oasis_library_x509_byte
 <lib/*.ml{,i,y}>: oasis_library_x509_byte
 <lib/*.ml{,i,y}>: pkg_asn1-combinators

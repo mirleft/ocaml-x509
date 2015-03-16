@@ -62,7 +62,6 @@ let sexp_of_certificate cert = Sexplib.Sexp.List
       Sexplib.Sexp.Atom (Cstruct.to_string (Hash.digest `SHA256 cert.raw)) ]
 
 let cs_of_cert  { raw ; _ } = raw
-let asn_of_cert { asn ; _ } = asn
 
 type host = [ `Strict of string | `Wildcard of string ]
 
@@ -84,8 +83,7 @@ type certificate_failure =
   | InvalidCA of certificate
   | IssuerSubjectMismatch of certificate * certificate
   | AuthorityKeyIdSubjectKeyIdMismatch of certificate * certificate
-  | NoServerName
-  | ServerNameNotPresent
+  | ServerNameNotPresent of certificate
   | InvalidFingerprint of certificate
   | NoCertificate
 with sexp
@@ -104,6 +102,8 @@ let supports_keytype c t =
   | Some (`RSA _), `RSA -> true
   | _ -> false
 
+type key_usage = Extension.key_usage
+
 let cert_usage { asn = cert ; _ } =
   match extn_key_usage cert with
   | Some (_, Extension.Key_usage usages) -> Some usages
@@ -113,6 +113,8 @@ let supports_usage ?(not_present = false) c u =
   match cert_usage c with
   | Some x -> List.mem u x
   | None   -> not_present
+
+type extended_key_usage = Extension.extended_key_usage
 
 let cert_extended_usage { asn = cert ; _ } =
   match extn_ext_key_usage cert with
@@ -441,47 +443,49 @@ let valid_cas ?time cas =
     (fun cert -> is_success @@ is_ca_cert_valid time cert)
     cas
 
-let trust_fingerprint ?host ?time ~hash ~fingerprints =
+let trust_fingerprint : ?host:host -> ?time:float -> hash:Hash.hash ->
+  fingerprints:(string * Cstruct.t) list -> certificate list ->
+  [ `Ok of certificate option | `Fail of certificate_failure ] =
+  fun ?host ?time ~hash ~fingerprints ->
   function
   | [] -> `Fail NoCertificate
   | server::_ ->
-    let verify_fingerprint name fingerprint fingerprints =
-      (try Ok (List.find (fun (n, _) -> n = name) fingerprints)
-       with Not_found -> fail ServerNameNotPresent) >>= fun (_, fp) ->
-      match fp, fingerprint with
-      | f, f' when Cs.equal f f' -> Ok None
-      | _ -> fail (InvalidFingerprint server)
-    and cert_fp = Hash.digest hash server.raw
+    let verify_fingerprint server fingerprints =
+      let cert_fp = Hash.digest hash server.raw in
+      (try Ok (List.find (fun (_, fp) -> Cs.equal fp cert_fp) fingerprints)
+       with Not_found -> fail (InvalidFingerprint server)) >>= fun (name, _) ->
+      if maybe_validate_hostname server (Some (`Wildcard name)) then
+        Ok None
+      else
+        fail (ServerNameNotPresent server)
     in
 
     let res =
-      match host with
-      | None -> fail NoServerName
-      | Some (`Wildcard name)
-      | Some (`Strict name) ->
-        match validate_time time server, maybe_validate_hostname server host with
-        | true , true  -> verify_fingerprint name cert_fp fingerprints
-        | false, _     -> fail (CertificateExpired server)
-        | _    , false -> fail (InvalidServerName server)
+      match validate_time time server, maybe_validate_hostname server host with
+      | true , true  -> verify_fingerprint server fingerprints
+      | false, _     -> fail (CertificateExpired server)
+      | _    , false -> fail (InvalidServerName server)
     in
     lower res
 
+let pkcs1_digest_info_of_cstruct : Cstruct.t -> (Hash.hash * Cstruct.t) option = Asn_grammars.pkcs1_digest_info_of_cstruct
+let pkcs1_digest_info_to_cstruct : (Hash.hash * Cstruct.t) -> Cstruct.t = Asn_grammars.pkcs1_digest_info_to_cstruct
+
 let certificate_failure_to_string = function
-  | InvalidFingerprint c -> "Invalid Fingerprint: " ^ (common_name_to_string c)
-  | InvalidSignature (t, c) -> "Invalid Signature: (" ^ (common_name_to_string t) ^ " does not validate " ^ (common_name_to_string c) ^ ")"
-  | CertificateExpired c -> "Certificate Expired: " ^ (common_name_to_string c)
-  | InvalidExtensions c -> "Invalid (intermediate CA/CA) extensions: " ^ (common_name_to_string c)
-  | InvalidVersion c -> "Invalid X.509 version given the extensions: " ^ (common_name_to_string c)
-  | InvalidPathlen c -> "Invalid Pathlength: " ^ (common_name_to_string c)
-  | SelfSigned c -> "Self Signed Certificate: " ^ (common_name_to_string c)
+  | InvalidFingerprint c -> "Invalid Fingerprint: " ^ common_name_to_string c
+  | InvalidSignature (t, c) -> "Invalid Signature: (" ^ common_name_to_string t ^ " does not validate " ^ common_name_to_string c ^ ")"
+  | CertificateExpired c -> "Certificate Expired: " ^ common_name_to_string c
+  | InvalidExtensions c -> "Invalid (intermediate CA/CA) extensions: " ^ common_name_to_string c
+  | InvalidVersion c -> "Invalid X.509 version given the extensions: " ^ common_name_to_string c
+  | InvalidPathlen c -> "Invalid Pathlength: " ^ common_name_to_string c
+  | SelfSigned c -> "Self Signed Certificate: " ^ common_name_to_string c
   | NoTrustAnchor -> "No Trust Anchor"
-  | InvalidServerExtensions c -> "Invalid Server Extensions: " ^ (common_name_to_string c)
-  | InvalidServerName c -> "Invalid Server Certificate Name: " ^ (common_name_to_string c)
-  | InvalidCA c -> "Invalid CA (issuer does not match subject): " ^ (common_name_to_string c)
-  | IssuerSubjectMismatch (t, c) -> "Issuer of " ^ (common_name_to_string c) ^ " does not match subject of " ^ (common_name_to_string t)
-  | AuthorityKeyIdSubjectKeyIdMismatch (t, c) -> "Authority Key ID extension of " ^ (common_name_to_string c) ^ " does not match Subject Key ID extension of " ^ (common_name_to_string t)
-  | NoServerName -> "No server name given (required for fingerprint verification)"
-  | ServerNameNotPresent -> "Given server name not in fingerprint list"
+  | InvalidServerExtensions c -> "Invalid Server Extensions: " ^ common_name_to_string c
+  | InvalidServerName c -> "Invalid Server Certificate Name: " ^ common_name_to_string c
+  | InvalidCA c -> "Invalid CA (issuer does not match subject): " ^ common_name_to_string c
+  | IssuerSubjectMismatch (t, c) -> "Issuer of " ^ common_name_to_string c ^ " does not match subject of " ^ common_name_to_string t
+  | AuthorityKeyIdSubjectKeyIdMismatch (t, c) -> "Authority Key ID extension of " ^ common_name_to_string c ^ " does not match Subject Key ID extension of " ^ common_name_to_string t
+  | ServerNameNotPresent c -> "Given server name not in fingerprint list " ^ common_name_to_string c
   | NoCertificate -> "No certificate provided"
 
 (* RFC5246 says 'root certificate authority MAY be omitted' *)

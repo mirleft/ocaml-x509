@@ -2,6 +2,8 @@
 * more detailed error messages (type certificate_failure modified)
 * no longer Printf.printf debug messages
 * API change: X509.authenticate receives a certificate list and returns an optional trust anchor [ `Ok of certificate option | `Fail of error ]
+* API change: cert_pubkey is now available, supports_keytype, supports_usage, supports_extended_usage are now there
+* library is now packed
 
 0.2.1 (2014-12-21):
 * server_fingerprint authenticator which validates the server certificate based on a hash algorithm and (server_name * fingerprint) list instead of a set of trust anchors

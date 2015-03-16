@@ -1,6 +1,6 @@
 OASISFormat: 0.4
 Name:        ocaml-x509
-Version:     0.2.1
+Version:     0.3.0
 Synopsis:    X509 support for OCaml
 Authors:     Hannes Mehnert <hannes@mehnert.org>, David Kaloper <david@numm.org>
 Maintainers: David Kaloper <david@numm.org>, Hannes Mehnert <hannes@mehnert.org>
@@ -13,9 +13,10 @@ Description:
 
 Library "x509"
   Path            : lib/
-  Modules         : Asn_grammars, Certificate, X509
-  InternalModules : X509_common, Registry
+  Modules         : Certificate, Parser, Authenticator
+  InternalModules : X509_common, Registry, Asn_grammars
   BuildDepends    : cstruct, sexplib.syntax, nocrypto, asn1-combinators
+  Pack            : true
   ByteOpt         : -w A-4-33-40-41-42-43-34-44
 
 Library "tests"
