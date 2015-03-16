@@ -84,8 +84,7 @@ type certificate_failure =
   | InvalidCA of certificate
   | IssuerSubjectMismatch of certificate * certificate
   | AuthorityKeyIdSubjectKeyIdMismatch of certificate * certificate
-  | NoServerName
-  | ServerNameNotPresent
+  | ServerNameNotPresent of certificate
   | InvalidFingerprint of certificate
   | NoCertificate
 with sexp
@@ -452,7 +451,7 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints =
       if maybe_validate_hostname server (Some (`Wildcard name)) then
         Ok None
       else
-        fail ServerNameNotPresent
+        fail (ServerNameNotPresent server)
     in
 
     let res =
@@ -464,21 +463,20 @@ let trust_fingerprint ?host ?time ~hash ~fingerprints =
     lower res
 
 let certificate_failure_to_string = function
-  | InvalidFingerprint c -> "Invalid Fingerprint: " ^ (common_name_to_string c)
-  | InvalidSignature (t, c) -> "Invalid Signature: (" ^ (common_name_to_string t) ^ " does not validate " ^ (common_name_to_string c) ^ ")"
-  | CertificateExpired c -> "Certificate Expired: " ^ (common_name_to_string c)
-  | InvalidExtensions c -> "Invalid (intermediate CA/CA) extensions: " ^ (common_name_to_string c)
-  | InvalidVersion c -> "Invalid X.509 version given the extensions: " ^ (common_name_to_string c)
-  | InvalidPathlen c -> "Invalid Pathlength: " ^ (common_name_to_string c)
-  | SelfSigned c -> "Self Signed Certificate: " ^ (common_name_to_string c)
+  | InvalidFingerprint c -> "Invalid Fingerprint: " ^ common_name_to_string c
+  | InvalidSignature (t, c) -> "Invalid Signature: (" ^ common_name_to_string t ^ " does not validate " ^ common_name_to_string c ^ ")"
+  | CertificateExpired c -> "Certificate Expired: " ^ common_name_to_string c
+  | InvalidExtensions c -> "Invalid (intermediate CA/CA) extensions: " ^ common_name_to_string c
+  | InvalidVersion c -> "Invalid X.509 version given the extensions: " ^ common_name_to_string c
+  | InvalidPathlen c -> "Invalid Pathlength: " ^ common_name_to_string c
+  | SelfSigned c -> "Self Signed Certificate: " ^ common_name_to_string c
   | NoTrustAnchor -> "No Trust Anchor"
-  | InvalidServerExtensions c -> "Invalid Server Extensions: " ^ (common_name_to_string c)
-  | InvalidServerName c -> "Invalid Server Certificate Name: " ^ (common_name_to_string c)
-  | InvalidCA c -> "Invalid CA (issuer does not match subject): " ^ (common_name_to_string c)
-  | IssuerSubjectMismatch (t, c) -> "Issuer of " ^ (common_name_to_string c) ^ " does not match subject of " ^ (common_name_to_string t)
-  | AuthorityKeyIdSubjectKeyIdMismatch (t, c) -> "Authority Key ID extension of " ^ (common_name_to_string c) ^ " does not match Subject Key ID extension of " ^ (common_name_to_string t)
-  | NoServerName -> "No server name given (required for fingerprint verification)"
-  | ServerNameNotPresent -> "Given server name not in fingerprint list"
+  | InvalidServerExtensions c -> "Invalid Server Extensions: " ^ common_name_to_string c
+  | InvalidServerName c -> "Invalid Server Certificate Name: " ^ common_name_to_string c
+  | InvalidCA c -> "Invalid CA (issuer does not match subject): " ^ common_name_to_string c
+  | IssuerSubjectMismatch (t, c) -> "Issuer of " ^ common_name_to_string c ^ " does not match subject of " ^ common_name_to_string t
+  | AuthorityKeyIdSubjectKeyIdMismatch (t, c) -> "Authority Key ID extension of " ^ common_name_to_string c ^ " does not match Subject Key ID extension of " ^ common_name_to_string t
+  | ServerNameNotPresent c -> "Given server name not in fingerprint list " ^ common_name_to_string c
   | NoCertificate -> "No certificate provided"
 
 (* RFC5246 says 'root certificate authority MAY be omitted' *)

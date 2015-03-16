@@ -29,8 +29,7 @@ type certificate_failure =
   | InvalidCA of certificate
   | IssuerSubjectMismatch of certificate * certificate
   | AuthorityKeyIdSubjectKeyIdMismatch of certificate * certificate
-  | NoServerName
-  | ServerNameNotPresent
+  | ServerNameNotPresent of certificate
   | InvalidFingerprint of certificate
   | NoCertificate
 with sexp
