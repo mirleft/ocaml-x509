@@ -122,13 +122,6 @@ module Authenticator : sig
   val null : a
 end
 
-(* belongs elsewhere *)
-module Cs : sig
-  val hex_to_cs : string -> Cstruct.t
-  val dotted_hex_to_cs : string -> Cstruct.t
-end
-
-
 module Encoding : sig
 
   (** [parse cstruct] is [certificate option] where the [cstruct] is parsed to a high-level [certificate] or failure *)
