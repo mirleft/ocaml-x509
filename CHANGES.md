@@ -1,7 +1,9 @@
-(trunk):
+0.3.0 (2015-03-19):
 * more detailed error messages (type certificate_failure modified)
 * no longer Printf.printf debug messages
-* API change: X509.authenticate receives a certificate list and returns an optional trust anchor [ `Ok of certificate option | `Fail of error ]
+* error reporting: `Ok of certificate option | `Fail of certificate_failure
+* fingerprint verification can work with None as host (useful for client authentication where host is not known upfront)
+* API reshape: X509 is the only public module, X509.t is the abstract certificate
 
 0.2.1 (2014-12-21):
 * server_fingerprint authenticator which validates the server certificate based on a hash algorithm and (server_name * fingerprint) list instead of a set of trust anchors
