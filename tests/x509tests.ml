@@ -82,7 +82,7 @@ let test_valid_ca_cert server chain valid name ca _ =
   | false, `Ok _   -> assert_failure "expected to fail, but didn't"
   | false, `Fail _ -> ()
   | true , `Ok _   -> ()
-  | true , `Fail c -> assert_failure ("valid certificate " ^ Validation.certificate_failure_to_string c)
+  | true , `Fail c -> assert_failure ("valid certificate " ^ Validation.validation_error_to_string c)
 
 let strict_test_valid_ca_cert server chain valid name ca =
   test_valid_ca_cert server chain valid (`Strict name) ca
