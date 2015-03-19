@@ -43,5 +43,5 @@ Document api
   Type: ocamlbuild (0.3)
   BuildTools+: ocamldoc
   XOcamlbuildPath: doc
-  XOcamlbuildModules: lib/X509, lib/Certificate
+  XOcamlbuildModules: lib/X509
   Install: false
