@@ -1,5 +1,7 @@
 [![Build Status](https://travis-ci.org/mirleft/ocaml-x509.svg?branch=master)](https://travis-ci.org/mirleft/ocaml-x509)
 
+[API documentation](https://mirleft.github.io/ocaml-x509/)
+
 ### ocaml-x509
 
 X.509 ([RFC5280][] and [RFC6125][]) handling in OCaml.
