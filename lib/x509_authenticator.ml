@@ -1,12 +1,7 @@
 
 open X509_certificate
 
-type res = [
-  | `Ok   of t option
-  | `Fail of Validation.certificate_failure
-]
-
-type a = ?host:host -> t list -> res
+type a = ?host:host -> t list -> Validation.result
 
 (* XXX
    * Authenticator just hands off a list of certs. Should be indexed.

@@ -13,7 +13,7 @@ let cacert = cert "cacert"
 
 let test_jc_jc _ =
   match Validation.verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[jc] [jc] with
-  | `Fail Validation.NoTrustAnchor -> ()
+  | `Fail `NoTrustAnchor -> ()
   | _ -> assert_failure ("something went wrong with jc_jc")
 
 let test_jc_ca _ =
