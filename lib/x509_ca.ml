@@ -76,4 +76,7 @@ let sign signing_request
     signature_val ;
   } in
   let raw = certificate_to_cstruct asn in
-  { asn ; raw }
+  let c = { asn ; raw } in
+  let key = t_of_c c in
+  Hashtbl.add keystore key c ;
+  key

@@ -7,6 +7,8 @@ open Asn_grammars
 
 include X509_types
 
+type t = Cstruct.t (* this is the SHA-256 digest of the certificate! *)
+
 (*
  * There are two reasons to carry Cstruct.t around:
  * - we still need to hack on the cstruct to get bytes to hash
@@ -17,29 +19,46 @@ include X509_types
  * place that hides the existence of this pair.
  *)
 
-type t = {
+type c = {
   asn : certificate ;
   raw : Cstruct.t
 }
 
-let issuer { asn ; _ } = asn.tbs_cert.issuer
+let (keystore : (t, c) Hashtbl.t) = Hashtbl.create 7
 
-let subject { asn ; _ } = asn.tbs_cert.subject
+let get t = Hashtbl.find keystore t
+let t_of_c cert = Hash.digest `SHA256 cert.raw
 
-let serial { asn ; _ } = asn.tbs_cert.serial
+let issuer t = let { asn ; _ } = get t in asn.tbs_cert.issuer
+
+let subject t = let { asn ; _ } = get t in asn.tbs_cert.subject
+
+let serial t = let { asn ; _ } = get t in asn.tbs_cert.serial
 
 let parse_certificate cs =
   match certificate_of_cstruct cs with
   | None     -> None
-  | Some asn -> Some { asn ; raw = cs }
+  | Some asn ->
+    let cert = { asn ; raw = cs } in
+    let key = t_of_c cert in
+    Hashtbl.add keystore key cert ;
+    Some key
 
-let cs_of_cert { raw ; _ } = raw
+let cs_of_cert c =
+  let { raw ; _ } = get c in
+  raw
 
 (* XXX Revisit this - would be lovely to dump the full ASN tree. *)
-let t_of_sexp _ = failwith "can't parse cert from sexps"
+let t_of_sexp sexp =
+  let open Sexplib.Sexp in
+  match sexp with
+  | List [ Atom "CERTIFICATE" ; data ] ->
+    Cstruct.of_string (string_of_sexp data)
+  | _ -> failwith "can't parse cert from sexps"
+
 let sexp_of_t cert = Sexplib.Sexp.List
     [ Sexplib.Sexp.Atom "CERTIFICATE" ;
-      Sexplib.Sexp.Atom (Cstruct.to_string (Hash.digest `SHA256 cert.raw)) ]
+      Sexplib.Sexp.Atom (Cstruct.to_string cert) ]
 
 let key_id = function
   | `RSA p -> Hash.digest `SHA1 (PK.rsa_public_to_cstruct p)
@@ -48,7 +67,9 @@ let key_id = function
 let private_key_to_keytype = function
   | `RSA _ -> `RSA
 
-let public_key { asn = cert ; _ } = cert.tbs_cert.pk_info
+let public_key c =
+  let { asn = cert ; _ } = get c in
+  cert.tbs_cert.pk_info
 
 let supports_keytype c t =
   match public_key c, t with
@@ -59,7 +80,8 @@ let subject_common_name cert =
   List_ext.map_find cert.tbs_cert.subject
            ~f:(function `CN n -> Some n | _ -> None)
 
-let common_name_to_string { asn = cert ; _ } =
+let common_name_to_string c =
+  let { asn = cert ; _ } = get c in
   match subject_common_name cert with
   | None   -> "NO commonName"
   | Some x -> x
@@ -75,7 +97,8 @@ let common_name_to_string { asn = cert ; _ } =
    domain name portion of an identifier of type DNS-ID, SRV-ID, or
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
-let hostnames { asn = cert ; _ } : string list =
+let hostnames c : string list =
+  let { asn = cert ; _ } = get c in
   let open Extension in
   match extn_subject_alt_name cert, subject_common_name cert with
     | Some (_, `Subject_alt_name names), _    ->
@@ -119,12 +142,12 @@ let wildcard_matches host cert =
 let supports_hostname cert = function
   | `Strict name   -> List.mem (String.lowercase name) (hostnames cert)
   | `Wildcard name -> let name = String.lowercase name in
-                             List.mem name (hostnames cert) ||
-                               wildcard_matches name cert
+                      List.mem name (hostnames cert) ||
+                      wildcard_matches name cert
 
 let maybe_validate_hostname cert = function
   | None   -> true
-  | Some x -> supports_hostname cert x
+  | Some x -> supports_hostname (t_of_c cert) x
 
 let issuer_matches_subject { asn = parent ; _ } { asn = cert ; _ } =
   Name.equal parent.tbs_cert.subject cert.tbs_cert.issuer
@@ -338,7 +361,6 @@ module Validation = struct
     | `ServerNameNotPresent c -> "Given server name not in fingerprint list " ^ common_name_to_string c
     | `EmptyCertificateChain -> "The provided certificate chain is empty"
 
-
   (* TODO RFC 5280: A certificate MUST NOT include more than one
      instance of a particular extension. *)
 
@@ -349,9 +371,9 @@ module Validation = struct
       validate_ca_extensions cert
     with
     | (true, true, true) -> success
-    | (false, _, _)      -> fail (`CertificateExpired cert)
-    | (_, false, _)      -> fail (`InvalidVersion cert)
-    | (_, _, false)      -> fail (`InvalidExtensions cert)
+    | (false, _, _)      -> fail (`CertificateExpired (t_of_c cert))
+    | (_, false, _)      -> fail (`InvalidVersion (t_of_c cert))
+    | (_, _, false)      -> fail (`InvalidExtensions (t_of_c cert))
 
   let is_ca_cert_valid now cert =
     match
@@ -362,11 +384,11 @@ module Validation = struct
       valid_trust_anchor_extensions cert
     with
     | (true, true, true, true, true) -> success
-    | (false, _, _, _, _)            -> fail (`InvalidCA cert)
-    | (_, false, _, _, _)            -> fail (`InvalidVersion cert)
-    | (_, _, false, _, _)            -> fail (`InvalidSignature (cert, cert))
-    | (_, _, _, false, _)            -> fail (`CertificateExpired cert)
-    | (_, _, _, _, false)            -> fail (`InvalidExtensions cert)
+    | (false, _, _, _, _)            -> fail (`InvalidCA (t_of_c cert))
+    | (_, false, _, _, _)            -> fail (`InvalidVersion (t_of_c cert))
+    | (_, _, false, _, _)            -> fail (`InvalidSignature (t_of_c cert, t_of_c cert))
+    | (_, _, _, false, _)            -> fail (`CertificateExpired (t_of_c cert))
+    | (_, _, _, _, false)            -> fail (`InvalidExtensions (t_of_c cert))
 
   let is_server_cert_valid ?host now cert =
     match
@@ -376,10 +398,10 @@ module Validation = struct
       validate_server_extensions cert
     with
     | (true, true, true, true) -> success
-    | (false, _, _, _)         -> fail (`CertificateExpired cert)
-    | (_, false, _, _)         -> fail (`InvalidServerName cert)
-    | (_, _, false, _)         -> fail (`InvalidVersion cert)
-    | (_, _, _, false)         -> fail (`InvalidServerExtensions cert)
+    | (false, _, _, _)         -> fail (`CertificateExpired (t_of_c cert))
+    | (_, false, _, _)         -> fail (`InvalidServerName (t_of_c cert))
+    | (_, _, false, _)         -> fail (`InvalidVersion (t_of_c cert))
+    | (_, _, _, false)         -> fail (`InvalidServerExtensions (t_of_c cert))
 
   let signs pathlen trusted cert =
     match
@@ -389,10 +411,10 @@ module Validation = struct
       validate_path_len pathlen trusted
     with
     | (true, true, true, true) -> success
-    | (false, _, _, _)         -> fail (`IssuerSubjectMismatch (trusted, cert))
-    | (_, false, _, _)         -> fail (`AuthorityKeyIdSubjectKeyIdMismatch (trusted, cert))
-    | (_, _, false, _)         -> fail (`InvalidSignature (trusted, cert))
-    | (_, _, _, false)         -> fail (`InvalidPathlen trusted)
+    | (false, _, _, _)         -> fail (`IssuerSubjectMismatch (t_of_c trusted, t_of_c cert))
+    | (_, false, _, _)         -> fail (`AuthorityKeyIdSubjectKeyIdMismatch (t_of_c trusted, t_of_c cert))
+    | (_, _, false, _)         -> fail (`InvalidSignature (t_of_c trusted, t_of_c cert))
+    | (_, _, _, false)         -> fail (`InvalidPathlen (t_of_c trusted))
 
   let issuer trusted cert =
     List.filter (fun p -> issuer_matches_subject p cert) trusted
@@ -400,7 +422,7 @@ module Validation = struct
   let rec validate_anchors pathlen cert = function
     | []    -> fail `NoTrustAnchor
     | x::xs -> match signs pathlen x cert with
-      | Ok _    -> Ok (Some x)
+      | Ok _    -> Ok (Some (t_of_c x))
       | Error _ -> validate_anchors pathlen cert xs
 
   let verify_chain ?host ?time (server, certs) =
@@ -419,42 +441,46 @@ module Validation = struct
     | `Fail of validation_error
   ]
 
-  let verify_chain_of_trust ?host ?time ~anchors = function
+  let verify_chain_of_trust ?host ?time ~anchors certs =
+    let anchors = List.map get anchors in
+    match List.map get certs with
     | [] -> `Fail `EmptyCertificateChain
     | server :: certs ->
       let res =
         verify_chain ?host ?time (server, certs) >>= fun (pathlen, cert) ->
         match List.filter (validate_time time) (issuer anchors cert) with
-        | [] when is_self_signed cert -> fail (`SelfSigned cert)
+        | [] when is_self_signed cert -> fail (`SelfSigned (t_of_c cert))
         | []                          -> fail `NoTrustAnchor
         | anchors                     -> validate_anchors pathlen cert anchors
       in
       lower res
 
   let valid_cas ?time cas =
-    List.filter
-      (fun cert -> is_success @@ is_ca_cert_valid time cert)
-      cas
+    List.map t_of_c
+      (List.filter
+         (fun cert -> is_success @@ is_ca_cert_valid time cert)
+         (List.map get cas))
 
   let trust_fingerprint ?host ?time ~hash ~fingerprints =
     function
     | [] -> `Fail `EmptyCertificateChain
     | server::_ ->
+      let server = get server in
       let verify_fingerprint server fingerprints =
         let cert_fp = Hash.digest hash server.raw in
         (try Ok (List.find (fun (_, fp) -> Uncommon.Cs.equal fp cert_fp) fingerprints)
-         with Not_found -> fail (`InvalidFingerprint server)) >>= fun (name, _) ->
+         with Not_found -> fail (`InvalidFingerprint (t_of_c server))) >>= fun (name, _) ->
         if maybe_validate_hostname server (Some (`Wildcard name)) then
           Ok None
         else
-          fail (`ServerNameNotPresent server)
+          fail (`ServerNameNotPresent (t_of_c server))
       in
 
       let res =
         match validate_time time server, maybe_validate_hostname server host with
         | true , true  -> verify_fingerprint server fingerprints
-        | false, _     -> fail (`CertificateExpired server)
-        | _    , false -> fail (`InvalidServerName server)
+        | false, _     -> fail (`CertificateExpired (t_of_c server))
+        | _    , false -> fail (`InvalidServerName (t_of_c server))
       in
       lower res
 

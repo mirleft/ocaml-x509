@@ -8,7 +8,7 @@ let cert_usage { asn = cert ; _ } =
   | _                           -> None
 
 let supports_usage ?(not_present = false) c u =
-  match cert_usage c with
+  match cert_usage (get c) with
   | Some x -> List.mem u x
   | None   -> not_present
 
@@ -18,6 +18,6 @@ let cert_extended_usage { asn = cert ; _ } =
   | _                               -> None
 
 let supports_extended_usage ?(not_present = false) c u =
-  match cert_extended_usage c with
+  match cert_extended_usage (get c) with
   | Some x -> List.mem u x
   | None   -> not_present
