@@ -114,6 +114,31 @@ val supports_hostname : t -> host -> bool
     name of the subject of the [certificate]. *)
 val common_name_to_string : t -> string
 
+(** Certificate Authority operations *)
+module CA : sig
+
+  (** {1 Signing} *)
+
+  (** The abstract type of a signing request. *)
+  type signing_request
+
+  (* TODO: to/from pem *)
+
+  (** The polymorphic variant of private keys. *)
+  type privkey = [ `RSA of Nocrypto.Rsa.priv ]
+
+  (** [generate subject private] is [signing_request], the signed request. *)
+  val generate : string -> privkey -> signing_request
+
+  (* TODO: policy/config stuff: extensions to add, signature algorithm, white/blacklist of keyusage/names/... *)
+
+  (** [sign signing_request ?digest ?valid_from ?valid_until ?serial
+      ?extensions private issuer] is [certificate], the certificate
+      signed with given private key and issuer; digest defaults to
+      `SHA1, validity from now for a day. *)
+  val sign : signing_request -> ?digest:Nocrypto.Hash.hash -> ?valid_from:Unix.tm -> ?valid_until:Unix.tm -> ?serial:Z.t -> ?extensions:(bool * Asn_grammars.Extension.t) list -> privkey -> string -> t
+end
+
 (** Validation logic: error variant and functions. *)
 module Validation : sig
 
