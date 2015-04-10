@@ -47,7 +47,7 @@ val sexp_of_t : t -> Sexplib.Sexp.t
 (** {1 Operations on a certificate} *)
 
 (** The polymorphic variant of public key types. *)
-type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
+type key_type = [ `RSA | `EC of Asn.OID.t ]
 
 (** [supports_keytype certificate key_type] is [result], whether public key of the [certificate] matches the given [key_type]. *)
 val supports_keytype : t -> key_type -> bool

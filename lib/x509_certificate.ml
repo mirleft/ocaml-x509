@@ -33,6 +33,7 @@ let sexp_of_t cert = Sexplib.Sexp.List
     [ Sexplib.Sexp.Atom "CERTIFICATE" ;
       Sexplib.Sexp.Atom (Cstruct.to_string (Hash.digest `SHA256 cert.raw)) ]
 
+type key_type = Asn_grammars.Algorithm.public_key
 
 type pubkey = [ `RSA of Nocrypto.Rsa.pub ]
 
@@ -40,8 +41,6 @@ let cert_pubkey { asn = cert ; _ } =
   match cert.tbs_cert.pk_info with
   | PK.RSA pk -> Some (`RSA pk)
   | _         -> None
-
-type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
 
 let supports_keytype c t =
   match cert_pubkey c, t with
@@ -224,8 +223,6 @@ module Validation = struct
     Cstruct.(sub raw 4 (len raw - (siglen + 4 + 19 + off)))
 
   let validate_signature { asn = trusted ; _ } cert =
-    let module A = Asn_grammars.Algorithm in
-
     let tbs_raw = raw_cert_hack cert in
     match trusted.tbs_cert.pk_info with
 
@@ -234,18 +231,14 @@ module Validation = struct
       ( match Rsa.PKCS1.verify ~key:issuing_key cert.asn.signature_val with
         | None           -> false
         | Some signature ->
-          match pkcs1_digest_info_of_cstruct signature with
-          | None              -> false
-          | Some (algo, hash) ->
-              let res = Uncommon.Cs.equal hash (Hash.digest algo tbs_raw) in
-              match (cert.asn.signature_algo, algo) with
-              | (A.MD5_RSA   , `MD5   ) -> res
-              | (A.SHA1_RSA  , `SHA1  ) -> res
-              | (A.SHA224_RSA, `SHA224) -> res
-              | (A.SHA256_RSA, `SHA256) -> res
-              | (A.SHA384_RSA, `SHA384) -> res
-              | (A.SHA512_RSA, `SHA512) -> res
-              | _                     -> false )
+          match
+            pkcs1_digest_info_of_cstruct signature,
+            Algorithm.to_signature_algorithm cert.asn.signature_algo
+          with
+          | Some (algo, hash), Some (`RSA, h) when h = algo ->
+            Uncommon.Cs.equal hash (Hash.digest algo tbs_raw)
+          | _ -> false )
+
     | _ -> false
 
   let validate_time time { asn = cert ; _ } =
