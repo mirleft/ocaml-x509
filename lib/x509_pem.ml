@@ -1,10 +1,5 @@
 open Cstruct
 
-let parse_certificate cs =
-  match Asn_grammars.certificate_of_cstruct cs with
-  | None     -> None
-  | Some asn -> Some X509_certificate.({ asn ; raw = cs })
-
 let o f g x = f (g x)
 
 module Cs = struct
@@ -92,7 +87,7 @@ module Cert = struct
   let of_pem_cstruct cs =
     List.fold_left (fun certs -> function
         | ("CERTIFICATE", cs) ->
-          ( match parse_certificate cs with
+          ( match X509_certificate.parse_certificate cs with
             | Some cert -> certs @ [cert]
             | None      -> invalid_arg "X509: failed to parse certificate" )
         | _ -> certs)

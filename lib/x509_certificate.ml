@@ -20,6 +20,13 @@ type t = {
   raw : Cstruct.t
 }
 
+let parse_certificate cs =
+  match Asn_grammars.certificate_of_cstruct cs with
+  | None     -> None
+  | Some asn -> Some { asn ; raw = cs }
+
+let cs_of_cert { raw ; _ } = raw
+
 (* XXX Revisit this - would be lovely to dump the full ASN tree. *)
 let t_of_sexp _ = failwith "can't parse cert from sexps"
 let sexp_of_t cert = Sexplib.Sexp.List
