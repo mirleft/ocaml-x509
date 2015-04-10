@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 8c0bd70a42fa83c3879769b97b59551a)
+# DO NOT EDIT (digest: c651375dd97d0341d3b237208e247424)
 X509
 X509_common
 Registry
@@ -8,4 +8,5 @@ X509_certificate
 X509_authenticator
 X509_encoding
 X509_pem
+X509_ca
 # OASIS_STOP

@@ -15,7 +15,7 @@ Library "x509"
   Path            : lib/
   Modules         : X509
   InternalModules : X509_common, Registry, Asn_grammars, X509_certificate,
-                    X509_authenticator, X509_encoding, X509_pem
+                    X509_authenticator, X509_encoding, X509_pem, X509_ca
   BuildDepends    : cstruct, sexplib.syntax, nocrypto, asn1-combinators
   ByteOpt         : -w A-4-33-40-41-42-43-34-44
 
