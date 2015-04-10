@@ -54,6 +54,9 @@ val sexp_of_t : t -> Sexplib.Sexp.t
 
 (** {1 Basic operations on a certificate} *)
 
+(** [id certificate] is [string], the unique identifier of a certificate. *)
+val id : t -> string
+
 (** The polymorphic variant of public key types. *)
 type key_type = [ `RSA | `EC of Asn.OID.t ]
 

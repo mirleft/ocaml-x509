@@ -64,6 +64,8 @@ let key_id = function
   | `RSA p -> Hash.digest `SHA1 (PK.rsa_public_to_cstruct p)
   | `EC_pub _ -> invalid_arg "ECDSA not implemented"
 
+let id c = Cstruct.to_string c
+
 let private_key_to_keytype = function
   | `RSA _ -> `RSA
 
