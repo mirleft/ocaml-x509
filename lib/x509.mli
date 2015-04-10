@@ -267,6 +267,14 @@ module Encoding : sig
       (** [of_pem_cstruct1 pem] is [t], where the single certificate
           of the [pem] is extracted *)
       val of_pem_cstruct1 : Cstruct.t -> t
+
+      (** [to_pem_cstruct certificates] is [pem], the pem encoded
+          certificates. *)
+      val to_pem_cstruct : t list -> Cstruct.t
+
+      (** [to_pem_cstruct1 certificate] is [pem], the pem encoded
+          certificate. *)
+      val to_pem_cstruct1 : t -> Cstruct.t
     end
 
     (** A parser for unencrypted private RSA keys certificates in PEM format *)
@@ -284,6 +292,14 @@ module Encoding : sig
       (** [of_pem_cstruct1 pem] is [t], where the private key of [pem]
           is extracted *)
       val of_pem_cstruct1 : Cstruct.t -> t
+
+      (** [to_pem_cstruct private_keys] is [pem], the pem encoded
+          private keys. *)
+      val to_pem_cstruct : t list -> Cstruct.t
+
+      (** [to_pem_cstruct1 private_key] is [pem], the pem encoded
+          private key. *)
+      val to_pem_cstruct1 : t -> Cstruct.t
     end
   end
 end
