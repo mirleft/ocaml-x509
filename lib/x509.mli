@@ -270,6 +270,14 @@ module Encoding : sig
       encoded hash and signature. *)
   val pkcs1_digest_info_to_cstruct : (Nocrypto.Hash.hash * Cstruct.t) -> Cstruct.t
 
+  (** [rsa_public_to_cstruct pk] is [buffer], the ASN.1 encoding of the
+      given public key. *)
+  val rsa_public_to_cstruct : Nocrypto.Rsa.pub -> Cstruct.t
+
+  (** [rsa_public_of_cstruct buffer] is [pubkey], the public key of
+      the ASN.1 encoded buffer. *)
+  val rsa_public_of_cstruct : Cstruct.t -> Nocrypto.Rsa.pub option
+
   (** A parser for PEM files *)
   module Pem : sig
 
