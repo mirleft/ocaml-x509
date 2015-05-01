@@ -113,6 +113,10 @@ module PK = struct
           ( match Asn_grammars.PK.rsa_private_of_cstruct cs with
             | Some pk -> pk :: pks
             | None    -> invalid_arg "X509: failed to parse rsa private key" )
+        | ("PRIVATE KEY", cs) ->
+          ( match Asn_grammars.PK.private_of_cstruct cs with
+            | Some pk -> pk :: pks
+            | None    -> invalid_arg "X509: failed to parse private key" )
         | _ -> pks)
       []
       (parse cs)

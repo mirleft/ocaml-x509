@@ -756,6 +756,28 @@ module PK = struct
       (required ~label:"algorithm" Algorithm.identifier)
       (required ~label:"subjectPK" bit_string_cs)
 
+  (* PKCS8 *)
+  let rsa_priv_of_cs, rsa_priv_to_cs = project_exn rsa_private_key
+  let reparse_private = function
+    | (0, Algorithm.RSA, cs) -> rsa_priv_of_cs cs
+    | _ -> parse_error "unknown private key info"
+
+  let unparse_private pk =
+    (0, Algorithm.RSA, rsa_priv_to_cs pk)
+
+  let private_key_info =
+    map reparse_private unparse_private @@
+    sequence3
+      (required ~label:"version"             int)
+      (required ~label:"privateKeyAlgorithm" Algorithm.identifier)
+      (required ~label:"privateKey"          octet_string)
+      (* TODO: there's an
+         (optional ~label:"attributes" @@ implicit 0 (SET of Attributes)
+         which are defined in X.501; but nobody seems to use them anyways *)
+
+  let (private_of_cstruct, private_to_cstruct) =
+    projections_of der private_key_info
+
 end
 
 
