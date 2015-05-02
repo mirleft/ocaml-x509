@@ -1,3 +1,6 @@
+0.3.1 (master):
+* PKCS8 private key info support (only unencrypted keys so far)
+
 0.3.0 (2015-03-19):
 * more detailed error messages (type certificate_failure modified)
 * no longer Printf.printf debug messages
