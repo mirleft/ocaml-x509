@@ -1,4 +1,4 @@
-0.3.1 (master):
+0.3.1 (2015-05-02):
 * PKCS8 private key info support (only unencrypted keys so far)
 
 0.3.0 (2015-03-19):
