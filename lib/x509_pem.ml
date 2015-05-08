@@ -117,6 +117,27 @@ module Cert = struct
     Cs.concat (List.map to_pem_cstruct1 cs)
 end
 
+module PublicKey = struct
+  let of_pem_cstruct cs =
+    List.fold_left (fun keys -> function
+        | ("PUBLIC KEY", cs) ->
+          ( match Asn_grammars.PK.pub_info_of_cstruct cs with
+            | Some key -> keys @ [key]
+            | None     -> invalid_arg "X509: failed to parse public key" )
+        | _ -> keys)
+      []
+      (parse cs)
+
+  let of_pem_cstruct1 =
+    o (exactly_one ~what:"public keys") of_pem_cstruct
+
+  let to_pem_cstruct1 v =
+    unparse ~tag:"PUBLIC KEY" (Asn_grammars.PK.pub_info_to_cstruct v)
+
+  let to_pem_cstruct cs =
+    Cs.concat (List.map to_pem_cstruct1 cs)
+end
+
 module PrivateKey = struct
 
   type t = Nocrypto.Rsa.priv

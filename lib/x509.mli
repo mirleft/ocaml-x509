@@ -310,6 +310,28 @@ module Encoding : sig
       val to_pem_cstruct1 : t -> Cstruct.t
     end
 
+    (** A parser for public keys in PEM format *)
+    module PublicKey : sig
+
+      (** {3 PEM encoded RSA keys} *)
+
+      (** [of_pem_cstruct pem] is [t list], where all public keys of
+          [pem] are extracted *)
+      val of_pem_cstruct  : Cstruct.t -> pubkey list
+
+      (** [of_pem_cstruct1 pem] is [t], where the public key of [pem]
+          is extracted *)
+      val of_pem_cstruct1 : Cstruct.t -> pubkey
+
+      (** [to_pem_cstruct public_keys] is [pem], the pem encoded
+          public keys. *)
+      val to_pem_cstruct : pubkey list -> Cstruct.t
+
+      (** [to_pem_cstruct1 public_key] is [pem], the pem encoded
+          public key. *)
+      val to_pem_cstruct1 : pubkey -> Cstruct.t
+    end
+
     (** A parser for unencrypted private RSA keys in PEM format *)
     module PrivateKey : sig
 
