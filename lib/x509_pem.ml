@@ -117,7 +117,7 @@ module Cert = struct
     Cs.concat (List.map to_pem_cstruct1 cs)
 end
 
-module PK = struct
+module PrivateKey = struct
 
   type t = Nocrypto.Rsa.priv
 

@@ -310,8 +310,8 @@ module Encoding : sig
       val to_pem_cstruct1 : t -> Cstruct.t
     end
 
-    (** A parser for unencrypted private RSA keys certificates in PEM format *)
-    module PK : sig
+    (** A parser for unencrypted private RSA keys in PEM format *)
+    module PrivateKey : sig
 
       (** {3 PEM encoded RSA keys} *)
 

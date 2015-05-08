@@ -9,7 +9,7 @@ let load file =
   cs_mmap ("./tests/testcertificates/" ^ file ^ ".pem")
 
 let priv =
-  Encoding.Pem.PK.of_pem_cstruct1 (load "private/cakey")
+  Encoding.Pem.PrivateKey.of_pem_cstruct1 (load "private/cakey")
 
 let cert name =
   Encoding.Pem.Cert.of_pem_cstruct1 (load name)
