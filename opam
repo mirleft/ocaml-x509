@@ -8,7 +8,8 @@ maintainer:   [ "Hannes Mehnert <hannes@mehnert.org>" "David Kaloper <david@numm
 license:      "BSD2"
 
 build: [
-  ["ocaml" "setup.ml" "-configure" "--prefix" prefix ]
+  ["ocaml" "setup.ml" "-configure" "--prefix" prefix
+   "--%{ounit:enable}%-tests" ]
   ["ocaml" "setup.ml" "-build"]
 ]
 install: ["ocaml" "setup.ml" "-install"]
