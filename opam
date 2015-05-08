@@ -24,11 +24,7 @@ depends: [
   "ounit" {test}
 ]
 
-build-test: [
-  ["ocaml" "setup.ml" "-configure" "--enable-tests"]
-  ["ocaml" "setup.ml" "-build"]
-  ["ocaml" "setup.ml" "-test"]
-]
+build-test: [make "test"]
 
 tags: [ "org:mirage" ]
 available: [ ocaml-version >= "4.01.0" ]
