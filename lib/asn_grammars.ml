@@ -776,26 +776,30 @@ module PK = struct
   (* ECs go here *)
   (* ... *)
 
-  type t =
-    | RSA    of Rsa.pub
-    | EC_pub of OID.t
+  type t = [
+    | `RSA    of Rsa.pub
+    | `EC_pub of OID.t
+  ]
 
   let rsa_pub_of_cs, rsa_pub_to_cs = project_exn rsa_public_key
 
   let reparse_pk = function
-    | (Algorithm.RSA      , cs) -> RSA (rsa_pub_of_cs cs)
-    | (Algorithm.EC_pub id, _)  -> EC_pub id
+    | (Algorithm.RSA      , cs) -> `RSA (rsa_pub_of_cs cs)
+    | (Algorithm.EC_pub id, _)  -> `EC_pub id
     | _ -> parse_error "unknown public key algorithm"
 
   let unparse_pk = function
-    | RSA pk    -> (Algorithm.RSA, rsa_pub_to_cs pk)
-    | EC_pub id -> (Algorithm.EC_pub id, Cstruct.create 0)
+    | `RSA pk    -> (Algorithm.RSA, rsa_pub_to_cs pk)
+    | `EC_pub id -> (Algorithm.EC_pub id, Cstruct.create 0)
 
   let pk_info_der =
     map reparse_pk unparse_pk @@
     sequence2
       (required ~label:"algorithm" Algorithm.identifier)
       (required ~label:"subjectPK" bit_string_cs)
+
+  let (pub_info_of_cstruct, pub_info_to_cstruct) =
+    projections_of der pk_info_der
 
   (* PKCS8 *)
   let rsa_priv_of_cs, rsa_priv_to_cs = project_exn rsa_private_key

@@ -36,8 +36,6 @@ let sign (subject, pubkey)
   and until = tm_to_asn valid_until
   and signature_algo =
     Algorithm.of_signature_algorithm (privkey_to_keytype key) digest
-  and pubkey = match pubkey with
-    | `RSA data -> PK.RSA data
   in
   let tbs : tBSCertificate = {
       version = `V3 ;

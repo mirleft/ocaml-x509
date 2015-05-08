@@ -33,19 +33,16 @@ let sexp_of_t cert = Sexplib.Sexp.List
     [ Sexplib.Sexp.Atom "CERTIFICATE" ;
       Sexplib.Sexp.Atom (Cstruct.to_string (Hash.digest `SHA256 cert.raw)) ]
 
-type key_type = Asn_grammars.Algorithm.public_key
+type key_type = Algorithm.public_key
 
-type pubkey = [ `RSA of Nocrypto.Rsa.pub ]
+type pubkey = PK.t
 
-let cert_pubkey { asn = cert ; _ } =
-  match cert.tbs_cert.pk_info with
-  | PK.RSA pk -> Some (`RSA pk)
-  | _         -> None
+let cert_pubkey { asn = cert ; _ } = cert.tbs_cert.pk_info
 
 let supports_keytype c t =
   match cert_pubkey c, t with
-  | Some (`RSA _), `RSA -> true
-  | _ -> false
+  | (`RSA _), `RSA -> true
+  | _              -> false
 
 let cert_usage { asn = cert ; _ } =
   match extn_key_usage cert with
@@ -226,7 +223,7 @@ module Validation = struct
     let tbs_raw = raw_cert_hack cert in
     match trusted.tbs_cert.pk_info with
 
-    | PK.RSA issuing_key ->
+    | `RSA issuing_key ->
 
       ( match Rsa.PKCS1.verify ~key:issuing_key cert.asn.signature_val with
         | None           -> false

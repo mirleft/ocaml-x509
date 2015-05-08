@@ -53,11 +53,11 @@ type key_type = [ `RSA | `EC of Asn.OID.t ]
 val supports_keytype : t -> key_type -> bool
 
 (** The polymorphic variant of public keys. *)
-type pubkey = [ `RSA of Nocrypto.Rsa.pub ]
+type pubkey = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
 
 (** [cert_pubkey certificate] is [pubkey], the public key of the
     [certificate]. *)
-val cert_pubkey : t -> pubkey option
+val cert_pubkey : t -> pubkey
 
 (** The polymorphic variant of key usages. *)
 type key_usage = [
