@@ -8,12 +8,11 @@ maintainer:   [ "Hannes Mehnert <hannes@mehnert.org>" "David Kaloper <david@numm
 license:      "BSD2"
 
 build: [
-  ["ocaml" "setup.ml" "-configure" "--prefix" prefix
-   "--%{ounit:enable}%-tests" ]
-  ["ocaml" "setup.ml" "-build"]
+  [ "./configure" "--prefix" prefix ]
+  [ make ]
 ]
-install: ["ocaml" "setup.ml" "-install"]
-remove: ["ocamlfind" "remove" "x509"]
+install: [ make "install" ]
+remove: [ "ocamlfind" "remove" "x509" ]
 
 depends: [
   "ocamlfind"
@@ -25,7 +24,10 @@ depends: [
   "ounit" {test}
 ]
 
-build-test: [make "test"]
+build-test: [
+  [ "./configure" "--%{ounit:enable}%-tests" ]
+  [ make "test" ]
+]
 
 tags: [ "org:mirage" ]
 available: [ ocaml-version >= "4.01.0" ]
