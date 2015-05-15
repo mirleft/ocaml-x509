@@ -263,6 +263,9 @@ module Algorithm = struct
    * that handles unsupported algos anyway.
    *)
 
+  type public_key = [ `RSA | `EC of OID.t ]
+  type signature  = [ `RSA | `ECDSA ]
+
   type t =
 
     (* pk algos *)
@@ -314,6 +317,44 @@ module Algorithm = struct
     | `SHA256 -> SHA256
     | `SHA384 -> SHA384
     | `SHA512 -> SHA512
+
+  and to_key_type = function
+    | RSA        -> Some `RSA
+    | EC_pub oid -> Some (`EC oid)
+    | _          -> None
+
+  and of_key_type = function
+    | `RSA    -> RSA
+    | `EC oid -> EC_pub oid
+
+  (* XXX: No MD2 / MD4 / RIPEMD160 *)
+  and to_signature_algorithm = function
+    | MD5_RSA       -> Some (`RSA  , `MD5)
+    | SHA1_RSA      -> Some (`RSA  , `SHA1)
+    | SHA256_RSA    -> Some (`RSA  , `SHA256)
+    | SHA384_RSA    -> Some (`RSA  , `SHA384)
+    | SHA512_RSA    -> Some (`RSA  , `SHA512)
+    | SHA224_RSA    -> Some (`RSA  , `SHA224)
+    | ECDSA_SHA1    -> Some (`ECDSA, `SHA1)
+    | ECDSA_SHA224  -> Some (`ECDSA, `SHA224)
+    | ECDSA_SHA256  -> Some (`ECDSA, `SHA256)
+    | ECDSA_SHA384  -> Some (`ECDSA, `SHA384)
+    | ECDSA_SHA512  -> Some (`ECDSA, `SHA512)
+    | _             -> None
+
+  and of_signature_algorithm public_key_algorithm digest =
+    match public_key_algorithm, digest with
+    | (`RSA  , `MD5)    -> MD5_RSA
+    | (`RSA  , `SHA1)   -> SHA1_RSA
+    | (`RSA  , `SHA256) -> SHA256_RSA
+    | (`RSA  , `SHA384) -> SHA384_RSA
+    | (`RSA  , `SHA512) -> SHA512_RSA
+    | (`RSA  , `SHA224) -> SHA224_RSA
+    | (`ECDSA, `SHA1)   -> ECDSA_SHA1
+    | (`ECDSA, `SHA224) -> ECDSA_SHA224
+    | (`ECDSA, `SHA256) -> ECDSA_SHA256
+    | (`ECDSA, `SHA384) -> ECDSA_SHA384
+    | (`ECDSA, `SHA512) -> ECDSA_SHA512
 
   (* XXX
    *
@@ -735,26 +776,30 @@ module PK = struct
   (* ECs go here *)
   (* ... *)
 
-  type t =
-    | RSA    of Rsa.pub
-    | EC_pub of OID.t
+  type t = [
+    | `RSA    of Rsa.pub
+    | `EC_pub of OID.t
+  ]
 
   let rsa_pub_of_cs, rsa_pub_to_cs = project_exn rsa_public_key
 
   let reparse_pk = function
-    | (Algorithm.RSA      , cs) -> RSA (rsa_pub_of_cs cs)
-    | (Algorithm.EC_pub id, _)  -> EC_pub id
+    | (Algorithm.RSA      , cs) -> `RSA (rsa_pub_of_cs cs)
+    | (Algorithm.EC_pub id, _)  -> `EC_pub id
     | _ -> parse_error "unknown public key algorithm"
 
   let unparse_pk = function
-    | RSA pk    -> (Algorithm.RSA, rsa_pub_to_cs pk)
-    | EC_pub id -> (Algorithm.EC_pub id, Cstruct.create 0)
+    | `RSA pk    -> (Algorithm.RSA, rsa_pub_to_cs pk)
+    | `EC_pub id -> (Algorithm.EC_pub id, Cstruct.create 0)
 
   let pk_info_der =
     map reparse_pk unparse_pk @@
     sequence2
       (required ~label:"algorithm" Algorithm.identifier)
       (required ~label:"subjectPK" bit_string_cs)
+
+  let (pub_info_of_cstruct, pub_info_to_cstruct) =
+    projections_of der pk_info_der
 
   (* PKCS8 *)
   let rsa_priv_of_cs, rsa_priv_to_cs = project_exn rsa_private_key

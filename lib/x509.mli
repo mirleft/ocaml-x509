@@ -47,17 +47,17 @@ val sexp_of_t : t -> Sexplib.Sexp.t
 (** {1 Operations on a certificate} *)
 
 (** The polymorphic variant of public key types. *)
-type key_type = [ `RSA | `DH | `ECDH | `ECDSA ]
+type key_type = [ `RSA | `EC of Asn.OID.t ]
 
 (** [supports_keytype certificate key_type] is [result], whether public key of the [certificate] matches the given [key_type]. *)
 val supports_keytype : t -> key_type -> bool
 
 (** The polymorphic variant of public keys. *)
-type pubkey = [ `RSA of Nocrypto.Rsa.pub ]
+type pubkey = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
 
 (** [cert_pubkey certificate] is [pubkey], the public key of the
     [certificate]. *)
-val cert_pubkey : t -> pubkey option
+val cert_pubkey : t -> pubkey
 
 (** The polymorphic variant of key usages. *)
 type key_usage = [
@@ -113,6 +113,31 @@ val supports_hostname : t -> host -> bool
 (** [common_name_to_string certificate] is [common_name], the common
     name of the subject of the [certificate]. *)
 val common_name_to_string : t -> string
+
+(** Certificate Authority operations *)
+module CA : sig
+
+  (** {1 Signing} *)
+
+  (** The abstract type of a signing request. *)
+  type signing_request
+
+  (* TODO: to/from pem *)
+
+  (** The polymorphic variant of private keys. *)
+  type privkey = [ `RSA of Nocrypto.Rsa.priv ]
+
+  (** [generate subject private] is [signing_request], the signed request. *)
+  val generate : string -> privkey -> signing_request
+
+  (* TODO: policy/config stuff: extensions to add, signature algorithm, white/blacklist of keyusage/names/... *)
+
+  (** [sign signing_request ?digest ?valid_from ?valid_until ?serial
+      ?extensions private issuer] is [certificate], the certificate
+      signed with given private key and issuer; digest defaults to
+      `SHA1, validity from now for a day. *)
+  val sign : signing_request -> ?digest:Nocrypto.Hash.hash -> ?valid_from:Unix.tm -> ?valid_until:Unix.tm -> ?serial:Z.t -> ?extensions:(bool * Asn_grammars.Extension.t) list -> privkey -> string -> t
+end
 
 (** Validation logic: error variant and functions. *)
 module Validation : sig
@@ -245,6 +270,14 @@ module Encoding : sig
       encoded hash and signature. *)
   val pkcs1_digest_info_to_cstruct : (Nocrypto.Hash.hash * Cstruct.t) -> Cstruct.t
 
+  (** [rsa_public_to_cstruct pk] is [buffer], the ASN.1 encoding of the
+      given public key. *)
+  val rsa_public_to_cstruct : Nocrypto.Rsa.pub -> Cstruct.t
+
+  (** [rsa_public_of_cstruct buffer] is [pubkey], the public key of
+      the ASN.1 encoded buffer. *)
+  val rsa_public_of_cstruct : Cstruct.t -> Nocrypto.Rsa.pub option
+
   (** A parser for PEM files *)
   module Pem : sig
 
@@ -267,10 +300,40 @@ module Encoding : sig
       (** [of_pem_cstruct1 pem] is [t], where the single certificate
           of the [pem] is extracted *)
       val of_pem_cstruct1 : Cstruct.t -> t
+
+      (** [to_pem_cstruct certificates] is [pem], the pem encoded
+          certificates. *)
+      val to_pem_cstruct : t list -> Cstruct.t
+
+      (** [to_pem_cstruct1 certificate] is [pem], the pem encoded
+          certificate. *)
+      val to_pem_cstruct1 : t -> Cstruct.t
     end
 
-    (** A parser for unencrypted private RSA keys certificates in PEM format *)
-    module PK : sig
+    (** A parser for public keys in PEM format *)
+    module PublicKey : sig
+
+      (** {3 PEM encoded RSA keys} *)
+
+      (** [of_pem_cstruct pem] is [t list], where all public keys of
+          [pem] are extracted *)
+      val of_pem_cstruct  : Cstruct.t -> pubkey list
+
+      (** [of_pem_cstruct1 pem] is [t], where the public key of [pem]
+          is extracted *)
+      val of_pem_cstruct1 : Cstruct.t -> pubkey
+
+      (** [to_pem_cstruct public_keys] is [pem], the pem encoded
+          public keys. *)
+      val to_pem_cstruct : pubkey list -> Cstruct.t
+
+      (** [to_pem_cstruct1 public_key] is [pem], the pem encoded
+          public key. *)
+      val to_pem_cstruct1 : pubkey -> Cstruct.t
+    end
+
+    (** A parser for unencrypted private RSA keys in PEM format *)
+    module PrivateKey : sig
 
       (** {3 PEM encoded RSA keys} *)
 
@@ -284,6 +347,14 @@ module Encoding : sig
       (** [of_pem_cstruct1 pem] is [t], where the private key of [pem]
           is extracted *)
       val of_pem_cstruct1 : Cstruct.t -> t
+
+      (** [to_pem_cstruct private_keys] is [pem], the pem encoded
+          private keys. *)
+      val to_pem_cstruct : t list -> Cstruct.t
+
+      (** [to_pem_cstruct1 private_key] is [pem], the pem encoded
+          private key. *)
+      val to_pem_cstruct1 : t -> Cstruct.t
     end
   end
 end

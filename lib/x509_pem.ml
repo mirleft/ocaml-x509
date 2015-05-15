@@ -1,10 +1,5 @@
 open Cstruct
 
-let parse_certificate cs =
-  match Asn_grammars.certificate_of_cstruct cs with
-  | None     -> None
-  | Some asn -> Some X509_certificate.({ asn ; raw = cs })
-
 let o f g x = f (g x)
 
 module Cs = struct
@@ -19,11 +14,6 @@ module Cs = struct
   let ends_with cs target =
     let l1 = len cs and l2 = len target in
     l1 >= l2 && equal (sub cs (l1 - l2) l2) target
-
-  let hex_to_cs = of_hex
-
-  let dotted_hex_to_cs =
-    o hex_to_cs (String.map (function ':' -> ' ' | x -> x))
 end
 
 let null cs = Cstruct.len cs = 0
@@ -87,12 +77,30 @@ let exactly_one ~what = function
   | [x] -> x
   | _   -> invalid_arg ("Multiple " ^ what)
 
+let unparse ~tag value =
+  let rec split_at_64 acc = function
+    | x when len x <= 64 -> List.rev (x :: acc)
+    | x -> let here, rest = split x 64 in
+           split_at_64 (here :: acc) rest
+  in
+  let raw = Nocrypto.Base64.encode value in
+  let pieces = split_at_64 [] raw in
+  let nl = of_string "\n" in
+  let lines = List.flatten (List.map (fun x -> [ x ; nl ]) pieces)
+  in
+
+  let tag = of_string tag in
+  let first = [ open_begin ; tag ; close ; nl ]
+  and last = [ open_end ; tag ; close ; nl ]
+  in
+  Cs.concat (first @ lines @ last)
+
 module Cert = struct
 
   let of_pem_cstruct cs =
     List.fold_left (fun certs -> function
         | ("CERTIFICATE", cs) ->
-          ( match parse_certificate cs with
+          ( match X509_certificate.parse_certificate cs with
             | Some cert -> certs @ [cert]
             | None      -> invalid_arg "X509: failed to parse certificate" )
         | _ -> certs)
@@ -101,9 +109,36 @@ module Cert = struct
 
   let of_pem_cstruct1 =
     o (exactly_one ~what:"certificates") of_pem_cstruct
+
+  let to_pem_cstruct1 v =
+    unparse ~tag:"CERTIFICATE" (X509_certificate.cs_of_cert v)
+
+  let to_pem_cstruct cs =
+    Cs.concat (List.map to_pem_cstruct1 cs)
 end
 
-module PK = struct
+module PublicKey = struct
+  let of_pem_cstruct cs =
+    List.fold_left (fun keys -> function
+        | ("PUBLIC KEY", cs) ->
+          ( match Asn_grammars.PK.pub_info_of_cstruct cs with
+            | Some key -> keys @ [key]
+            | None     -> invalid_arg "X509: failed to parse public key" )
+        | _ -> keys)
+      []
+      (parse cs)
+
+  let of_pem_cstruct1 =
+    o (exactly_one ~what:"public keys") of_pem_cstruct
+
+  let to_pem_cstruct1 v =
+    unparse ~tag:"PUBLIC KEY" (Asn_grammars.PK.pub_info_to_cstruct v)
+
+  let to_pem_cstruct cs =
+    Cs.concat (List.map to_pem_cstruct1 cs)
+end
+
+module PrivateKey = struct
 
   type t = Nocrypto.Rsa.priv
 
@@ -123,4 +158,10 @@ module PK = struct
 
   let of_pem_cstruct1 =
     o (exactly_one ~what:"RSA keys") of_pem_cstruct
+
+  let to_pem_cstruct1 v =
+    unparse ~tag:"RSA PRIVATE KEY" (Asn_grammars.PK.rsa_private_to_cstruct v)
+
+  let to_pem_cstruct cs =
+    Cs.concat (List.map to_pem_cstruct1 cs)
 end

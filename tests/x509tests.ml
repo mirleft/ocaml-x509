@@ -9,7 +9,7 @@ let load file =
   cs_mmap ("./tests/testcertificates/" ^ file ^ ".pem")
 
 let priv =
-  Encoding.Pem.PK.of_pem_cstruct1 (load "private/cakey")
+  Encoding.Pem.PrivateKey.of_pem_cstruct1 (load "private/cakey")
 
 let cert name =
   Encoding.Pem.Cert.of_pem_cstruct1 (load name)
@@ -21,12 +21,15 @@ let invalid_cas = [
   "cacert-ext-usage-timestamping"
 ]
 
+let cert_public_is_pub cert =
+  let pub = Nocrypto.Rsa.pub_of_priv priv in
+  ( match cert_pubkey cert with
+    | `RSA pub' when pub = pub' -> ()
+    | _ -> assert_failure "public / private key doesn't match" )
+
 let test_invalid_ca name _ =
   let c = cert name in
-  let pub = Nocrypto.Rsa.pub_of_priv priv in
-  ( match cert_pubkey c with
-    | Some (`RSA pub') when pub = pub' -> ()
-    | _ -> assert_failure "public / private key doesn't match" ) ;
+  cert_public_is_pub c ;
   assert_equal (List.length (Validation.valid_cas [c])) 0
 
 let invalid_ca_tests =
@@ -41,10 +44,7 @@ let cacert_ext_ku = cert "cacert-ext-usage"
 let cacert_v1 = cert "cacert-v1"
 
 let test_valid_ca c _ =
-  let pub = Nocrypto.Rsa.pub_of_priv priv in
-  ( match cert_pubkey c with
-    | Some (`RSA pub') when pub = pub' -> ()
-    | _                           -> assert_failure "public / private key doesn't match" ) ;
+  cert_public_is_pub c ;
   assert_equal (List.length (Validation.valid_cas [c])) 1
 
 let valid_ca_tests = [
