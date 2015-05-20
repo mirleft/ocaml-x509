@@ -2,7 +2,7 @@ open X509_certificate
 
 open Asn_grammars
 
-type signing_request = (string * pubkey)
+type signing_request = (Name.dn * pubkey)
 
 type privkey = [ `RSA of Nocrypto.Rsa.priv ]
 
@@ -31,7 +31,6 @@ let sign (subject, pubkey)
     ?(serial = Nocrypto.(Rng.Z.gen_r Numeric.Z.one Numeric.Z.(one lsl 64)))
     ?(extensions = [])
     key issuer =
-  let str2dn s = [Name.(CN s)] in
   let from = tm_to_asn valid_from
   and until = tm_to_asn valid_until
   and signature_algo =
@@ -41,9 +40,9 @@ let sign (subject, pubkey)
       version = `V3 ;
       serial ;
       signature = signature_algo ;
-      issuer = str2dn issuer ;
+      issuer = issuer ;
       validity = (from, until) ;
-      subject = str2dn subject ;
+      subject = subject ;
       pk_info = pubkey ;
       issuer_id = None ;
       subject_id = None ;

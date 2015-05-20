@@ -162,7 +162,7 @@ module CA : sig
   type privkey = [ `RSA of Nocrypto.Rsa.priv ]
 
   (** [generate subject private] is [signing_request], the signed request. *)
-  val generate : string -> privkey -> signing_request
+  val generate : distinguished_name -> privkey -> signing_request
 
   (* TODO: policy/config stuff: extensions to add, signature algorithm, white/blacklist of keyusage/names/... *)
 
@@ -170,7 +170,7 @@ module CA : sig
       ?extensions private issuer] is [certificate], the certificate
       signed with given private key and issuer; digest defaults to
       `SHA1, validity from now for a day. *)
-  val sign : signing_request -> ?digest:Nocrypto.Hash.hash -> ?valid_from:Unix.tm -> ?valid_until:Unix.tm -> ?serial:Z.t -> ?extensions:(bool * Asn_grammars.Extension.t) list -> privkey -> string -> t
+  val sign : signing_request -> ?digest:Nocrypto.Hash.hash -> ?valid_from:Unix.tm -> ?valid_until:Unix.tm -> ?serial:Z.t -> ?extensions:(bool * Asn_grammars.Extension.t) list -> privkey -> distinguished_name -> t
 end
 
 (** Validation logic: error variant and functions. *)
