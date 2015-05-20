@@ -16,7 +16,7 @@ open Asn_grammars
  *)
 
 type t = {
-  asn : Asn_grammars.certificate ;
+  asn : certificate ;
   raw : Cstruct.t
 }
 
@@ -31,7 +31,7 @@ let subject { asn ; _ } = asn.tbs_cert.subject
 let distinguished_name_to_string = Name.dn_to_string
 
 let parse_certificate cs =
-  match Asn_grammars.certificate_of_cstruct cs with
+  match certificate_of_cstruct cs with
   | None     -> None
   | Some asn -> Some { asn ; raw = cs }
 
