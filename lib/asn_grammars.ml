@@ -90,6 +90,27 @@ module Name = struct
 
   type dn = component list
 
+  let component_to_string = function
+    | `CN s -> "CN=" ^ s
+    | `Serialnumber s -> "Serialnumber=" ^ s
+    | `C s -> "C=" ^ s
+    | `L s -> "L=" ^ s
+    | `SP s -> "SP=" ^ s
+    | `O s -> "O=" ^ s
+    | `OU s -> "OU=" ^ s
+    | `T s -> "T=" ^ s
+    | `DNQ s -> "DNQ=" ^ s
+    | `Mail s -> "Mail=" ^ s
+    | `DC s -> "DC=" ^ s
+    | `Given_name s -> "Given_name=" ^ s
+    | `Surname s -> "Surname=" ^ s
+    | `Initials s -> "Initials=" ^ s
+    | `Pseudonym s -> "Pseudonym=" ^ s
+    | `Generation s -> "Generation=" ^ s
+    | `Other (oid, s) -> OID.to_string oid ^ "=" ^ s
+
+  let dn_to_string dn = String.concat "/" (List.map component_to_string dn)
+
   (* See rfc5280 section 4.1.2.4. *)
   let directory_name =
     let f = function | `C1 s -> s | `C2 s -> s | `C3 s -> s
