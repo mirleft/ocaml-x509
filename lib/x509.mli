@@ -114,6 +114,40 @@ val supports_hostname : t -> host -> bool
     name of the subject of the [certificate]. *)
 val common_name_to_string : t -> string
 
+type component = [
+  | `CN           of string
+  | `Serialnumber of string
+  | `C            of string
+  | `L            of string
+  | `SP           of string
+  | `O            of string
+  | `OU           of string
+  | `T            of string
+  | `DNQ          of string
+  | `Mail         of string
+  | `DC           of string
+
+  | `Given_name   of string
+  | `Surname      of string
+  | `Initials     of string
+  | `Pseudonym    of string
+  | `Generation   of string
+
+  | `Other        of Asn.OID.t * string
+]
+
+type distinguished_name = component list
+
+(** [distinguished_name_to_string dn] is [string], the string representation of the distinguished name. *)
+val distinguished_name_to_string : distinguished_name -> string
+
+(** [subject t] is [dn], the subject as distinguished name of the certificate. *)
+val subject : t -> distinguished_name
+
+(** [issuer t] is [dn], the issuer as distinguished name of the certificate. *)
+val issuer : t -> distinguished_name
+
+
 (** Certificate Authority operations *)
 module CA : sig
 

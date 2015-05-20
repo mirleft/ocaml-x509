@@ -20,6 +20,16 @@ type t = {
   raw : Cstruct.t
 }
 
+type component = Name.component
+
+type distinguished_name = Name.dn
+
+let issuer { asn ; _ } = asn.tbs_cert.issuer
+
+let subject { asn ; _ } = asn.tbs_cert.subject
+
+let distinguished_name_to_string = Name.dn_to_string
+
 let parse_certificate cs =
   match Asn_grammars.certificate_of_cstruct cs with
   | None     -> None
