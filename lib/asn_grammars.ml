@@ -66,26 +66,27 @@ module Name = struct
   (* A list of abbreviations: http://pic.dhe.ibm.com/infocenter/wmqv7/v7r1/index.jsp?topic=%2Fcom.ibm.mq.doc%2Fsy10570_.htm *)
   (* Also rfc4519. *)
 
-  type component =
-    | CN           of string
-    | Serialnumber of string
-    | C            of string
-    | L            of string
-    | SP           of string
-    | O            of string
-    | OU           of string
-    | T            of string
-    | DNQ          of string
-    | Mail         of string
-    | DC           of string
+  type component = [
+    | `CN           of string
+    | `Serialnumber of string
+    | `C            of string
+    | `L            of string
+    | `SP           of string
+    | `O            of string
+    | `OU           of string
+    | `T            of string
+    | `DNQ          of string
+    | `Mail         of string
+    | `DC           of string
 
-    | Given_name   of string
-    | Surname      of string
-    | Initials     of string
-    | Pseudonym    of string
-    | Generation   of string
+    | `Given_name   of string
+    | `Surname      of string
+    | `Initials     of string
+    | `Pseudonym    of string
+    | `Generation   of string
 
-    | Other        of OID.t * string
+    | `Other        of OID.t * string
+  ]
 
   type dn = component list
 
@@ -109,42 +110,42 @@ module Name = struct
     let open Registry in
 
     let a_f = case_of_2 [
-      (domain_component              , fun x -> DC           x) ;
-      (X520.common_name              , fun x -> CN           x) ;
-      (X520.serial_number            , fun x -> Serialnumber x) ;
-      (X520.country_name             , fun x -> C            x) ;
-      (X520.locality_name            , fun x -> L            x) ;
-      (X520.state_or_province_name   , fun x -> SP           x) ;
-      (X520.organization_name        , fun x -> O            x) ;
-      (X520.organizational_unit_name , fun x -> OU           x) ;
-      (X520.title                    , fun x -> T            x) ;
-      (X520.dn_qualifier             , fun x -> DNQ          x) ;
-      (PKCS9.email                   , fun x -> Mail         x) ;
-      (X520.given_name               , fun x -> Given_name   x) ;
-      (X520.surname                  , fun x -> Surname      x) ;
-      (X520.initials                 , fun x -> Initials     x) ;
-      (X520.pseudonym                , fun x -> Pseudonym    x) ;
-      (X520.generation_qualifier     , fun x -> Generation   x) ]
-      ~default:(fun oid x -> Other (oid, x))
+      (domain_component              , fun x -> `DC           x) ;
+      (X520.common_name              , fun x -> `CN           x) ;
+      (X520.serial_number            , fun x -> `Serialnumber x) ;
+      (X520.country_name             , fun x -> `C            x) ;
+      (X520.locality_name            , fun x -> `L            x) ;
+      (X520.state_or_province_name   , fun x -> `SP           x) ;
+      (X520.organization_name        , fun x -> `O            x) ;
+      (X520.organizational_unit_name , fun x -> `OU           x) ;
+      (X520.title                    , fun x -> `T            x) ;
+      (X520.dn_qualifier             , fun x -> `DNQ          x) ;
+      (PKCS9.email                   , fun x -> `Mail         x) ;
+      (X520.given_name               , fun x -> `Given_name   x) ;
+      (X520.surname                  , fun x -> `Surname      x) ;
+      (X520.initials                 , fun x -> `Initials     x) ;
+      (X520.pseudonym                , fun x -> `Pseudonym    x) ;
+      (X520.generation_qualifier     , fun x -> `Generation   x) ]
+      ~default:(fun oid x -> `Other (oid, x))
 
     and a_g = function
-      | DC           x   -> (domain_component              , x )
-      | CN           x   -> (X520.common_name              , x )
-      | Serialnumber x   -> (X520.serial_number            , x )
-      | C            x   -> (X520.country_name             , x )
-      | L            x   -> (X520.locality_name            , x )
-      | SP           x   -> (X520.state_or_province_name   , x )
-      | O            x   -> (X520.organization_name        , x )
-      | OU           x   -> (X520.organizational_unit_name , x )
-      | T            x   -> (X520.title                    , x )
-      | DNQ          x   -> (X520.dn_qualifier             , x )
-      | Mail         x   -> (PKCS9.email                   , x )
-      | Given_name   x   -> (X520.given_name               , x )
-      | Surname      x   -> (X520.surname                  , x )
-      | Initials     x   -> (X520.initials                 , x )
-      | Pseudonym    x   -> (X520.pseudonym                , x )
-      | Generation   x   -> (X520.generation_qualifier     , x )
-      | Other (oid,  x ) -> (oid                           , x )
+      | `DC           x   -> (domain_component              , x )
+      | `CN           x   -> (X520.common_name              , x )
+      | `Serialnumber x   -> (X520.serial_number            , x )
+      | `C            x   -> (X520.country_name             , x )
+      | `L            x   -> (X520.locality_name            , x )
+      | `SP           x   -> (X520.state_or_province_name   , x )
+      | `O            x   -> (X520.organization_name        , x )
+      | `OU           x   -> (X520.organizational_unit_name , x )
+      | `T            x   -> (X520.title                    , x )
+      | `DNQ          x   -> (X520.dn_qualifier             , x )
+      | `Mail         x   -> (PKCS9.email                   , x )
+      | `Given_name   x   -> (X520.given_name               , x )
+      | `Surname      x   -> (X520.surname                  , x )
+      | `Initials     x   -> (X520.initials                 , x )
+      | `Pseudonym    x   -> (X520.pseudonym                , x )
+      | `Generation   x   -> (X520.generation_qualifier     , x )
+      | `Other (oid,  x ) -> (oid                           , x )
     in
 
     let attribute_tv =
