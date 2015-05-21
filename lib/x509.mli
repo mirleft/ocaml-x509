@@ -114,6 +114,11 @@ val supports_hostname : t -> host -> bool
     name of the subject of the [certificate]. *)
 val common_name_to_string : t -> string
 
+(** [sort_certificates server certificates] is [certificate_chain],
+    the first chain of certificates from server using
+    certificates.  *)
+val sort_certificates : t -> t list -> t list option
+
 (** Certificate Authority operations *)
 module CA : sig
 
