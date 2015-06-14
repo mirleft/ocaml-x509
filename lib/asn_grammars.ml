@@ -847,6 +847,79 @@ module PK = struct
 
 end
 
+module CertificateRequest = struct
+  open Registry
+
+  let attributes =
+    let f = function
+      | (oid, [`C1 p]) when oid = PKCS9.challenge_password -> `Password p
+      | (oid, [`C1 n]) when oid = PKCS9.unstructured_name -> `Name n
+      | (oid, [`C2 es]) when oid = PKCS9.extension_request -> `Extensions es
+    and g = function
+      | `Password p -> (PKCS9.challenge_password, [`C1 p])
+      | `Name n -> (PKCS9.unstructured_name, [`C1 n])
+      | `Extensions es -> (PKCS9.extension_request, [`C2 es])
+    in
+    map f g @@
+    sequence2
+      (required ~label:"attr type" oid)
+      (required ~label:"attr value"
+         (set_of (choice2
+                    utf8_string
+                    Extension.extensions_der)))
+
+  type request_info_extensions = [
+    | `Password of string
+    | `Name of string
+    | `Extensions of (bool * Extension.t) list
+  ]
+
+  type certificate_request_info = {
+    subject : Name.dn ;
+    public_key : PK.t ;
+    extensions : request_info_extensions list option ;
+  }
+
+  let certificate_request_info =
+    let f = function
+      | (0, subject, public_key, extensions) ->
+        { subject ; public_key ; extensions }
+      | _ ->
+        parse_error "unknown certificate request info"
+    and g { subject ; public_key ; extensions } =
+      (0, subject, public_key, extensions)
+    in
+    map f g @@
+    sequence4
+      (required ~label:"version" int)
+      (required ~label:"subject" Name.name)
+      (required ~label:"subjectPKInfo" PK.pk_info_der)
+      (optional ~label:"attributes" @@ implicit 0 (set_of attributes))
+
+  let certificate_request_info_of_cs, certificate_request_info_to_cs =
+    projections_of der certificate_request_info
+
+  type certificate_request = {
+    info : certificate_request_info ;
+    signature_algorithm : Algorithm.t ;
+    signature : Cstruct.t
+  }
+
+  let certificate_request =
+    let f = fun (info, signature_algorithm, signature) ->
+      { info ; signature_algorithm ; signature }
+    and g = fun { info ; signature_algorithm ; signature } ->
+      (info, signature_algorithm, signature)
+    in
+    map f g @@
+    sequence3
+      (required ~label:"certificationRequestInfo" certificate_request_info)
+      (required ~label:"signatureAlgorithm" Algorithm.identifier)
+      (required ~label:"signature" bit_string_cs)
+
+  let certificate_request_of_cs, certificate_request_to_cs =
+    projections_of der certificate_request
+end
 
 (*
  * X509 certs
