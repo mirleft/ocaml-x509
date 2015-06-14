@@ -652,19 +652,19 @@ module Extension = struct
           (optional ~label:"policyQualifiers" (sequence_of qualifier_info))
 
 
-  type t =
-    | Unsupported       of OID.t * Cstruct.t
-    | Subject_alt_name  of gen_names
-    | Authority_key_id  of authority_key_id
-    | Subject_key_id    of Cstruct.t
-    | Issuer_alt_name   of gen_names
-    | Key_usage         of key_usage list
-    | Ext_key_usage     of extended_key_usage list
-    | Basic_constraints of (bool * int option)
-    | Priv_key_period   of priv_key_usage_period
-    | Name_constraints  of name_constraints
-    | Policies          of cert_policies
-
+  type t = [
+    | `Unsupported       of OID.t * Cstruct.t
+    | `Subject_alt_name  of gen_names
+    | `Authority_key_id  of authority_key_id
+    | `Subject_key_id    of Cstruct.t
+    | `Issuer_alt_name   of gen_names
+    | `Key_usage         of key_usage list
+    | `Ext_key_usage     of extended_key_usage list
+    | `Basic_constraints of (bool * int option)
+    | `Priv_key_period   of priv_key_usage_period
+    | `Name_constraints  of name_constraints
+    | `Policies          of cert_policies
+  ]
 
   let gen_names_of_cs, gen_names_to_cs       = project_exn gen_names
   and auth_key_id_of_cs, auth_key_id_to_cs   = project_exn authority_key_id
@@ -681,49 +681,49 @@ module Extension = struct
   let reparse_extension_exn = case_of_2 [
 
     (ID.subject_alternative_name, fun cs ->
-      Subject_alt_name (gen_names_of_cs cs)) ;
+      `Subject_alt_name (gen_names_of_cs cs)) ;
 
     (ID.issuer_alternative_name, fun cs ->
-      Issuer_alt_name (gen_names_of_cs cs)) ;
+      `Issuer_alt_name (gen_names_of_cs cs)) ;
 
     (ID.authority_key_identifier, fun cs ->
-      Authority_key_id (auth_key_id_of_cs cs)) ;
+      `Authority_key_id (auth_key_id_of_cs cs)) ;
 
     (ID.subject_key_identifier, fun cs ->
-      Subject_key_id (subj_key_id_of_cs cs)) ;
+      `Subject_key_id (subj_key_id_of_cs cs)) ;
 
     (ID.key_usage, fun cs ->
-      Key_usage (key_usage_of_cs cs)) ;
+      `Key_usage (key_usage_of_cs cs)) ;
 
     (ID.basic_constraints, fun cs ->
-      Basic_constraints (basic_constr_of_cs cs));
+      `Basic_constraints (basic_constr_of_cs cs));
 
     (ID.extended_key_usage, fun cs ->
-      Ext_key_usage (e_key_usage_of_cs cs)) ;
+      `Ext_key_usage (e_key_usage_of_cs cs)) ;
 
     (ID.private_key_usage_period, fun cs ->
-      Priv_key_period (pr_key_peri_of_cs cs)) ;
+      `Priv_key_period (pr_key_peri_of_cs cs)) ;
 
     (ID.name_constraints, fun cs ->
-      Name_constraints (name_con_of_cs cs)) ;
+      `Name_constraints (name_con_of_cs cs)) ;
 
     (ID.certificate_policies_2, fun cs ->
-      Policies (cert_pol_of_cs cs))
+      `Policies (cert_pol_of_cs cs))
     ]
-    ~default:(fun oid cs -> Unsupported (oid, cs))
+    ~default:(fun oid cs -> `Unsupported (oid, cs))
 
   let unparse_extension = function
-    | Subject_alt_name  x -> (ID.subject_alternative_name, gen_names_to_cs    x)
-    | Issuer_alt_name   x -> (ID.issuer_alternative_name , gen_names_to_cs    x)
-    | Authority_key_id  x -> (ID.authority_key_identifier, auth_key_id_to_cs  x)
-    | Subject_key_id    x -> (ID.subject_key_identifier  , subj_key_id_to_cs  x)
-    | Key_usage         x -> (ID.key_usage               , key_usage_to_cs    x)
-    | Basic_constraints x -> (ID.basic_constraints       , basic_constr_to_cs x)
-    | Ext_key_usage     x -> (ID.extended_key_usage      , e_key_usage_to_cs  x)
-    | Priv_key_period   x -> (ID.private_key_usage_period, pr_key_peri_to_cs  x)
-    | Name_constraints  x -> (ID.name_constraints        , name_con_to_cs     x)
-    | Policies          x -> (ID.certificate_policies_2  , cert_pol_to_cs     x)
-    | Unsupported (oid, cs) -> (oid, cs)
+    | `Subject_alt_name  x -> (ID.subject_alternative_name, gen_names_to_cs    x)
+    | `Issuer_alt_name   x -> (ID.issuer_alternative_name , gen_names_to_cs    x)
+    | `Authority_key_id  x -> (ID.authority_key_identifier, auth_key_id_to_cs  x)
+    | `Subject_key_id    x -> (ID.subject_key_identifier  , subj_key_id_to_cs  x)
+    | `Key_usage         x -> (ID.key_usage               , key_usage_to_cs    x)
+    | `Basic_constraints x -> (ID.basic_constraints       , basic_constr_to_cs x)
+    | `Ext_key_usage     x -> (ID.extended_key_usage      , e_key_usage_to_cs  x)
+    | `Priv_key_period   x -> (ID.private_key_usage_period, pr_key_peri_to_cs  x)
+    | `Name_constraints  x -> (ID.name_constraints        , name_con_to_cs     x)
+    | `Policies          x -> (ID.certificate_policies_2  , cert_pol_to_cs     x)
+    | `Unsupported (oid, cs) -> (oid, cs)
 
   let extensions_der =
     let extension =
@@ -990,13 +990,13 @@ let  extn_subject_alt_name
             match pred ext with None -> None | Some x -> Some (crit, x))
   in
   let open Extension in
-  (f @@ function Subject_alt_name  _ as x -> Some x | _ -> None),
-  (f @@ function Issuer_alt_name   _ as x -> Some x | _ -> None),
-  (f @@ function Authority_key_id  _ as x -> Some x | _ -> None),
-  (f @@ function Subject_key_id    _ as x -> Some x | _ -> None),
-  (f @@ function Key_usage         _ as x -> Some x | _ -> None),
-  (f @@ function Ext_key_usage     _ as x -> Some x | _ -> None),
-  (f @@ function Basic_constraints _ as x -> Some x | _ -> None),
-  (f @@ function Priv_key_period   _ as x -> Some x | _ -> None),
-  (f @@ function Name_constraints  _ as x -> Some x | _ -> None),
-  (f @@ function Policies          _ as x -> Some x | _ -> None)
+  (f @@ function `Subject_alt_name  _ as x -> Some x | _ -> None),
+  (f @@ function `Issuer_alt_name   _ as x -> Some x | _ -> None),
+  (f @@ function `Authority_key_id  _ as x -> Some x | _ -> None),
+  (f @@ function `Subject_key_id    _ as x -> Some x | _ -> None),
+  (f @@ function `Key_usage         _ as x -> Some x | _ -> None),
+  (f @@ function `Ext_key_usage     _ as x -> Some x | _ -> None),
+  (f @@ function `Basic_constraints _ as x -> Some x | _ -> None),
+  (f @@ function `Priv_key_period   _ as x -> Some x | _ -> None),
+  (f @@ function `Name_constraints  _ as x -> Some x | _ -> None),
+  (f @@ function `Policies          _ as x -> Some x | _ -> None)

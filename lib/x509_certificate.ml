@@ -56,8 +56,8 @@ let supports_keytype c t =
 
 let cert_usage { asn = cert ; _ } =
   match extn_key_usage cert with
-  | Some (_, Extension.Key_usage usages) -> Some usages
-  | _                                    -> None
+  | Some (_, `Key_usage usages) -> Some usages
+  | _                           -> None
 
 type key_usage = Extension.key_usage
 
@@ -68,8 +68,8 @@ let supports_usage ?(not_present = false) c u =
 
 let cert_extended_usage { asn = cert ; _ } =
   match extn_ext_key_usage cert with
-  | Some (_, Extension.Ext_key_usage usages) -> Some usages
-  | _                                        -> None
+  | Some (_, `Ext_key_usage usages) -> Some usages
+  | _                               -> None
 
 type extended_key_usage = Extension.extended_key_usage
 
@@ -101,7 +101,7 @@ let common_name_to_string { asn = cert ; _ } =
 let cert_hostnames { asn = cert ; _ } : string list =
   let open Extension in
   match extn_subject_alt_name cert, subject_common_name cert with
-    | Some (_, Subject_alt_name names), _     ->
+    | Some (_, `Subject_alt_name names), _    ->
        List_ext.filter_map
          names
          ~f:(function
@@ -203,10 +203,10 @@ let validate_path_len pathlen { asn = cert ; _ } =
   (* TODO: make it configurable whether to accept V1/2 certificates at all *)
   let open Extension in
   match cert.tbs_cert.version, extn_basic_constr cert with
-  | (`V1 | `V2), _                                   -> true
-  | `V3, Some (_ , Basic_constraints (true, None))   -> true
-  | `V3, Some (_ , Basic_constraints (true, Some n)) -> n >= pathlen
-  | _                                                -> false
+  | (`V1 | `V2), _                                    -> true
+  | `V3, Some (_ , `Basic_constraints (true, None))   -> true
+  | `V3, Some (_ , `Basic_constraints (true, Some n)) -> n >= pathlen
+  | _                                                 -> false
 
 let cacert_fingerprints =
   List.map
@@ -230,8 +230,8 @@ let validate_ca_extensions { asn ; raw } =
   (* unfortunately, there are 8 CA certs (including the one which
      signed google.com) which are _NOT_ marked as critical *)
   ( match extn_basic_constr cert with
-    | Some (_ , Basic_constraints (true, _))   -> true
-    | _                                        -> false ) &&
+    | Some (_ , `Basic_constraints (true, _)) -> true
+    | _                                       -> false ) &&
 
   (* 4.2.1.3 Key Usage *)
   (* Conforming CAs MUST include key usage extension *)
@@ -239,9 +239,9 @@ let validate_ca_extensions { asn ; raw } =
   ( match extn_key_usage cert with
     (* When present, conforming CAs SHOULD mark this extension as critical *)
     (* yeah, you wish... *)
-    | Some (_, Key_usage usage) -> List.mem `Key_cert_sign usage
-    | None when is_cacert raw   -> true (* CA Cert does not include any key usage extensions *)
-    | _                         -> false ) &&
+    | Some (_, `Key_usage usage) -> List.mem `Key_cert_sign usage
+    | None when is_cacert raw    -> true (* CA Cert does not include any key usage extensions *)
+    | _                          -> false ) &&
 
   (* if we require this, we cannot talk to github.com
      (* 4.2.1.12.  Extended Key Usage
@@ -260,22 +260,22 @@ let validate_ca_extensions { asn ; raw } =
 
   (* check criticality *)
   List.for_all (function
-      | (true, Key_usage _)         -> true
-      | (true, Basic_constraints _) -> true
-      | (crit, _)                   -> not crit )
+      | (true, `Key_usage _)         -> true
+      | (true, `Basic_constraints _) -> true
+      | (crit, _)                    -> not crit )
     cert.tbs_cert.extensions
 
 let validate_server_extensions { asn = cert ; _ } =
   let open Extension in
   List.for_all (function
-      | (_, Basic_constraints (true, _))  -> false
-      | (_, Basic_constraints (false, _)) -> true
-      | (_, Key_usage _)                  -> true
-      | (_, Ext_key_usage _)              -> true
-      | (_, Subject_alt_name _)           -> true
-      | (c, Policies ps)                  -> not c || List.mem `Any ps
+      | (_, `Basic_constraints (true, _))  -> false
+      | (_, `Basic_constraints (false, _)) -> true
+      | (_, `Key_usage _)                  -> true
+      | (_, `Ext_key_usage _)              -> true
+      | (_, `Subject_alt_name _)           -> true
+      | (c, `Policies ps)                  -> not c || List.mem `Any ps
       (* we've to deal with _all_ extensions marked critical! *)
-      | (crit, _)                         -> not crit )
+      | (c, _)                             -> not c )
     cert.tbs_cert.extensions
 
 let valid_trust_anchor_extensions cert =
@@ -288,12 +288,12 @@ let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
   match
     extn_authority_key_id cert, extn_subject_key_id trusted
   with
-  | (_, None) | (None, _)                      -> true (* not mandatory *)
-  | Some (_, Authority_key_id (Some auth, _, _)),
-    Some (_, Subject_key_id au)                -> Uncommon.Cs.equal auth au
+  | (_, None) | (None, _)                       -> true (* not mandatory *)
+  | Some (_, `Authority_key_id (Some auth, _, _)),
+    Some (_, `Subject_key_id au)                -> Uncommon.Cs.equal auth au
   (* TODO: check exact rules in RFC5280 *)
-  | Some (_, Authority_key_id (None, _, _)), _ -> true (* not mandatory *)
-  | _, _                                       -> false
+  | Some (_, `Authority_key_id (None, _, _)), _ -> true (* not mandatory *)
+  | _, _                                        -> false
 
 
 module Validation = struct
