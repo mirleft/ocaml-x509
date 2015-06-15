@@ -156,15 +156,20 @@ module CA : sig
   (** The abstract type of a signing request. *)
   type signing_request
 
-  (* TODO: to/from pem *)
-
   (** The polymorphic variant of private keys. *)
   type privkey = [ `RSA of Nocrypto.Rsa.priv ]
 
-  (** [generate subject private] is [signing_request], the signed request. *)
-  val generate : distinguished_name -> privkey -> signing_request
+  type request_info_extensions = [
+    | `Password of string
+    | `Name of string
+    | `Extensions of (bool * Asn_grammars.Extension.t) list
+  ]
+
+  (** [generate subject ~extensions private] is [signing_request], the self-signed certificate request. *)
+  val generate : distinguished_name -> ?digest:Nocrypto.Hash.hash -> ?extensions:request_info_extensions list option -> privkey -> signing_request
 
   (* TODO: policy/config stuff: extensions to add, signature algorithm, white/blacklist of keyusage/names/... *)
+  (* TODO: sign a self-signed certificate? *)
 
   (** [sign signing_request ?digest ?valid_from ?valid_until ?serial
       ?extensions private issuer] is [certificate], the certificate
