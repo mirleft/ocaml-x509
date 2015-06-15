@@ -344,6 +344,30 @@ module Encoding : sig
       val to_pem_cstruct1 : t -> Cstruct.t
     end
 
+    (** A parser for PKCS10 certificate request in PEM format *)
+    module CertificateSigningRequest : sig
+
+      (** {3 PEM encoded certificate signing requests} *)
+
+      type t = CA.signing_request
+
+      (** [of_pem_cstruct pem] is [t list], where all signing requests
+          of the [pem] are extracted *)
+      val of_pem_cstruct  : Cstruct.t -> t list
+
+      (** [of_pem_cstruct1 pem] is [t], where the single signing
+          request of the [pem] is extracted *)
+      val of_pem_cstruct1 : Cstruct.t -> t
+
+      (** [to_pem_cstruct signing_requests] is [pem], the pem encoded
+          signing requests. *)
+      val to_pem_cstruct : t list -> Cstruct.t
+
+      (** [to_pem_cstruct1 signing_request] is [pem], the pem encoded
+          signing_request. *)
+      val to_pem_cstruct1 : t -> Cstruct.t
+    end
+
     (** A parser for public keys in PEM format *)
     module PublicKey : sig
 

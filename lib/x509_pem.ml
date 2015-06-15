@@ -117,6 +117,30 @@ module Cert = struct
     Cs.concat (List.map to_pem_cstruct1 cs)
 end
 
+module CertificateSigningRequest = struct
+
+  type t = X509_ca.signing_request
+
+  let of_pem_cstruct cs =
+    List.fold_left (fun csrs -> function
+        | ("CERTIFICATE REQUEST", cs) ->
+          ( match X509_ca.parse_signing_request cs with
+            | Some csr -> csrs @ [csr]
+            | None     -> invalid_arg "X509: failed to parse certificate signing request" )
+        | _ -> csrs)
+      []
+      (parse cs)
+
+  let of_pem_cstruct1 =
+    o (exactly_one ~what:"certificate request") of_pem_cstruct
+
+  let to_pem_cstruct1 v =
+    unparse ~tag:"CERTIFICATE REQUEST" (X509_ca.cs_of_signing_request v)
+
+  let to_pem_cstruct cs =
+    Cs.concat (List.map to_pem_cstruct1 cs)
+end
+
 module PublicKey = struct
   let of_pem_cstruct cs =
     List.fold_left (fun keys -> function
