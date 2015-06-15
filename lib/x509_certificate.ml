@@ -154,30 +154,30 @@ let issuer_matches_subject { asn = parent ; _ } { asn = cert ; _ } =
 
 let is_self_signed cert = issuer_matches_subject cert cert
 
-(* XXX should return the tbs_cert blob from the parser, this is insane *)
-let raw_cert_hack { asn ; raw } =
-  let siglen = Cstruct.len asn.signature_val in
-  let off    = if siglen > 128 then 1 else 0 in
-  Cstruct.(sub raw 4 (len raw - (siglen + 4 + 19 + off)))
-
-let validate_signature { asn = trusted ; _ } cert =
-  let tbs_raw = raw_cert_hack cert in
-  match trusted.tbs_cert.pk_info with
-
+let validate_raw_signature raw signature_algo signature_val pk_info =
+  match pk_info with
   | `RSA issuing_key ->
-
-    ( match Rsa.PKCS1.verify ~key:issuing_key cert.asn.signature_val with
+    ( match Rsa.PKCS1.verify ~key:issuing_key signature_val with
       | None           -> false
       | Some signature ->
         match
           pkcs1_digest_info_of_cstruct signature,
-          Algorithm.to_signature_algorithm cert.asn.signature_algo
+          Algorithm.to_signature_algorithm signature_algo
         with
         | Some (algo, hash), Some (`RSA, h) when h = algo ->
-          Uncommon.Cs.equal hash (Hash.digest algo tbs_raw)
+          Uncommon.Cs.equal hash (Hash.digest algo raw)
         | _ -> false )
-
   | _ -> false
+
+(* XXX should return the tbs_cert blob from the parser, this is insane *)
+let raw_cert_hack raw signature =
+  let siglen = Cstruct.len signature in
+  let off    = if siglen > 128 then 1 else 0 in
+  Cstruct.(sub raw 4 (len raw - (siglen + 4 + 19 + off)))
+
+let validate_signature { asn = trusted ; _ } cert =
+  let tbs_raw = raw_cert_hack cert.raw cert.asn.signature_val in
+  validate_raw_signature tbs_raw cert.asn.signature_algo cert.asn.signature_val trusted.tbs_cert.pk_info
 
 let validate_time time { asn = cert ; _ } =
   match time with
