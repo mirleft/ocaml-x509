@@ -761,7 +761,7 @@ module CertificateRequest = struct
   type certificate_request_info = {
     subject : distinguished_name ;
     public_key : public_key ;
-    extensions : request_info_extensions list option ;
+    extensions : request_info_extensions list ;
   }
 
   let certificate_request_info =
@@ -778,7 +778,7 @@ module CertificateRequest = struct
       (required ~label:"version" int)
       (required ~label:"subject" Name.name)
       (required ~label:"subjectPKInfo" PK.pk_info_der)
-      (optional ~label:"attributes" @@ implicit 0 (set_of attributes))
+      (required ~label:"attributes" @@ implicit 0 (set_of attributes))
 
   let certificate_request_info_of_cs, certificate_request_info_to_cs =
     projections_of der certificate_request_info

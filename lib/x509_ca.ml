@@ -34,7 +34,7 @@ let cs_of_signing_request (csr, raw) =
   | Some x -> x
   | None -> CertificateRequest.certificate_request_to_cs csr
 
-let generate subject ?(digest = `SHA256) ?(extensions = None) = function
+let generate subject ?(digest = `SHA256) ?(extensions = []) = function
   | `RSA priv ->
     let public_key = `RSA (Nocrypto.Rsa.pub_of_priv priv) in
     let info = { CertificateRequest.subject ; public_key ; extensions } in

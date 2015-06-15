@@ -228,7 +228,7 @@ module CA : sig
   (** [generate subject ~digest ~extensions private] creates
       [signing_request], a self-signed certificate request using the
       given digest (defaults to [`SHA256]) and list of extensions. *)
-  val generate : distinguished_name -> ?digest:Nocrypto.Hash.hash -> ?extensions:request_info_extensions list option -> private_key -> signing_request
+  val generate : distinguished_name -> ?digest:Nocrypto.Hash.hash -> ?extensions:request_info_extensions list -> private_key -> signing_request
 
   (* TODO: policy/config stuff: extensions to add, signature algorithm, white/blacklist of keyusage/names/... *)
   (* TODO: sign a self-signed certificate? *)
