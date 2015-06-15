@@ -8,25 +8,23 @@ let raw_sign raw digest key =
   match key with
     | `RSA priv -> Nocrypto.Rsa.PKCS1.sign ~key:priv sigval
 
-open CertificateRequest
+type signing_request = CertificateRequest.certificate_request * Cstruct.t option
 
-type signing_request = certificate_request * Cstruct.t option
+type request_info_extensions = X509_types.request_info_extensions
 
-type request_info_extensions = [
-  | `Password of string
-  | `Name of string
-  | `Extensions of (bool * Extension.t) list
-]
-
-let validate_signature (csr, raw) =
+let validate_signature ({ CertificateRequest.info ; signature ; signature_algorithm }, raw) =
   let raw = match raw with
-    | None -> certificate_request_info_to_cs csr.info
-    | Some x -> raw_cert_hack x csr.signature
+    | None -> CertificateRequest.certificate_request_info_to_cs info
+    | Some x -> raw_cert_hack x signature
   in
-  validate_raw_signature raw csr.signature_algorithm csr.signature csr.info.public_key
+  validate_raw_signature
+    raw
+    signature_algorithm
+    signature
+    info.CertificateRequest.public_key
 
 let parse_signing_request cs =
-  match certificate_request_of_cs cs with
+  match CertificateRequest.certificate_request_of_cs cs with
   | Some csr when validate_signature (csr, Some cs) ->
     Some (csr, Some cs)
   | _ -> None
@@ -34,21 +32,16 @@ let parse_signing_request cs =
 let cs_of_signing_request (csr, raw) =
   match raw with
   | Some x -> x
-  | None -> certificate_request_to_cs csr
-
-type privkey = [ `RSA of Nocrypto.Rsa.priv ]
-
-let privkey_to_keytype = function
-  | `RSA _ -> `RSA
+  | None -> CertificateRequest.certificate_request_to_cs csr
 
 let generate subject ?(digest = `SHA256) ?(extensions = None) = function
   | `RSA priv ->
     let public_key = `RSA (Nocrypto.Rsa.pub_of_priv priv) in
-    let info = { subject ; public_key ; extensions } in
-    let info_cs = certificate_request_info_to_cs info in
+    let info = { CertificateRequest.subject ; public_key ; extensions } in
+    let info_cs = CertificateRequest.certificate_request_info_to_cs info in
     let signature = raw_sign info_cs digest (`RSA priv) in
     let signature_algorithm = Algorithm.of_signature_algorithm `RSA digest in
-    ({ info ; signature_algorithm ; signature }, None)
+    ({ CertificateRequest.info ; signature_algorithm ; signature }, None)
 
 (* move to Asn_time? *)
 let tm_to_asn t =
@@ -73,8 +66,8 @@ let sign signing_request
   let from = tm_to_asn valid_from
   and until = tm_to_asn valid_until
   and signature_algo =
-    Algorithm.of_signature_algorithm (privkey_to_keytype key) digest
-  and info = (fst signing_request).info
+    Algorithm.of_signature_algorithm (private_key_to_keytype key) digest
+  and info = (fst signing_request).CertificateRequest.info
   in
   let tbs_cert : tBSCertificate = {
       version = `V3 ;
@@ -82,8 +75,8 @@ let sign signing_request
       signature = signature_algo ;
       issuer = issuer ;
       validity = (from, until) ;
-      subject = info.subject ;
-      pk_info = info.public_key ;
+      subject = info.CertificateRequest.subject ;
+      pk_info = info.CertificateRequest.public_key ;
       issuer_id = None ;
       subject_id = None ;
       extensions

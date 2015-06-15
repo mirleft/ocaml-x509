@@ -1,4 +1,5 @@
 open X509_common
+open X509_types
 open Asn
 
 let def  x = function None -> x | Some y -> y
@@ -65,51 +66,6 @@ module Name = struct
   (* rfc5280 section 4.1.2.4 - name components we "must" handle. *)
   (* A list of abbreviations: http://pic.dhe.ibm.com/infocenter/wmqv7/v7r1/index.jsp?topic=%2Fcom.ibm.mq.doc%2Fsy10570_.htm *)
   (* Also rfc4519. *)
-
-  type component = [
-    | `CN           of string
-    | `Serialnumber of string
-    | `C            of string
-    | `L            of string
-    | `SP           of string
-    | `O            of string
-    | `OU           of string
-    | `T            of string
-    | `DNQ          of string
-    | `Mail         of string
-    | `DC           of string
-
-    | `Given_name   of string
-    | `Surname      of string
-    | `Initials     of string
-    | `Pseudonym    of string
-    | `Generation   of string
-
-    | `Other        of OID.t * string
-  ]
-
-  type dn = component list
-
-  let component_to_string = function
-    | `CN s -> "CN=" ^ s
-    | `Serialnumber s -> "Serialnumber=" ^ s
-    | `C s -> "C=" ^ s
-    | `L s -> "L=" ^ s
-    | `SP s -> "SP=" ^ s
-    | `O s -> "O=" ^ s
-    | `OU s -> "OU=" ^ s
-    | `T s -> "T=" ^ s
-    | `DNQ s -> "DNQ=" ^ s
-    | `Mail s -> "Mail=" ^ s
-    | `DC s -> "DC=" ^ s
-    | `Given_name s -> "Given_name=" ^ s
-    | `Surname s -> "Surname=" ^ s
-    | `Initials s -> "Initials=" ^ s
-    | `Pseudonym s -> "Pseudonym=" ^ s
-    | `Generation s -> "Generation=" ^ s
-    | `Other (oid, s) -> OID.to_string oid ^ "=" ^ s
-
-  let dn_to_string dn = String.concat "/" (List.map component_to_string dn)
 
   (* See rfc5280 section 4.1.2.4. *)
   let directory_name =
@@ -221,40 +177,29 @@ module General_name = struct
       (optional ~label:"nameAssigner" @@ implicit 0 Name.directory_name)
       (required ~label:"partyName"    @@ implicit 1 Name.directory_name)
 
-  type t =
-    | Other         of (OID.t * string) (* another_name *)
-    | Rfc_822       of string
-    | DNS           of string
-    | X400_address  of unit      (* or_address *)
-    | Directory     of Name.dn
-    | EDI_party     of (string option * string)
-    | URI           of string
-    | IP            of Cstruct.t (* ... decode? *)
-    | Registered_id of OID.t
-
   let general_name =
 
     let f = function
-      | `C1 (`C1 x) -> Other         x
-      | `C1 (`C2 x) -> Rfc_822       x
-      | `C1 (`C3 x) -> DNS           x
-      | `C1 (`C4 x) -> X400_address  x
-      | `C1 (`C5 x) -> Directory     x
-      | `C1 (`C6 x) -> EDI_party     x
-      | `C2 (`C1 x) -> URI           x
-      | `C2 (`C2 x) -> IP            x
-      | `C2 (`C3 x) -> Registered_id x
+      | `C1 (`C1 x) -> `Other         x
+      | `C1 (`C2 x) -> `Rfc_822       x
+      | `C1 (`C3 x) -> `DNS           x
+      | `C1 (`C4 x) -> `X400_address  x
+      | `C1 (`C5 x) -> `Directory     x
+      | `C1 (`C6 x) -> `EDI_party     x
+      | `C2 (`C1 x) -> `URI           x
+      | `C2 (`C2 x) -> `IP            x
+      | `C2 (`C3 x) -> `Registered_id x
 
     and g = function
-      | Other         x -> `C1 (`C1 x)
-      | Rfc_822       x -> `C1 (`C2 x)
-      | DNS           x -> `C1 (`C3 x)
-      | X400_address  x -> `C1 (`C4 x)
-      | Directory     x -> `C1 (`C5 x)
-      | EDI_party     x -> `C1 (`C6 x)
-      | URI           x -> `C2 (`C1 x)
-      | IP            x -> `C2 (`C2 x)
-      | Registered_id x -> `C2 (`C3 x)
+      | `Other         x -> `C1 (`C1 x)
+      | `Rfc_822       x -> `C1 (`C2 x)
+      | `DNS           x -> `C1 (`C3 x)
+      | `X400_address  x -> `C1 (`C4 x)
+      | `Directory     x -> `C1 (`C5 x)
+      | `EDI_party     x -> `C1 (`C6 x)
+      | `URI           x -> `C2 (`C1 x)
+      | `IP            x -> `C2 (`C2 x)
+      | `Registered_id x -> `C2 (`C3 x)
     in
 
     map f g @@
@@ -285,7 +230,6 @@ module Algorithm = struct
    * that handles unsupported algos anyway.
    *)
 
-  type public_key = [ `RSA | `EC of OID.t ]
   type signature  = [ `RSA | `ECDSA ]
 
   type t =
@@ -479,21 +423,8 @@ module Extension = struct
 
   module ID = Registry.Cert_extn
 
-  type gen_names = General_name.t list
-
   let gen_names = sequence_of General_name.general_name
 
-  type key_usage = [
-    | `Digital_signature
-    | `Content_commitment
-    | `Key_encipherment
-    | `Data_encipherment
-    | `Key_agreement
-    | `Key_cert_sign
-    | `CRL_sign
-    | `Encipher_only
-    | `Decipher_only
-  ]
 
   let key_usage = bit_string_flags [
       0, `Digital_signature
@@ -507,19 +438,6 @@ module Extension = struct
     ; 8, `Decipher_only
     ]
 
-  type extended_key_usage = [
-    | `Any
-    | `Server_auth
-    | `Client_auth
-    | `Code_signing
-    | `Email_protection
-    | `Ipsec_end
-    | `Ipsec_tunnel
-    | `Ipsec_user
-    | `Time_stamping
-    | `Ocsp_signing
-    | `Other of OID.t
-  ]
 
   let ext_key_usage =
     let open ID.Extended_usage in
@@ -552,6 +470,7 @@ module Extension = struct
     in
     map (List.map f) (List.map g) @@ sequence_of oid
 
+
   let basic_constraints =
     map (fun (a, b) -> (def  false a, b))
         (fun (a, b) -> (def' false a, b))
@@ -560,7 +479,6 @@ module Extension = struct
       (optional ~label:"cA"      bool)
       (optional ~label:"pathLen" int)
 
-  type authority_key_id = Cstruct.t option * gen_names * Z.t option
 
   let authority_key_id =
     map (fun (a, b, c) -> (a, def  [] b, c))
@@ -571,29 +489,22 @@ module Extension = struct
       (optional ~label:"authCertIssuer" @@ implicit 1 gen_names)
       (optional ~label:"authCertSN"     @@ implicit 2 integer)
 
-  type priv_key_usage_period =
-    | Interval   of Time.t * Time.t
-    | Not_after  of Time.t
-    | Not_before of Time.t
 
   let priv_key_usage_period =
     let f = function
-      | (Some t1, Some t2) -> Interval (t1, t2)
-      | (Some t1, None   ) -> Not_before t1
-      | (None   , Some t2) -> Not_after  t2
+      | (Some t1, Some t2) -> `Interval (t1, t2)
+      | (Some t1, None   ) -> `Not_before t1
+      | (None   , Some t2) -> `Not_after  t2
       | _                  -> parse_error "empty PrivateKeyUsagePeriod"
     and g = function
-      | Interval (t1, t2) -> (Some t1, Some t2)
-      | Not_before t1     -> (Some t1, None   )
-      | Not_after  t2     -> (None   , Some t2) in
+      | `Interval (t1, t2) -> (Some t1, Some t2)
+      | `Not_before t1     -> (Some t1, None   )
+      | `Not_after  t2     -> (None   , Some t2) in
     map f g @@
     sequence2
       (optional ~label:"notBefore" @@ implicit 0 generalized_time)
       (optional ~label:"notAfter"  @@ implicit 1 generalized_time)
 
-
-  type name_constraint = (General_name.t * int * int option) list
-  type name_constraints = name_constraint * name_constraint
 
   let name_constraints =
     let subtree =
@@ -612,8 +523,6 @@ module Extension = struct
       (optional ~label:"permittedSubtrees" @@ implicit 0 (sequence_of subtree))
       (optional ~label:"excludedSubtrees"  @@ implicit 1 (sequence_of subtree))
 
-
-    type cert_policies = [ `Any | `Something of OID.t ] list
 
     let cert_policies =
       let open ID.Cert_policy in
@@ -651,20 +560,6 @@ module Extension = struct
           (required ~label:"policyIdentifier" oid)
           (optional ~label:"policyQualifiers" (sequence_of qualifier_info))
 
-
-  type t = [
-    | `Unsupported       of OID.t * Cstruct.t
-    | `Subject_alt_name  of gen_names
-    | `Authority_key_id  of authority_key_id
-    | `Subject_key_id    of Cstruct.t
-    | `Issuer_alt_name   of gen_names
-    | `Key_usage         of key_usage list
-    | `Ext_key_usage     of extended_key_usage list
-    | `Basic_constraints of (bool * int option)
-    | `Priv_key_period   of priv_key_usage_period
-    | `Name_constraints  of name_constraints
-    | `Policies          of cert_policies
-  ]
 
   let gen_names_of_cs, gen_names_to_cs       = project_exn gen_names
   and auth_key_id_of_cs, auth_key_id_to_cs   = project_exn authority_key_id
@@ -798,11 +693,6 @@ module PK = struct
   (* ECs go here *)
   (* ... *)
 
-  type t = [
-    | `RSA    of Rsa.pub
-    | `EC_pub of OID.t
-  ]
-
   let rsa_pub_of_cs, rsa_pub_to_cs = project_exn rsa_public_key
 
   let reparse_pk = function
@@ -868,15 +758,9 @@ module CertificateRequest = struct
                     utf8_string
                     Extension.extensions_der)))
 
-  type request_info_extensions = [
-    | `Password of string
-    | `Name of string
-    | `Extensions of (bool * Extension.t) list
-  ]
-
   type certificate_request_info = {
-    subject : Name.dn ;
-    public_key : PK.t ;
+    subject : distinguished_name ;
+    public_key : public_key ;
     extensions : request_info_extensions list option ;
   }
 
@@ -930,13 +814,13 @@ type tBSCertificate = {
   version    : [ `V1 | `V2 | `V3 ] ;
   serial     : Z.t ;
   signature  : Algorithm.t ;
-  issuer     : Name.dn ;
+  issuer     : distinguished_name ;
   validity   : Time.t * Time.t ;
-  subject    : Name.dn ;
-  pk_info    : PK.t ;
+  subject    : distinguished_name ;
+  pk_info    : public_key ;
   issuer_id  : Cstruct.t option ;
   subject_id : Cstruct.t option ;
-  extensions : (bool * Extension.t) list
+  extensions : (bool * extension) list
 }
 
 type certificate = {

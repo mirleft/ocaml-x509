@@ -20,15 +20,15 @@ type t = {
   raw : Cstruct.t
 }
 
-type component = Name.component
+type component = X509_types.component
 
-type distinguished_name = Name.dn
+type distinguished_name = X509_types.distinguished_name
 
 let issuer { asn ; _ } = asn.tbs_cert.issuer
 
 let subject { asn ; _ } = asn.tbs_cert.subject
 
-let distinguished_name_to_string = Name.dn_to_string
+let distinguished_name_to_string = X509_types.dn_to_string
 
 let parse_certificate cs =
   match certificate_of_cstruct cs with
@@ -43,9 +43,12 @@ let sexp_of_t cert = Sexplib.Sexp.List
     [ Sexplib.Sexp.Atom "CERTIFICATE" ;
       Sexplib.Sexp.Atom (Cstruct.to_string (Hash.digest `SHA256 cert.raw)) ]
 
-type key_type = Algorithm.public_key
+type key_type = X509_types.keytype
+type public_key = X509_types.public_key
+type private_key = X509_types.private_key
 
-type pubkey = PK.t
+let private_key_to_keytype = function
+  | `RSA _ -> `RSA
 
 let cert_pubkey { asn = cert ; _ } = cert.tbs_cert.pk_info
 
@@ -53,30 +56,6 @@ let supports_keytype c t =
   match cert_pubkey c, t with
   | (`RSA _), `RSA -> true
   | _              -> false
-
-let cert_usage { asn = cert ; _ } =
-  match extn_key_usage cert with
-  | Some (_, `Key_usage usages) -> Some usages
-  | _                           -> None
-
-type key_usage = Extension.key_usage
-
-let supports_usage ?(not_present = false) c u =
-  match cert_usage c with
-  | Some x -> List.mem u x
-  | None   -> not_present
-
-let cert_extended_usage { asn = cert ; _ } =
-  match extn_ext_key_usage cert with
-  | Some (_, `Ext_key_usage usages) -> Some usages
-  | _                               -> None
-
-type extended_key_usage = Extension.extended_key_usage
-
-let supports_extended_usage ?(not_present = false) c u =
-  match cert_extended_usage c with
-  | Some x -> List.mem u x
-  | None   -> not_present
 
 let subject_common_name cert =
   List_ext.map_find cert.tbs_cert.subject
@@ -105,8 +84,8 @@ let cert_hostnames { asn = cert ; _ } : string list =
        List_ext.filter_map
          names
          ~f:(function
-              | General_name.DNS x -> Some (String.lowercase x)
-              | _                  -> None)
+              | `DNS x -> Some (String.lowercase x)
+              | _      -> None)
     | _                              , Some x -> [String.lowercase x]
     | _                              , _      -> []
 

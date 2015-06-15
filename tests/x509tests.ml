@@ -9,7 +9,8 @@ let load file =
   cs_mmap ("./tests/testcertificates/" ^ file ^ ".pem")
 
 let priv =
-  Encoding.Pem.PrivateKey.of_pem_cstruct1 (load "private/cakey")
+  match Encoding.Pem.Private_key.of_pem_cstruct1 (load "private/cakey") with
+  | `RSA x -> x
 
 let cert name =
   Encoding.Pem.Cert.of_pem_cstruct1 (load name)
@@ -91,13 +92,13 @@ let wildcard_test_valid_ca_cert server chain valid name ca =
   test_valid_ca_cert server chain valid (`Wildcard name) ca
 
 let test_cert c usages extusage _ =
-  ( if List.for_all (fun u -> supports_usage c u) usages then
+  ( if List.for_all (fun u -> Extension.supports_usage c u) usages then
       ()
     else
       assert_failure "key usage is different" ) ;
   ( match extusage with
     | None -> ()
-    | Some x when List.for_all (fun u -> supports_extended_usage c u) x -> ()
+    | Some x when List.for_all (fun u -> Extension.supports_extended_usage c u) x -> ()
     | _ -> assert_failure "extended key usage is broken" )
 
 let first_cert_tests =
