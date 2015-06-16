@@ -838,8 +838,15 @@ let version =
 let certificate_sn = integer
 
 let time =
-  map (function `C1 t -> t | `C2 t -> t) (fun t -> `C2 t)
-      (choice2 utc_time generalized_time)
+  map
+    (function `C1 t -> t | `C2 t -> t)
+    (fun t ->
+       let year, _, _ = t.Time.date in
+       if year < 2050 then
+         `C1 t
+       else
+         `C2 t)
+    (choice2 utc_time generalized_time)
 
 let validity =
   sequence2
