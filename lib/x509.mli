@@ -236,8 +236,8 @@ module CA : sig
   (** [sign signing_request ~digest ~valid_from ~valid_until ~serial
       ~extensions private issuer] is [certificate], the certificate
       signed with given private key and issuer; digest defaults to
-      [`SHA256], validity from now for a day. *)
-  val sign : signing_request -> ?digest:Nocrypto.Hash.hash -> ?valid_from:Unix.tm -> ?valid_until:Unix.tm -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
+      [`SHA256]. *)
+  val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
 end
 
 (** Validation logic: error variant and functions. *)

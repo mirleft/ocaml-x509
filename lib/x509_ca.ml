@@ -43,29 +43,14 @@ let generate subject ?(digest = `SHA256) ?(extensions = []) = function
     let signature_algorithm = Algorithm.of_signature_algorithm `RSA digest in
     ({ CertificateRequest.info ; signature_algorithm ; signature }, None)
 
-(* move to Asn_time? *)
-let tm_to_asn t =
-  let open Unix in
-  let y = t.tm_year + 1900
-  and m = t.tm_mon + 1
-  and d = t.tm_mday
-  and hh = t.tm_hour
-  and mm = t.tm_min
-  and ss = t.tm_sec
-  in
-  Asn.Time.({ date = (y, m, d) ; time = (hh ,mm, ss, 0.) ; tz = None })
-
 let sign signing_request
+    ~valid_from ~valid_until
     ?(digest = `SHA256)
-    ?(valid_from = Unix.gmtime (Unix.time ()))
-    ?(valid_until = Unix.gmtime (Unix.time () +. 86400.))
     ?(serial = Nocrypto.(Rng.Z.gen_r Numeric.Z.one Numeric.Z.(one lsl 64)))
     ?(extensions = [])
     key issuer =
   assert (validate_signature signing_request) ;
-  let from = tm_to_asn valid_from
-  and until = tm_to_asn valid_until
-  and signature_algo =
+  let signature_algo =
     Algorithm.of_signature_algorithm (private_key_to_keytype key) digest
   and info = (fst signing_request).CertificateRequest.info
   in
@@ -74,7 +59,7 @@ let sign signing_request
       serial ;
       signature = signature_algo ;
       issuer = issuer ;
-      validity = (from, until) ;
+      validity = (valid_from, valid_until) ;
       subject = info.CertificateRequest.subject ;
       pk_info = info.CertificateRequest.public_key ;
       issuer_id = None ;
