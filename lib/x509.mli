@@ -53,48 +53,14 @@ type key_type = [ `RSA | `EC of Asn.OID.t ]
 val supports_keytype : t -> key_type -> bool
 
 (** The polymorphic variant of public keys. *)
-type pubkey = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
+type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
+
+(** The polymorphic variant of private keys. *)
+type private_key = [ `RSA of Nocrypto.Rsa.priv ]
 
 (** [cert_pubkey certificate] is [pubkey], the public key of the
     [certificate]. *)
-val cert_pubkey : t -> pubkey
-
-(** The polymorphic variant of key usages. *)
-type key_usage = [
-  | `Digital_signature
-  | `Content_commitment
-  | `Key_encipherment
-  | `Data_encipherment
-  | `Key_agreement
-  | `Key_cert_sign
-  | `CRL_sign
-  | `Encipher_only
-  | `Decipher_only
-]
-
-(** [supports_usage ?not_present certificate key_usage] is [result],
-    whether the [certificate] supports the given [key_usage]. *)
-val supports_usage : ?not_present:bool -> t -> key_usage -> bool
-
-(** The polymorphic variant of extended key usages. *)
-type extended_key_usage = [
-  | `Any
-  | `Server_auth
-  | `Client_auth
-  | `Code_signing
-  | `Email_protection
-  | `Ipsec_end
-  | `Ipsec_tunnel
-  | `Ipsec_user
-  | `Time_stamping
-  | `Ocsp_signing
-  | `Other of Asn.OID.t
-]
-
-(** [supports_extended_usage certificate extended_key_usage] is
-    [result], whether the [certificate] supports the given
-    [extended_key_usage]. *)
-val supports_extended_usage : ?not_present:bool -> t -> extended_key_usage -> bool
+val cert_pubkey : t -> public_key
 
 (** [cert_hostnames certficate] are [hostnames], the list of hostnames
     this [certifcate] is valid for.  Currently, these are the DNS names of
@@ -114,29 +80,164 @@ val supports_hostname : t -> host -> bool
     name of the subject of the [certificate]. *)
 val common_name_to_string : t -> string
 
+(** The polymorphic variant of a distinguished name component, as
+    defined in X.501. *)
+type component = [
+  | `CN           of string
+  | `Serialnumber of string
+  | `C            of string
+  | `L            of string
+  | `SP           of string
+  | `O            of string
+  | `OU           of string
+  | `T            of string
+  | `DNQ          of string
+  | `Mail         of string
+  | `DC           of string
+
+  | `Given_name   of string
+  | `Surname      of string
+  | `Initials     of string
+  | `Pseudonym    of string
+  | `Generation   of string
+
+  | `Other        of Asn.OID.t * string
+]
+
+(** A distinguished name is a list of [!components]. *)
+type distinguished_name = component list
+
+(** [distinguished_name_to_string dn] is [string], the string
+    representation of the distinguished name. *)
+val distinguished_name_to_string : distinguished_name -> string
+
+(** [subject t] is [dn], the subject as distinguished name of the
+    certificate. *)
+val subject : t -> distinguished_name
+
+(** [issuer t] is [dn], the issuer as distinguished name of the
+    certificate. *)
+val issuer : t -> distinguished_name
+
+(** X.509v3 extensions *)
+module Extension : sig
+
+  (** {1 X.509v3 extension} *)
+
+  (** The polymorphic variant of key usages. *)
+  type key_usage = [
+    | `Digital_signature
+    | `Content_commitment
+    | `Key_encipherment
+    | `Data_encipherment
+    | `Key_agreement
+    | `Key_cert_sign
+    | `CRL_sign
+    | `Encipher_only
+    | `Decipher_only
+  ]
+
+  (** [supports_usage ?not_present certificate key_usage] is [result],
+      whether the [certificate] supports the given [key_usage]. *)
+  val supports_usage : ?not_present:bool -> t -> key_usage -> bool
+
+  (** The polymorphic variant of extended key usages. *)
+  type extended_key_usage = [
+    | `Any
+    | `Server_auth
+    | `Client_auth
+    | `Code_signing
+    | `Email_protection
+    | `Ipsec_end
+    | `Ipsec_tunnel
+    | `Ipsec_user
+    | `Time_stamping
+    | `Ocsp_signing
+    | `Other of Asn.OID.t
+  ]
+
+  (** [supports_extended_usage certificate extended_key_usage] is
+      [result], whether the [certificate] supports the given
+      [extended_key_usage]. *)
+  val supports_extended_usage : ?not_present:bool -> t -> extended_key_usage -> bool
+
+  (** The content of a SubjectAlternativeName and
+      IssuerAlternativeName extensions are general_name lists. *)
+  type general_name = [
+    | `Other         of (Asn.OID.t * string)
+    | `Rfc_822       of string
+    | `DNS           of string
+    | `X400_address  of unit
+    | `Directory     of distinguished_name
+    | `EDI_party     of (string option * string)
+    | `URI           of string
+    | `IP            of Cstruct.t
+    | `Registered_id of Asn.OID.t
+  ]
+
+  (** The authority key id present in the respective extension. *)
+  type authority_key_id = Cstruct.t option * general_name list * Z.t option
+
+  type priv_key_usage_period = [
+    | `Interval   of Asn.Time.t * Asn.Time.t
+    | `Not_after  of Asn.Time.t
+    | `Not_before of Asn.Time.t
+  ]
+
+  (** Name constraint in a X509v3 extension *)
+  type name_constraint = (general_name * int * int option) list
+
+  (** Name constraints tuple in a X509v3 extension *)
+  type name_constraints = name_constraint * name_constraint
+
+  (** Certificate policy *)
+  type cert_policy = [ `Any | `Something of Asn.OID.t ]
+
+  (** The polymorphic variant of extensions *)
+  type t = [
+    | `Unsupported       of Asn.OID.t * Cstruct.t
+    | `Subject_alt_name  of general_name list
+    | `Authority_key_id  of authority_key_id
+    | `Subject_key_id    of Cstruct.t
+    | `Issuer_alt_name   of general_name list
+    | `Key_usage         of key_usage list
+    | `Ext_key_usage     of extended_key_usage list
+    | `Basic_constraints of (bool * int option)
+    | `Priv_key_period   of priv_key_usage_period
+    | `Name_constraints  of name_constraints
+    | `Policies          of cert_policy list
+  ]
+end
+
 (** Certificate Authority operations *)
 module CA : sig
 
   (** {1 Signing} *)
 
-  (** The abstract type of a signing request. *)
+  (** The abstract type of a PKCS10 signing request. *)
   type signing_request
 
-  (* TODO: to/from pem *)
+  (** The polymorphic variant of certificate request extensions, as
+      defined in PKCS9. *)
+  type request_info_extensions = [
+    | `Password of string
+    | `Name of string
+    | `Extensions of (bool * Extension.t) list
+  ]
 
-  (** The polymorphic variant of private keys. *)
-  type privkey = [ `RSA of Nocrypto.Rsa.priv ]
-
-  (** [generate subject private] is [signing_request], the signed request. *)
-  val generate : string -> privkey -> signing_request
+  (** [generate subject ~digest ~extensions private] creates
+      [signing_request], a self-signed certificate request using the
+      given digest (defaults to [`SHA256]) and list of extensions. *)
+  val generate : distinguished_name -> ?digest:Nocrypto.Hash.hash -> ?extensions:request_info_extensions list -> private_key -> signing_request
 
   (* TODO: policy/config stuff: extensions to add, signature algorithm, white/blacklist of keyusage/names/... *)
+  (* TODO: sign a self-signed certificate? *)
 
-  (** [sign signing_request ?digest ?valid_from ?valid_until ?serial
-      ?extensions private issuer] is [certificate], the certificate
+  (** [sign signing_request ~digest ~valid_from ~valid_until ~serial
+      ~extensions private issuer] is [certificate], the certificate
       signed with given private key and issuer; digest defaults to
-      `SHA1, validity from now for a day. *)
-  val sign : signing_request -> ?digest:Nocrypto.Hash.hash -> ?valid_from:Unix.tm -> ?valid_until:Unix.tm -> ?serial:Z.t -> ?extensions:(bool * Asn_grammars.Extension.t) list -> privkey -> string -> t
+      [`SHA256]. *)
+  val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
 end
 
 (** Validation logic: error variant and functions. *)
@@ -310,51 +411,72 @@ module Encoding : sig
       val to_pem_cstruct1 : t -> Cstruct.t
     end
 
+    (** A parser for PKCS10 certificate request in PEM format *)
+    module Certificate_signing_request : sig
+
+      (** {3 PEM encoded certificate signing requests} *)
+
+      type t = CA.signing_request
+
+      (** [of_pem_cstruct pem] is [t list], where all signing requests
+          of the [pem] are extracted *)
+      val of_pem_cstruct  : Cstruct.t -> t list
+
+      (** [of_pem_cstruct1 pem] is [t], where the single signing
+          request of the [pem] is extracted *)
+      val of_pem_cstruct1 : Cstruct.t -> t
+
+      (** [to_pem_cstruct signing_requests] is [pem], the pem encoded
+          signing requests. *)
+      val to_pem_cstruct : t list -> Cstruct.t
+
+      (** [to_pem_cstruct1 signing_request] is [pem], the pem encoded
+          signing_request. *)
+      val to_pem_cstruct1 : t -> Cstruct.t
+    end
+
     (** A parser for public keys in PEM format *)
-    module PublicKey : sig
+    module Public_key : sig
 
       (** {3 PEM encoded RSA keys} *)
 
       (** [of_pem_cstruct pem] is [t list], where all public keys of
           [pem] are extracted *)
-      val of_pem_cstruct  : Cstruct.t -> pubkey list
+      val of_pem_cstruct  : Cstruct.t -> public_key list
 
       (** [of_pem_cstruct1 pem] is [t], where the public key of [pem]
           is extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> pubkey
+      val of_pem_cstruct1 : Cstruct.t -> public_key
 
       (** [to_pem_cstruct public_keys] is [pem], the pem encoded
           public keys. *)
-      val to_pem_cstruct : pubkey list -> Cstruct.t
+      val to_pem_cstruct : public_key list -> Cstruct.t
 
       (** [to_pem_cstruct1 public_key] is [pem], the pem encoded
           public key. *)
-      val to_pem_cstruct1 : pubkey -> Cstruct.t
+      val to_pem_cstruct1 : public_key -> Cstruct.t
     end
 
     (** A parser for unencrypted private RSA keys in PEM format *)
-    module PrivateKey : sig
+    module Private_key : sig
 
       (** {3 PEM encoded RSA keys} *)
 
-      (** The private RSA key type *)
-      type t = Nocrypto.Rsa.priv
-
       (** [of_pem_cstruct pem] is [t list], where all private keys of
           [pem] are extracted *)
-      val of_pem_cstruct  : Cstruct.t -> t list
+      val of_pem_cstruct  : Cstruct.t -> private_key list
 
       (** [of_pem_cstruct1 pem] is [t], where the private key of [pem]
           is extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> t
+      val of_pem_cstruct1 : Cstruct.t -> private_key
 
       (** [to_pem_cstruct private_keys] is [pem], the pem encoded
           private keys. *)
-      val to_pem_cstruct : t list -> Cstruct.t
+      val to_pem_cstruct : private_key list -> Cstruct.t
 
       (** [to_pem_cstruct1 private_key] is [pem], the pem encoded
           private key. *)
-      val to_pem_cstruct1 : t -> Cstruct.t
+      val to_pem_cstruct1 : private_key -> Cstruct.t
     end
   end
 end

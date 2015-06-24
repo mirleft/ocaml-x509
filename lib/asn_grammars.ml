@@ -1,4 +1,5 @@
 open X509_common
+open X509_types
 open Asn
 
 let def  x = function None -> x | Some y -> y
@@ -66,29 +67,6 @@ module Name = struct
   (* A list of abbreviations: http://pic.dhe.ibm.com/infocenter/wmqv7/v7r1/index.jsp?topic=%2Fcom.ibm.mq.doc%2Fsy10570_.htm *)
   (* Also rfc4519. *)
 
-  type component =
-    | CN           of string
-    | Serialnumber of string
-    | C            of string
-    | L            of string
-    | SP           of string
-    | O            of string
-    | OU           of string
-    | T            of string
-    | DNQ          of string
-    | Mail         of string
-    | DC           of string
-
-    | Given_name   of string
-    | Surname      of string
-    | Initials     of string
-    | Pseudonym    of string
-    | Generation   of string
-
-    | Other        of OID.t * string
-
-  type dn = component list
-
   (* See rfc5280 section 4.1.2.4. *)
   let directory_name =
     let f = function | `C1 s -> s | `C2 s -> s | `C3 s -> s
@@ -109,42 +87,42 @@ module Name = struct
     let open Registry in
 
     let a_f = case_of_2 [
-      (domain_component              , fun x -> DC           x) ;
-      (X520.common_name              , fun x -> CN           x) ;
-      (X520.serial_number            , fun x -> Serialnumber x) ;
-      (X520.country_name             , fun x -> C            x) ;
-      (X520.locality_name            , fun x -> L            x) ;
-      (X520.state_or_province_name   , fun x -> SP           x) ;
-      (X520.organization_name        , fun x -> O            x) ;
-      (X520.organizational_unit_name , fun x -> OU           x) ;
-      (X520.title                    , fun x -> T            x) ;
-      (X520.dn_qualifier             , fun x -> DNQ          x) ;
-      (PKCS9.email                   , fun x -> Mail         x) ;
-      (X520.given_name               , fun x -> Given_name   x) ;
-      (X520.surname                  , fun x -> Surname      x) ;
-      (X520.initials                 , fun x -> Initials     x) ;
-      (X520.pseudonym                , fun x -> Pseudonym    x) ;
-      (X520.generation_qualifier     , fun x -> Generation   x) ]
-      ~default:(fun oid x -> Other (oid, x))
+      (domain_component              , fun x -> `DC           x) ;
+      (X520.common_name              , fun x -> `CN           x) ;
+      (X520.serial_number            , fun x -> `Serialnumber x) ;
+      (X520.country_name             , fun x -> `C            x) ;
+      (X520.locality_name            , fun x -> `L            x) ;
+      (X520.state_or_province_name   , fun x -> `SP           x) ;
+      (X520.organization_name        , fun x -> `O            x) ;
+      (X520.organizational_unit_name , fun x -> `OU           x) ;
+      (X520.title                    , fun x -> `T            x) ;
+      (X520.dn_qualifier             , fun x -> `DNQ          x) ;
+      (PKCS9.email                   , fun x -> `Mail         x) ;
+      (X520.given_name               , fun x -> `Given_name   x) ;
+      (X520.surname                  , fun x -> `Surname      x) ;
+      (X520.initials                 , fun x -> `Initials     x) ;
+      (X520.pseudonym                , fun x -> `Pseudonym    x) ;
+      (X520.generation_qualifier     , fun x -> `Generation   x) ]
+      ~default:(fun oid x -> `Other (oid, x))
 
     and a_g = function
-      | DC           x   -> (domain_component              , x )
-      | CN           x   -> (X520.common_name              , x )
-      | Serialnumber x   -> (X520.serial_number            , x )
-      | C            x   -> (X520.country_name             , x )
-      | L            x   -> (X520.locality_name            , x )
-      | SP           x   -> (X520.state_or_province_name   , x )
-      | O            x   -> (X520.organization_name        , x )
-      | OU           x   -> (X520.organizational_unit_name , x )
-      | T            x   -> (X520.title                    , x )
-      | DNQ          x   -> (X520.dn_qualifier             , x )
-      | Mail         x   -> (PKCS9.email                   , x )
-      | Given_name   x   -> (X520.given_name               , x )
-      | Surname      x   -> (X520.surname                  , x )
-      | Initials     x   -> (X520.initials                 , x )
-      | Pseudonym    x   -> (X520.pseudonym                , x )
-      | Generation   x   -> (X520.generation_qualifier     , x )
-      | Other (oid,  x ) -> (oid                           , x )
+      | `DC           x   -> (domain_component              , x )
+      | `CN           x   -> (X520.common_name              , x )
+      | `Serialnumber x   -> (X520.serial_number            , x )
+      | `C            x   -> (X520.country_name             , x )
+      | `L            x   -> (X520.locality_name            , x )
+      | `SP           x   -> (X520.state_or_province_name   , x )
+      | `O            x   -> (X520.organization_name        , x )
+      | `OU           x   -> (X520.organizational_unit_name , x )
+      | `T            x   -> (X520.title                    , x )
+      | `DNQ          x   -> (X520.dn_qualifier             , x )
+      | `Mail         x   -> (PKCS9.email                   , x )
+      | `Given_name   x   -> (X520.given_name               , x )
+      | `Surname      x   -> (X520.surname                  , x )
+      | `Initials     x   -> (X520.initials                 , x )
+      | `Pseudonym    x   -> (X520.pseudonym                , x )
+      | `Generation   x   -> (X520.generation_qualifier     , x )
+      | `Other (oid,  x ) -> (oid                           , x )
     in
 
     let attribute_tv =
@@ -199,40 +177,29 @@ module General_name = struct
       (optional ~label:"nameAssigner" @@ implicit 0 Name.directory_name)
       (required ~label:"partyName"    @@ implicit 1 Name.directory_name)
 
-  type t =
-    | Other         of (OID.t * string) (* another_name *)
-    | Rfc_822       of string
-    | DNS           of string
-    | X400_address  of unit      (* or_address *)
-    | Directory     of Name.dn
-    | EDI_party     of (string option * string)
-    | URI           of string
-    | IP            of Cstruct.t (* ... decode? *)
-    | Registered_id of OID.t
-
   let general_name =
 
     let f = function
-      | `C1 (`C1 x) -> Other         x
-      | `C1 (`C2 x) -> Rfc_822       x
-      | `C1 (`C3 x) -> DNS           x
-      | `C1 (`C4 x) -> X400_address  x
-      | `C1 (`C5 x) -> Directory     x
-      | `C1 (`C6 x) -> EDI_party     x
-      | `C2 (`C1 x) -> URI           x
-      | `C2 (`C2 x) -> IP            x
-      | `C2 (`C3 x) -> Registered_id x
+      | `C1 (`C1 x) -> `Other         x
+      | `C1 (`C2 x) -> `Rfc_822       x
+      | `C1 (`C3 x) -> `DNS           x
+      | `C1 (`C4 x) -> `X400_address  x
+      | `C1 (`C5 x) -> `Directory     x
+      | `C1 (`C6 x) -> `EDI_party     x
+      | `C2 (`C1 x) -> `URI           x
+      | `C2 (`C2 x) -> `IP            x
+      | `C2 (`C3 x) -> `Registered_id x
 
     and g = function
-      | Other         x -> `C1 (`C1 x)
-      | Rfc_822       x -> `C1 (`C2 x)
-      | DNS           x -> `C1 (`C3 x)
-      | X400_address  x -> `C1 (`C4 x)
-      | Directory     x -> `C1 (`C5 x)
-      | EDI_party     x -> `C1 (`C6 x)
-      | URI           x -> `C2 (`C1 x)
-      | IP            x -> `C2 (`C2 x)
-      | Registered_id x -> `C2 (`C3 x)
+      | `Other         x -> `C1 (`C1 x)
+      | `Rfc_822       x -> `C1 (`C2 x)
+      | `DNS           x -> `C1 (`C3 x)
+      | `X400_address  x -> `C1 (`C4 x)
+      | `Directory     x -> `C1 (`C5 x)
+      | `EDI_party     x -> `C1 (`C6 x)
+      | `URI           x -> `C2 (`C1 x)
+      | `IP            x -> `C2 (`C2 x)
+      | `Registered_id x -> `C2 (`C3 x)
     in
 
     map f g @@
@@ -263,7 +230,6 @@ module Algorithm = struct
    * that handles unsupported algos anyway.
    *)
 
-  type public_key = [ `RSA | `EC of OID.t ]
   type signature  = [ `RSA | `ECDSA ]
 
   type t =
@@ -457,21 +423,8 @@ module Extension = struct
 
   module ID = Registry.Cert_extn
 
-  type gen_names = General_name.t list
-
   let gen_names = sequence_of General_name.general_name
 
-  type key_usage = [
-    | `Digital_signature
-    | `Content_commitment
-    | `Key_encipherment
-    | `Data_encipherment
-    | `Key_agreement
-    | `Key_cert_sign
-    | `CRL_sign
-    | `Encipher_only
-    | `Decipher_only
-  ]
 
   let key_usage = bit_string_flags [
       0, `Digital_signature
@@ -485,19 +438,6 @@ module Extension = struct
     ; 8, `Decipher_only
     ]
 
-  type extended_key_usage = [
-    | `Any
-    | `Server_auth
-    | `Client_auth
-    | `Code_signing
-    | `Email_protection
-    | `Ipsec_end
-    | `Ipsec_tunnel
-    | `Ipsec_user
-    | `Time_stamping
-    | `Ocsp_signing
-    | `Other of OID.t
-  ]
 
   let ext_key_usage =
     let open ID.Extended_usage in
@@ -530,6 +470,7 @@ module Extension = struct
     in
     map (List.map f) (List.map g) @@ sequence_of oid
 
+
   let basic_constraints =
     map (fun (a, b) -> (def  false a, b))
         (fun (a, b) -> (def' false a, b))
@@ -538,7 +479,6 @@ module Extension = struct
       (optional ~label:"cA"      bool)
       (optional ~label:"pathLen" int)
 
-  type authority_key_id = Cstruct.t option * gen_names * Z.t option
 
   let authority_key_id =
     map (fun (a, b, c) -> (a, def  [] b, c))
@@ -549,29 +489,22 @@ module Extension = struct
       (optional ~label:"authCertIssuer" @@ implicit 1 gen_names)
       (optional ~label:"authCertSN"     @@ implicit 2 integer)
 
-  type priv_key_usage_period =
-    | Interval   of Time.t * Time.t
-    | Not_after  of Time.t
-    | Not_before of Time.t
 
   let priv_key_usage_period =
     let f = function
-      | (Some t1, Some t2) -> Interval (t1, t2)
-      | (Some t1, None   ) -> Not_before t1
-      | (None   , Some t2) -> Not_after  t2
+      | (Some t1, Some t2) -> `Interval (t1, t2)
+      | (Some t1, None   ) -> `Not_before t1
+      | (None   , Some t2) -> `Not_after  t2
       | _                  -> parse_error "empty PrivateKeyUsagePeriod"
     and g = function
-      | Interval (t1, t2) -> (Some t1, Some t2)
-      | Not_before t1     -> (Some t1, None   )
-      | Not_after  t2     -> (None   , Some t2) in
+      | `Interval (t1, t2) -> (Some t1, Some t2)
+      | `Not_before t1     -> (Some t1, None   )
+      | `Not_after  t2     -> (None   , Some t2) in
     map f g @@
     sequence2
       (optional ~label:"notBefore" @@ implicit 0 generalized_time)
       (optional ~label:"notAfter"  @@ implicit 1 generalized_time)
 
-
-  type name_constraint = (General_name.t * int * int option) list
-  type name_constraints = name_constraint * name_constraint
 
   let name_constraints =
     let subtree =
@@ -590,8 +523,6 @@ module Extension = struct
       (optional ~label:"permittedSubtrees" @@ implicit 0 (sequence_of subtree))
       (optional ~label:"excludedSubtrees"  @@ implicit 1 (sequence_of subtree))
 
-
-    type cert_policies = [ `Any | `Something of OID.t ] list
 
     let cert_policies =
       let open ID.Cert_policy in
@@ -630,20 +561,6 @@ module Extension = struct
           (optional ~label:"policyQualifiers" (sequence_of qualifier_info))
 
 
-  type t =
-    | Unsupported       of OID.t * Cstruct.t
-    | Subject_alt_name  of gen_names
-    | Authority_key_id  of authority_key_id
-    | Subject_key_id    of Cstruct.t
-    | Issuer_alt_name   of gen_names
-    | Key_usage         of key_usage list
-    | Ext_key_usage     of extended_key_usage list
-    | Basic_constraints of (bool * int option)
-    | Priv_key_period   of priv_key_usage_period
-    | Name_constraints  of name_constraints
-    | Policies          of cert_policies
-
-
   let gen_names_of_cs, gen_names_to_cs       = project_exn gen_names
   and auth_key_id_of_cs, auth_key_id_to_cs   = project_exn authority_key_id
   and subj_key_id_of_cs, subj_key_id_to_cs   = project_exn octet_string
@@ -659,49 +576,49 @@ module Extension = struct
   let reparse_extension_exn = case_of_2 [
 
     (ID.subject_alternative_name, fun cs ->
-      Subject_alt_name (gen_names_of_cs cs)) ;
+      `Subject_alt_name (gen_names_of_cs cs)) ;
 
     (ID.issuer_alternative_name, fun cs ->
-      Issuer_alt_name (gen_names_of_cs cs)) ;
+      `Issuer_alt_name (gen_names_of_cs cs)) ;
 
     (ID.authority_key_identifier, fun cs ->
-      Authority_key_id (auth_key_id_of_cs cs)) ;
+      `Authority_key_id (auth_key_id_of_cs cs)) ;
 
     (ID.subject_key_identifier, fun cs ->
-      Subject_key_id (subj_key_id_of_cs cs)) ;
+      `Subject_key_id (subj_key_id_of_cs cs)) ;
 
     (ID.key_usage, fun cs ->
-      Key_usage (key_usage_of_cs cs)) ;
+      `Key_usage (key_usage_of_cs cs)) ;
 
     (ID.basic_constraints, fun cs ->
-      Basic_constraints (basic_constr_of_cs cs));
+      `Basic_constraints (basic_constr_of_cs cs));
 
     (ID.extended_key_usage, fun cs ->
-      Ext_key_usage (e_key_usage_of_cs cs)) ;
+      `Ext_key_usage (e_key_usage_of_cs cs)) ;
 
     (ID.private_key_usage_period, fun cs ->
-      Priv_key_period (pr_key_peri_of_cs cs)) ;
+      `Priv_key_period (pr_key_peri_of_cs cs)) ;
 
     (ID.name_constraints, fun cs ->
-      Name_constraints (name_con_of_cs cs)) ;
+      `Name_constraints (name_con_of_cs cs)) ;
 
     (ID.certificate_policies_2, fun cs ->
-      Policies (cert_pol_of_cs cs))
+      `Policies (cert_pol_of_cs cs))
     ]
-    ~default:(fun oid cs -> Unsupported (oid, cs))
+    ~default:(fun oid cs -> `Unsupported (oid, cs))
 
   let unparse_extension = function
-    | Subject_alt_name  x -> (ID.subject_alternative_name, gen_names_to_cs    x)
-    | Issuer_alt_name   x -> (ID.issuer_alternative_name , gen_names_to_cs    x)
-    | Authority_key_id  x -> (ID.authority_key_identifier, auth_key_id_to_cs  x)
-    | Subject_key_id    x -> (ID.subject_key_identifier  , subj_key_id_to_cs  x)
-    | Key_usage         x -> (ID.key_usage               , key_usage_to_cs    x)
-    | Basic_constraints x -> (ID.basic_constraints       , basic_constr_to_cs x)
-    | Ext_key_usage     x -> (ID.extended_key_usage      , e_key_usage_to_cs  x)
-    | Priv_key_period   x -> (ID.private_key_usage_period, pr_key_peri_to_cs  x)
-    | Name_constraints  x -> (ID.name_constraints        , name_con_to_cs     x)
-    | Policies          x -> (ID.certificate_policies_2  , cert_pol_to_cs     x)
-    | Unsupported (oid, cs) -> (oid, cs)
+    | `Subject_alt_name  x -> (ID.subject_alternative_name, gen_names_to_cs    x)
+    | `Issuer_alt_name   x -> (ID.issuer_alternative_name , gen_names_to_cs    x)
+    | `Authority_key_id  x -> (ID.authority_key_identifier, auth_key_id_to_cs  x)
+    | `Subject_key_id    x -> (ID.subject_key_identifier  , subj_key_id_to_cs  x)
+    | `Key_usage         x -> (ID.key_usage               , key_usage_to_cs    x)
+    | `Basic_constraints x -> (ID.basic_constraints       , basic_constr_to_cs x)
+    | `Ext_key_usage     x -> (ID.extended_key_usage      , e_key_usage_to_cs  x)
+    | `Priv_key_period   x -> (ID.private_key_usage_period, pr_key_peri_to_cs  x)
+    | `Name_constraints  x -> (ID.name_constraints        , name_con_to_cs     x)
+    | `Policies          x -> (ID.certificate_policies_2  , cert_pol_to_cs     x)
+    | `Unsupported (oid, cs) -> (oid, cs)
 
   let extensions_der =
     let extension =
@@ -776,11 +693,6 @@ module PK = struct
   (* ECs go here *)
   (* ... *)
 
-  type t = [
-    | `RSA    of Rsa.pub
-    | `EC_pub of OID.t
-  ]
-
   let rsa_pub_of_cs, rsa_pub_to_cs = project_exn rsa_public_key
 
   let reparse_pk = function
@@ -825,6 +737,73 @@ module PK = struct
 
 end
 
+module CertificateRequest = struct
+  open Registry
+
+  let attributes =
+    let f = function
+      | (oid, [`C1 p]) when oid = PKCS9.challenge_password -> `Password p
+      | (oid, [`C1 n]) when oid = PKCS9.unstructured_name -> `Name n
+      | (oid, [`C2 es]) when oid = PKCS9.extension_request -> `Extensions es
+    and g = function
+      | `Password p -> (PKCS9.challenge_password, [`C1 p])
+      | `Name n -> (PKCS9.unstructured_name, [`C1 n])
+      | `Extensions es -> (PKCS9.extension_request, [`C2 es])
+    in
+    map f g @@
+    sequence2
+      (required ~label:"attr type" oid)
+      (required ~label:"attr value"
+         (set_of (choice2
+                    utf8_string
+                    Extension.extensions_der)))
+
+  type certificate_request_info = {
+    subject : distinguished_name ;
+    public_key : public_key ;
+    extensions : request_info_extensions list ;
+  }
+
+  let certificate_request_info =
+    let f = function
+      | (0, subject, public_key, extensions) ->
+        { subject ; public_key ; extensions }
+      | _ ->
+        parse_error "unknown certificate request info"
+    and g { subject ; public_key ; extensions } =
+      (0, subject, public_key, extensions)
+    in
+    map f g @@
+    sequence4
+      (required ~label:"version" int)
+      (required ~label:"subject" Name.name)
+      (required ~label:"subjectPKInfo" PK.pk_info_der)
+      (required ~label:"attributes" @@ implicit 0 (set_of attributes))
+
+  let certificate_request_info_of_cs, certificate_request_info_to_cs =
+    projections_of der certificate_request_info
+
+  type certificate_request = {
+    info : certificate_request_info ;
+    signature_algorithm : Algorithm.t ;
+    signature : Cstruct.t
+  }
+
+  let certificate_request =
+    let f = fun (info, signature_algorithm, signature) ->
+      { info ; signature_algorithm ; signature }
+    and g = fun { info ; signature_algorithm ; signature } ->
+      (info, signature_algorithm, signature)
+    in
+    map f g @@
+    sequence3
+      (required ~label:"certificationRequestInfo" certificate_request_info)
+      (required ~label:"signatureAlgorithm" Algorithm.identifier)
+      (required ~label:"signature" bit_string_cs)
+
+  let certificate_request_of_cs, certificate_request_to_cs =
+    projections_of der certificate_request
+end
 
 (*
  * X509 certs
@@ -835,13 +814,13 @@ type tBSCertificate = {
   version    : [ `V1 | `V2 | `V3 ] ;
   serial     : Z.t ;
   signature  : Algorithm.t ;
-  issuer     : Name.dn ;
+  issuer     : distinguished_name ;
   validity   : Time.t * Time.t ;
-  subject    : Name.dn ;
-  pk_info    : PK.t ;
+  subject    : distinguished_name ;
+  pk_info    : public_key ;
   issuer_id  : Cstruct.t option ;
   subject_id : Cstruct.t option ;
-  extensions : (bool * Extension.t) list
+  extensions : (bool * extension) list
 }
 
 type certificate = {
@@ -859,8 +838,15 @@ let version =
 let certificate_sn = integer
 
 let time =
-  map (function `C1 t -> t | `C2 t -> t) (fun t -> `C2 t)
-      (choice2 utc_time generalized_time)
+  map
+    (function `C1 t -> t | `C2 t -> t)
+    (fun t ->
+       let year, _, _ = t.Time.date in
+       if year < 2050 then
+         `C1 t
+       else
+         `C2 t)
+    (choice2 utc_time generalized_time)
 
 let validity =
   sequence2
@@ -968,13 +954,13 @@ let  extn_subject_alt_name
             match pred ext with None -> None | Some x -> Some (crit, x))
   in
   let open Extension in
-  (f @@ function Subject_alt_name  _ as x -> Some x | _ -> None),
-  (f @@ function Issuer_alt_name   _ as x -> Some x | _ -> None),
-  (f @@ function Authority_key_id  _ as x -> Some x | _ -> None),
-  (f @@ function Subject_key_id    _ as x -> Some x | _ -> None),
-  (f @@ function Key_usage         _ as x -> Some x | _ -> None),
-  (f @@ function Ext_key_usage     _ as x -> Some x | _ -> None),
-  (f @@ function Basic_constraints _ as x -> Some x | _ -> None),
-  (f @@ function Priv_key_period   _ as x -> Some x | _ -> None),
-  (f @@ function Name_constraints  _ as x -> Some x | _ -> None),
-  (f @@ function Policies          _ as x -> Some x | _ -> None)
+  (f @@ function `Subject_alt_name  _ as x -> Some x | _ -> None),
+  (f @@ function `Issuer_alt_name   _ as x -> Some x | _ -> None),
+  (f @@ function `Authority_key_id  _ as x -> Some x | _ -> None),
+  (f @@ function `Subject_key_id    _ as x -> Some x | _ -> None),
+  (f @@ function `Key_usage         _ as x -> Some x | _ -> None),
+  (f @@ function `Ext_key_usage     _ as x -> Some x | _ -> None),
+  (f @@ function `Basic_constraints _ as x -> Some x | _ -> None),
+  (f @@ function `Priv_key_period   _ as x -> Some x | _ -> None),
+  (f @@ function `Name_constraints  _ as x -> Some x | _ -> None),
+  (f @@ function `Policies          _ as x -> Some x | _ -> None)

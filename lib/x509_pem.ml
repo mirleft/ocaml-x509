@@ -117,7 +117,31 @@ module Cert = struct
     Cs.concat (List.map to_pem_cstruct1 cs)
 end
 
-module PublicKey = struct
+module Certificate_signing_request = struct
+
+  type t = X509_ca.signing_request
+
+  let of_pem_cstruct cs =
+    List.fold_left (fun csrs -> function
+        | ("CERTIFICATE REQUEST", cs) ->
+          ( match X509_ca.parse_signing_request cs with
+            | Some csr -> csrs @ [csr]
+            | None     -> invalid_arg "X509: failed to parse certificate signing request" )
+        | _ -> csrs)
+      []
+      (parse cs)
+
+  let of_pem_cstruct1 =
+    o (exactly_one ~what:"certificate request") of_pem_cstruct
+
+  let to_pem_cstruct1 v =
+    unparse ~tag:"CERTIFICATE REQUEST" (X509_ca.cs_of_signing_request v)
+
+  let to_pem_cstruct cs =
+    Cs.concat (List.map to_pem_cstruct1 cs)
+end
+
+module Public_key = struct
   let of_pem_cstruct cs =
     List.fold_left (fun keys -> function
         | ("PUBLIC KEY", cs) ->
@@ -138,19 +162,16 @@ module PublicKey = struct
     Cs.concat (List.map to_pem_cstruct1 cs)
 end
 
-module PrivateKey = struct
-
-  type t = Nocrypto.Rsa.priv
-
+module Private_key = struct
   let of_pem_cstruct cs =
     List.fold_left (fun pks -> function
         | ("RSA PRIVATE KEY", cs) ->
           ( match Asn_grammars.PK.rsa_private_of_cstruct cs with
-            | Some pk -> pk :: pks
+            | Some pk -> (`RSA pk) :: pks
             | None    -> invalid_arg "X509: failed to parse rsa private key" )
         | ("PRIVATE KEY", cs) ->
           ( match Asn_grammars.PK.private_of_cstruct cs with
-            | Some pk -> pk :: pks
+            | Some pk -> (`RSA pk) :: pks
             | None    -> invalid_arg "X509: failed to parse private key" )
         | _ -> pks)
       []
@@ -159,8 +180,8 @@ module PrivateKey = struct
   let of_pem_cstruct1 =
     o (exactly_one ~what:"RSA keys") of_pem_cstruct
 
-  let to_pem_cstruct1 v =
-    unparse ~tag:"RSA PRIVATE KEY" (Asn_grammars.PK.rsa_private_to_cstruct v)
+  let to_pem_cstruct1 = function
+    | `RSA v -> unparse ~tag:"RSA PRIVATE KEY" (Asn_grammars.PK.rsa_private_to_cstruct v)
 
   let to_pem_cstruct cs =
     Cs.concat (List.map to_pem_cstruct1 cs)

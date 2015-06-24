@@ -16,12 +16,22 @@ open Asn_grammars
  *)
 
 type t = {
-  asn : Asn_grammars.certificate ;
+  asn : certificate ;
   raw : Cstruct.t
 }
 
+type component = X509_types.component
+
+type distinguished_name = X509_types.distinguished_name
+
+let issuer { asn ; _ } = asn.tbs_cert.issuer
+
+let subject { asn ; _ } = asn.tbs_cert.subject
+
+let distinguished_name_to_string = X509_types.dn_to_string
+
 let parse_certificate cs =
-  match Asn_grammars.certificate_of_cstruct cs with
+  match certificate_of_cstruct cs with
   | None     -> None
   | Some asn -> Some { asn ; raw = cs }
 
@@ -33,9 +43,12 @@ let sexp_of_t cert = Sexplib.Sexp.List
     [ Sexplib.Sexp.Atom "CERTIFICATE" ;
       Sexplib.Sexp.Atom (Cstruct.to_string (Hash.digest `SHA256 cert.raw)) ]
 
-type key_type = Algorithm.public_key
+type key_type = X509_types.keytype
+type public_key = X509_types.public_key
+type private_key = X509_types.private_key
 
-type pubkey = PK.t
+let private_key_to_keytype = function
+  | `RSA _ -> `RSA
 
 let cert_pubkey { asn = cert ; _ } = cert.tbs_cert.pk_info
 
@@ -44,33 +57,9 @@ let supports_keytype c t =
   | (`RSA _), `RSA -> true
   | _              -> false
 
-let cert_usage { asn = cert ; _ } =
-  match extn_key_usage cert with
-  | Some (_, Extension.Key_usage usages) -> Some usages
-  | _                                    -> None
-
-type key_usage = Extension.key_usage
-
-let supports_usage ?(not_present = false) c u =
-  match cert_usage c with
-  | Some x -> List.mem u x
-  | None   -> not_present
-
-let cert_extended_usage { asn = cert ; _ } =
-  match extn_ext_key_usage cert with
-  | Some (_, Extension.Ext_key_usage usages) -> Some usages
-  | _                                        -> None
-
-type extended_key_usage = Extension.extended_key_usage
-
-let supports_extended_usage ?(not_present = false) c u =
-  match cert_extended_usage c with
-  | Some x -> List.mem u x
-  | None   -> not_present
-
 let subject_common_name cert =
   List_ext.map_find cert.tbs_cert.subject
-           ~f:(function Name.CN n -> Some n | _ -> None)
+           ~f:(function `CN n -> Some n | _ -> None)
 
 let common_name_to_string { asn = cert ; _ } =
   match subject_common_name cert with
@@ -91,12 +80,12 @@ let common_name_to_string { asn = cert ; _ } =
 let cert_hostnames { asn = cert ; _ } : string list =
   let open Extension in
   match extn_subject_alt_name cert, subject_common_name cert with
-    | Some (_, Subject_alt_name names), _     ->
+    | Some (_, `Subject_alt_name names), _    ->
        List_ext.filter_map
          names
          ~f:(function
-              | General_name.DNS x -> Some (String.lowercase x)
-              | _                  -> None)
+              | `DNS x -> Some (String.lowercase x)
+              | _      -> None)
     | _                              , Some x -> [String.lowercase x]
     | _                              , _      -> []
 
@@ -134,6 +123,156 @@ let supports_hostname cert = function
   | `Wildcard name -> let name = String.lowercase name in
                              List.mem name (cert_hostnames cert) ||
                                wildcard_matches name cert
+
+let maybe_validate_hostname cert = function
+  | None   -> true
+  | Some x -> supports_hostname cert x
+
+let issuer_matches_subject { asn = parent ; _ } { asn = cert ; _ } =
+  Name.equal parent.tbs_cert.subject cert.tbs_cert.issuer
+
+let is_self_signed cert = issuer_matches_subject cert cert
+
+let validate_raw_signature raw signature_algo signature_val pk_info =
+  match pk_info with
+  | `RSA issuing_key ->
+    ( match Rsa.PKCS1.verify ~key:issuing_key signature_val with
+      | None           -> false
+      | Some signature ->
+        match
+          pkcs1_digest_info_of_cstruct signature,
+          Algorithm.to_signature_algorithm signature_algo
+        with
+        | Some (algo, hash), Some (`RSA, h) when h = algo ->
+          Uncommon.Cs.equal hash (Hash.digest algo raw)
+        | _ -> false )
+  | _ -> false
+
+(* XXX should return the tbs_cert blob from the parser, this is insane *)
+let raw_cert_hack raw signature =
+  let siglen = Cstruct.len signature in
+  let off    = if siglen > 128 then 1 else 0 in
+  Cstruct.(sub raw 4 (len raw - (siglen + 4 + 19 + off)))
+
+let validate_signature { asn = trusted ; _ } cert =
+  let tbs_raw = raw_cert_hack cert.raw cert.asn.signature_val in
+  validate_raw_signature tbs_raw cert.asn.signature_algo cert.asn.signature_val trusted.tbs_cert.pk_info
+
+let validate_time time { asn = cert ; _ } =
+  match time with
+  | None     -> true
+  | Some now ->
+    let (not_before, not_after) = cert.tbs_cert.validity in
+    let (t1, t2) =
+      Asn.Time.(to_posix_time not_before, to_posix_time not_after) in
+    t1 <= now && now <= t2
+
+let version_matches_extensions { asn = cert ; _ } =
+  let tbs = cert.tbs_cert in
+  match tbs.version, tbs.extensions with
+  | (`V1 | `V2), [] -> true
+  | (`V1 | `V2), _  -> false
+  | `V3        , _  -> true
+
+let validate_path_len pathlen { asn = cert ; _ } =
+  (* X509 V1/V2 certificates do not contain X509v3 extensions! *)
+  (* thus, we cannot check the path length. this will only ever happen for trust anchors: *)
+  (* intermediate CAs are checked by is_cert_valid, which checks that the CA extensions are there *)
+  (* whereas trust anchor are ok with getting V1/2 certificates *)
+  (* TODO: make it configurable whether to accept V1/2 certificates at all *)
+  let open Extension in
+  match cert.tbs_cert.version, extn_basic_constr cert with
+  | (`V1 | `V2), _                                    -> true
+  | `V3, Some (_ , `Basic_constraints (true, None))   -> true
+  | `V3, Some (_ , `Basic_constraints (true, Some n)) -> n >= pathlen
+  | _                                                 -> false
+
+let cacert_fingerprints =
+  List.map
+    Uncommon.Cs.of_hex
+    [ "FF2A65CFF1149C7430101E0F65A07EC19183A3B633EF4A6510890DAD18316B3A" (* class 1 from 2003 *) ;
+      "4EDDE9E55CA453B388887CAA25D5C5C5BCCF2891D73B87495808293D5FAC83C8" (* class 3 from 2011 *) ;
+    ]
+
+let is_cacert raw =
+  let fp = Hash.digest `SHA256 raw in
+  List.exists (fun x -> Uncommon.Cs.equal x fp) cacert_fingerprints
+
+let validate_ca_extensions { asn ; raw } =
+  let cert = asn in
+  let open Extension in
+  (* comments from RFC5280 *)
+  (* 4.2.1.9 Basic Constraints *)
+  (* Conforming CAs MUST include this extension in all CA certificates used *)
+  (* to validate digital signatures on certificates and MUST mark the *)
+  (* extension as critical in such certificates *)
+  (* unfortunately, there are 8 CA certs (including the one which
+     signed google.com) which are _NOT_ marked as critical *)
+  ( match extn_basic_constr cert with
+    | Some (_ , `Basic_constraints (true, _)) -> true
+    | _                                       -> false ) &&
+
+  (* 4.2.1.3 Key Usage *)
+  (* Conforming CAs MUST include key usage extension *)
+  (* CA Cert (cacert.org) does not *)
+  ( match extn_key_usage cert with
+    (* When present, conforming CAs SHOULD mark this extension as critical *)
+    (* yeah, you wish... *)
+    | Some (_, `Key_usage usage) -> List.mem `Key_cert_sign usage
+    | None when is_cacert raw    -> true (* CA Cert does not include any key usage extensions *)
+    | _                          -> false ) &&
+
+  (* if we require this, we cannot talk to github.com
+     (* 4.2.1.12.  Extended Key Usage
+     If a certificate contains both a key usage extension and an extended
+     key usage extension, then both extensions MUST be processed
+     independently and the certificate MUST only be used for a purpose
+     consistent with both extensions.  If there is no purpose consistent
+     with both extensions, then the certificate MUST NOT be used for any
+     purpose. *)
+     ( match extn_ext_key_usage cert with
+     | Some (_, Ext_key_usage usages) -> List.mem Any usages
+     | _                              -> true ) &&
+  *)
+
+  (* Name Constraints - name constraints should match servername *)
+
+  (* check criticality *)
+  List.for_all (function
+      | (true, `Key_usage _)         -> true
+      | (true, `Basic_constraints _) -> true
+      | (crit, _)                    -> not crit )
+    cert.tbs_cert.extensions
+
+let validate_server_extensions { asn = cert ; _ } =
+  let open Extension in
+  List.for_all (function
+      | (_, `Basic_constraints (true, _))  -> false
+      | (_, `Basic_constraints (false, _)) -> true
+      | (_, `Key_usage _)                  -> true
+      | (_, `Ext_key_usage _)              -> true
+      | (_, `Subject_alt_name _)           -> true
+      | (c, `Policies ps)                  -> not c || List.mem `Any ps
+      (* we've to deal with _all_ extensions marked critical! *)
+      | (c, _)                             -> not c )
+    cert.tbs_cert.extensions
+
+let valid_trust_anchor_extensions cert =
+  match cert.asn.tbs_cert.version with
+  | `V1 | `V2 -> true
+  | `V3       -> validate_ca_extensions cert
+
+let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
+  let open Extension in
+  match
+    extn_authority_key_id cert, extn_subject_key_id trusted
+  with
+  | (_, None) | (None, _)                       -> true (* not mandatory *)
+  | Some (_, `Authority_key_id (Some auth, _, _)),
+    Some (_, `Subject_key_id au)                -> Uncommon.Cs.equal auth au
+  (* TODO: check exact rules in RFC5280 *)
+  | Some (_, `Authority_key_id (None, _, _)), _ -> true (* not mandatory *)
+  | _, _                                        -> false
 
 
 module Validation = struct
@@ -201,141 +340,9 @@ module Validation = struct
     | `ServerNameNotPresent c -> "Given server name not in fingerprint list " ^ common_name_to_string c
     | `EmptyCertificateChain -> "The provided certificate chain is empty"
 
-  let maybe_validate_hostname cert = function
-    | None   -> true
-    | Some x -> supports_hostname cert x
 
   (* TODO RFC 5280: A certificate MUST NOT include more than one
      instance of a particular extension. *)
-
-  let issuer_matches_subject { asn = parent ; _ } { asn = cert ; _ } =
-    Name.equal parent.tbs_cert.subject cert.tbs_cert.issuer
-
-  let is_self_signed cert = issuer_matches_subject cert cert
-
-  (* XXX should return the tbs_cert blob from the parser, this is insane *)
-  let raw_cert_hack { asn ; raw } =
-    let siglen = Cstruct.len asn.signature_val in
-    let off    = if siglen > 128 then 1 else 0 in
-    Cstruct.(sub raw 4 (len raw - (siglen + 4 + 19 + off)))
-
-  let validate_signature { asn = trusted ; _ } cert =
-    let tbs_raw = raw_cert_hack cert in
-    match trusted.tbs_cert.pk_info with
-
-    | `RSA issuing_key ->
-
-      ( match Rsa.PKCS1.verify ~key:issuing_key cert.asn.signature_val with
-        | None           -> false
-        | Some signature ->
-          match
-            pkcs1_digest_info_of_cstruct signature,
-            Algorithm.to_signature_algorithm cert.asn.signature_algo
-          with
-          | Some (algo, hash), Some (`RSA, h) when h = algo ->
-            Uncommon.Cs.equal hash (Hash.digest algo tbs_raw)
-          | _ -> false )
-
-    | _ -> false
-
-  let validate_time time { asn = cert ; _ } =
-    match time with
-    | None     -> true
-    | Some now ->
-      let (not_before, not_after) = cert.tbs_cert.validity in
-      let (t1, t2) =
-        Asn.Time.(to_posix_time not_before, to_posix_time not_after) in
-      t1 <= now && now <= t2
-
-  let version_matches_extensions { asn = cert ; _ } =
-    let tbs = cert.tbs_cert in
-    match tbs.version, tbs.extensions with
-    | (`V1 | `V2), [] -> true
-    | (`V1 | `V2), _  -> false
-    | `V3        , _  -> true
-
-  let validate_path_len pathlen { asn = cert ; _ } =
-    (* X509 V1/V2 certificates do not contain X509v3 extensions! *)
-    (* thus, we cannot check the path length. this will only ever happen for trust anchors: *)
-    (* intermediate CAs are checked by is_cert_valid, which checks that the CA extensions are there *)
-    (* whereas trust anchor are ok with getting V1/2 certificates *)
-    (* TODO: make it configurable whether to accept V1/2 certificates at all *)
-    let open Extension in
-    match cert.tbs_cert.version, extn_basic_constr cert with
-    | (`V1 | `V2), _                                   -> true
-    | `V3, Some (_ , Basic_constraints (true, None))   -> true
-    | `V3, Some (_ , Basic_constraints (true, Some n)) -> n >= pathlen
-    | _                                                -> false
-
-  let cacert_fingerprints =
-    List.map
-      Uncommon.Cs.of_hex
-      [ "FF2A65CFF1149C7430101E0F65A07EC19183A3B633EF4A6510890DAD18316B3A" (* class 1 from 2003 *) ;
-        "4EDDE9E55CA453B388887CAA25D5C5C5BCCF2891D73B87495808293D5FAC83C8" (* class 3 from 2011 *) ;
-      ]
-
-  let is_cacert raw =
-    let fp = Hash.digest `SHA256 raw in
-    List.exists (fun x -> Uncommon.Cs.equal x fp) cacert_fingerprints
-
-  let validate_ca_extensions { asn ; raw } =
-    let cert = asn in
-    let open Extension in
-    (* comments from RFC5280 *)
-    (* 4.2.1.9 Basic Constraints *)
-    (* Conforming CAs MUST include this extension in all CA certificates used *)
-    (* to validate digital signatures on certificates and MUST mark the *)
-    (* extension as critical in such certificates *)
-    (* unfortunately, there are 8 CA certs (including the one which
-       signed google.com) which are _NOT_ marked as critical *)
-    ( match extn_basic_constr cert with
-      | Some (_ , Basic_constraints (true, _))   -> true
-      | _                                        -> false ) &&
-
-    (* 4.2.1.3 Key Usage *)
-    (* Conforming CAs MUST include key usage extension *)
-    (* CA Cert (cacert.org) does not *)
-    ( match extn_key_usage cert with
-      (* When present, conforming CAs SHOULD mark this extension as critical *)
-      (* yeah, you wish... *)
-      | Some (_, Key_usage usage) -> List.mem `Key_cert_sign usage
-      | None when is_cacert raw   -> true (* CA Cert does not include any key usage extensions *)
-      | _                         -> false ) &&
-
-    (* if we require this, we cannot talk to github.com
-       (* 4.2.1.12.  Extended Key Usage
-       If a certificate contains both a key usage extension and an extended
-       key usage extension, then both extensions MUST be processed
-       independently and the certificate MUST only be used for a purpose
-       consistent with both extensions.  If there is no purpose consistent
-       with both extensions, then the certificate MUST NOT be used for any
-       purpose. *)
-       ( match extn_ext_key_usage cert with
-       | Some (_, Ext_key_usage usages) -> List.mem Any usages
-       | _                              -> true ) &&
-    *)
-
-    (* Name Constraints - name constraints should match servername *)
-
-    (* check criticality *)
-    List.for_all (function
-        | (true, Key_usage _)         -> true
-        | (true, Basic_constraints _) -> true
-        | (crit, _)                   -> not crit )
-      cert.tbs_cert.extensions
-
-  let validate_server_extensions { asn = cert ; _ } =
-    let open Extension in
-    List.for_all (function
-        | (_, Basic_constraints (true, _))  -> false
-        | (_, Basic_constraints (false, _)) -> true
-        | (_, Key_usage _)                  -> true
-        | (_, Ext_key_usage _)              -> true
-        | (_, Subject_alt_name _)           -> true
-        | (c, Policies ps)                  -> not c || List.mem `Any ps
-        (* we've to deal with _all_ extensions marked critical! *)
-        | (crit, _)                         -> not crit )
-      cert.tbs_cert.extensions
 
   let is_cert_valid now cert =
     match
@@ -347,11 +354,6 @@ module Validation = struct
     | (false, _, _)      -> fail (`CertificateExpired cert)
     | (_, false, _)      -> fail (`InvalidVersion cert)
     | (_, _, false)      -> fail (`InvalidExtensions cert)
-
-  let valid_trust_anchor_extensions cert =
-    match cert.asn.tbs_cert.version with
-    | `V1 | `V2 -> true
-    | `V3       -> validate_ca_extensions cert
 
   let is_ca_cert_valid now cert =
     match
@@ -380,18 +382,6 @@ module Validation = struct
     | (_, false, _, _)         -> fail (`InvalidServerName cert)
     | (_, _, false, _)         -> fail (`InvalidVersion cert)
     | (_, _, _, false)         -> fail (`InvalidServerExtensions cert)
-
-  let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
-    let open Extension in
-    match
-      extn_authority_key_id cert, extn_subject_key_id trusted
-    with
-    | (_, None) | (None, _)                      -> true (* not mandatory *)
-    | Some (_, Authority_key_id (Some auth, _, _)),
-      Some (_, Subject_key_id au)                -> Uncommon.Cs.equal auth au
-    (* TODO: check exact rules in RFC5280 *)
-    | Some (_, Authority_key_id (None, _, _)), _ -> true (* not mandatory *)
-    | _, _                                       -> false
 
   let signs pathlen trusted cert =
     match
