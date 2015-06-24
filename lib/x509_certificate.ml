@@ -136,6 +136,42 @@ let supports_hostname cert = function
                                wildcard_matches name cert
 
 
+module Graph = struct
+  type edge = distinguished_name * distinguished_name
+
+  let edges = List.map (fun x -> (subject x, issuer x))
+
+  let out_edges name =
+    List.filter (fun (f, _) -> Name.equal f name)
+
+  let find_chain start edges =
+    let rec move cur acc =
+      match out_edges cur edges with
+      | [] -> Some (cur :: acc)
+      | xs ->
+        List.fold_left (fun r (_, t) ->
+            match r with
+            | None when List.mem cur acc -> None
+            | None -> move t (cur :: acc)
+            | Some x -> Some x)
+          None xs
+    in
+    match move start [] with
+    | None -> None
+    | Some x -> Some (List.rev x)
+end
+
+let sort_certificates server certs =
+  let start = issuer server
+  and edges = Graph.edges certs
+  and rev_names = List.map (fun t -> (subject t, t)) certs
+  in
+  let find_cert subject = snd (List.find (fun (n, _) -> Name.equal subject n) rev_names)
+  in
+  match Graph.find_chain start edges with
+  | None -> None
+  | Some xs -> Some (List.map find_cert xs)
+
 module Validation = struct
   (* Control flow stuff. Should be imported from a single place. *)
 
