@@ -50,10 +50,10 @@ type private_key = X509_types.private_key
 let private_key_to_keytype = function
   | `RSA _ -> `RSA
 
-let cert_pubkey { asn = cert ; _ } = cert.tbs_cert.pk_info
+let public_key { asn = cert ; _ } = cert.tbs_cert.pk_info
 
 let supports_keytype c t =
-  match cert_pubkey c, t with
+  match public_key c, t with
   | (`RSA _), `RSA -> true
   | _              -> false
 
@@ -77,7 +77,7 @@ let common_name_to_string { asn = cert ; _ } =
    domain name portion of an identifier of type DNS-ID, SRV-ID, or
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
-let cert_hostnames { asn = cert ; _ } : string list =
+let hostnames { asn = cert ; _ } : string list =
   let open Extension in
   match extn_subject_alt_name cert, subject_common_name cert with
     | Some (_, `Subject_alt_name names), _    ->
@@ -110,7 +110,7 @@ let wildcard_matches host cert =
     | x::xs, y::ys when x = y -> wildcard_hostname_matches xs ys
     | _    , _                -> false
   in
-  let names = cert_hostnames cert in
+  let names = hostnames cert in
     match split_labels host with
     | None      -> false
     | Some lbls ->
@@ -119,9 +119,9 @@ let wildcard_matches host cert =
          List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
 
 let supports_hostname cert = function
-  | `Strict name   -> List.mem (String.lowercase name) (cert_hostnames cert)
+  | `Strict name   -> List.mem (String.lowercase name) (hostnames cert)
   | `Wildcard name -> let name = String.lowercase name in
-                             List.mem name (cert_hostnames cert) ||
+                             List.mem name (hostnames cert) ||
                                wildcard_matches name cert
 
 let maybe_validate_hostname cert = function

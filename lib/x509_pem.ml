@@ -95,7 +95,7 @@ let unparse ~tag value =
   in
   Cs.concat (first @ lines @ last)
 
-module Cert = struct
+module Certificate = struct
 
   let of_pem_cstruct cs =
     List.fold_left (fun certs -> function

@@ -761,7 +761,7 @@ module CertificateRequest = struct
   type certificate_request_info = {
     subject : distinguished_name ;
     public_key : public_key ;
-    extensions : request_info_extensions list ;
+    extensions : request_extensions list ;
   }
 
   let certificate_request_info =

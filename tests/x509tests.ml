@@ -13,7 +13,7 @@ let priv =
   | `RSA x -> x
 
 let cert name =
-  Encoding.Pem.Cert.of_pem_cstruct1 (load name)
+  Encoding.Pem.Certificate.of_pem_cstruct1 (load name)
 
 let invalid_cas = [
   "cacert-basicconstraint-ca-false";
@@ -24,7 +24,7 @@ let invalid_cas = [
 
 let cert_public_is_pub cert =
   let pub = Nocrypto.Rsa.pub_of_priv priv in
-  ( match cert_pubkey cert with
+  ( match public_key cert with
     | `RSA pub' when pub = pub' -> ()
     | _ -> assert_failure "public / private key doesn't match" )
 
@@ -56,7 +56,7 @@ let valid_ca_tests = [
 ]
 
 let first_cert name =
-  Encoding.Pem.Cert.of_pem_cstruct1 (load ("first/" ^ name))
+  Encoding.Pem.Certificate.of_pem_cstruct1 (load ("first/" ^ name))
 
 (* ok, now some real certificates *)
 let first_certs = [
@@ -179,7 +179,7 @@ let intermediate_cas = [
 ]
 
 let im_cert name =
-  Encoding.Pem.Cert.of_pem_cstruct1 (load ("intermediate/" ^ name))
+  Encoding.Pem.Certificate.of_pem_cstruct1 (load ("intermediate/" ^ name))
 
 let second_certs = [
   ("second", [ "second.foobar.com" ], true, (* no subjAltName *)
@@ -207,7 +207,7 @@ let second_certs = [
 ]
 
 let second_cert name =
-  Encoding.Pem.Cert.of_pem_cstruct1 (load ("intermediate/second/" ^ name))
+  Encoding.Pem.Certificate.of_pem_cstruct1 (load ("intermediate/second/" ^ name))
 
 let second_cert_tests =
   List.mapi
