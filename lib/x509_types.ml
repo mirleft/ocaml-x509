@@ -99,9 +99,8 @@ type priv_key_usage_period = [
 ]
 
 type name_constraint = (general_name * int * int option) list
-type name_constraints = name_constraint * name_constraint
 
-type cert_policy = [ `Any | `Something of Asn.OID.t ]
+type policy = [ `Any | `Something of Asn.OID.t ]
 
 type extension = [
   | `Unsupported       of Asn.OID.t * Cstruct.t
@@ -113,11 +112,11 @@ type extension = [
   | `Ext_key_usage     of extended_key_usage list
   | `Basic_constraints of (bool * int option)
   | `Priv_key_period   of priv_key_usage_period
-  | `Name_constraints  of name_constraints
-  | `Policies          of cert_policy list
+  | `Name_constraints  of name_constraint * name_constraint
+  | `Policies          of policy list
 ]
 
-type request_info_extensions = [
+type request_extensions = [
   | `Password of string
   | `Name of string
   | `Extensions of (bool * extension) list

@@ -10,7 +10,7 @@ let raw_sign raw digest key =
 
 type signing_request = CertificateRequest.certificate_request * Cstruct.t option
 
-type request_info_extensions = X509_types.request_info_extensions
+type request_extensions = X509_types.request_extensions
 
 let validate_signature ({ CertificateRequest.info ; signature ; signature_algorithm }, raw) =
   let raw = match raw with
@@ -34,7 +34,7 @@ let cs_of_signing_request (csr, raw) =
   | Some x -> x
   | None -> CertificateRequest.certificate_request_to_cs csr
 
-let generate subject ?(digest = `SHA256) ?(extensions = []) = function
+let request subject ?(digest = `SHA256) ?(extensions = []) = function
   | `RSA priv ->
     let public_key = `RSA (Nocrypto.Rsa.pub_of_priv priv) in
     let info = { CertificateRequest.subject ; public_key ; extensions } in

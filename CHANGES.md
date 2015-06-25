@@ -1,3 +1,16 @@
+0.4.0 (master):
+* certificate signing request support (PKCS10)
+* basic CA functionality (in CA module): create and sign certificate signing requests
+* PEM encoding of X.509 certificates, RSA public and private keys, and certificate signing requests
+* new module Extension contains X509v3 extensions as polymorphic variants
+* expose distinguished_name as polymorphic variant
+* type pubkey is now public_key
+* function cert_pubkey is now public_key
+* functions supports_usage, supports_extended_usage are now in Extension module
+* types key_usage, extended_key_usage are now in Extension module
+* Encoding.Pem.Cert has been renamed to Encoding.Pem.Certificate
+* Encoding.Pem.PK has been renamed to Encoding.Pem.Private_key (now uses type private_key instead of Nocrypto.Rsa.priv)
+
 0.3.1 (2015-05-02):
 * PKCS8 private key info support (only unencrypted keys so far)
 

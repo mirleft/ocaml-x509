@@ -58,15 +58,15 @@ type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
 (** The polymorphic variant of private keys. *)
 type private_key = [ `RSA of Nocrypto.Rsa.priv ]
 
-(** [cert_pubkey certificate] is [pubkey], the public key of the
+(** [public_key certificate] is [pubkey], the public key of the
     [certificate]. *)
-val cert_pubkey : t -> public_key
+val public_key : t -> public_key
 
-(** [cert_hostnames certficate] are [hostnames], the list of hostnames
+(** [hostnames certficate] are [hostnames], the list of hostnames
     this [certifcate] is valid for.  Currently, these are the DNS names of
     the subject alternativ name extension, if present, or otherwise the
     singleton list containing the common name. *)
-val cert_hostnames : t -> string list
+val hostnames : t -> string list
 
 (** The polymorphic variant for hostname validation. *)
 type host = [ `Strict of string | `Wildcard of string ]
@@ -187,11 +187,8 @@ module Extension : sig
   (** Name constraint in a X509v3 extension *)
   type name_constraint = (general_name * int * int option) list
 
-  (** Name constraints tuple in a X509v3 extension *)
-  type name_constraints = name_constraint * name_constraint
-
   (** Certificate policy *)
-  type cert_policy = [ `Any | `Something of Asn.OID.t ]
+  type policy = [ `Any | `Something of Asn.OID.t ]
 
   (** The polymorphic variant of extensions *)
   type t = [
@@ -204,8 +201,8 @@ module Extension : sig
     | `Ext_key_usage     of extended_key_usage list
     | `Basic_constraints of (bool * int option)
     | `Priv_key_period   of priv_key_usage_period
-    | `Name_constraints  of name_constraints
-    | `Policies          of cert_policy list
+    | `Name_constraints  of name_constraint * name_constraint
+    | `Policies          of policy list
   ]
 end
 
@@ -219,19 +216,16 @@ module CA : sig
 
   (** The polymorphic variant of certificate request extensions, as
       defined in PKCS9. *)
-  type request_info_extensions = [
+  type request_extensions = [
     | `Password of string
     | `Name of string
     | `Extensions of (bool * Extension.t) list
   ]
 
-  (** [generate subject ~digest ~extensions private] creates
+  (** [request subject ~digest ~extensions private] creates
       [signing_request], a self-signed certificate request using the
       given digest (defaults to [`SHA256]) and list of extensions. *)
-  val generate : distinguished_name -> ?digest:Nocrypto.Hash.hash -> ?extensions:request_info_extensions list -> private_key -> signing_request
-
-  (* TODO: policy/config stuff: extensions to add, signature algorithm, white/blacklist of keyusage/names/... *)
-  (* TODO: sign a self-signed certificate? *)
+  val request : distinguished_name -> ?digest:Nocrypto.Hash.hash -> ?extensions:request_extensions list -> private_key -> signing_request
 
   (** [sign signing_request ~digest ~valid_from ~valid_until ~serial
       ~extensions private issuer] is [certificate], the certificate
@@ -390,7 +384,7 @@ module Encoding : sig
     val parse : Cstruct.t -> (string * Cstruct.t) list
 
     (** A parser for X509 certificates in PEM format *)
-    module Cert : sig
+    module Certificate : sig
 
       (** {3 PEM encoded certificates} *)
 
