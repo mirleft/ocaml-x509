@@ -55,6 +55,13 @@ val supports_keytype : t -> key_type -> bool
 (** The polymorphic variant of public keys. *)
 type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
 
+(** [key_id public_key] return the 160-bit SHA-1 hash
+    of the BIT STRING subjectPublicKey (excluding the tag, length, and
+    number of unused bits) for the publicKeyInfo in [input].
+
+    RFC 5280, 4.2.1.2., variant (1) *)
+val key_id: public_key -> Cstruct.t
+
 (** The polymorphic variant of private keys. *)
 type private_key = [ `RSA of Nocrypto.Rsa.priv ]
 
