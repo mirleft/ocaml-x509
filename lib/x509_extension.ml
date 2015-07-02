@@ -1,8 +1,6 @@
 
-include X509_types
+include X509_extension_types
 open X509_certificate
-
-type t = extension
 
 let cert_usage { asn = cert ; _ } =
   match Asn_grammars.extn_key_usage cert with
