@@ -75,3 +75,25 @@ let sign signing_request
   } in
   let raw = certificate_to_cstruct asn in
   { asn ; raw }
+
+module Util = struct
+    let extensions signing_request =
+      let info = (fst signing_request).CertificateRequest.info in
+      info.CertificateRequest.extensions
+
+    type input = [
+      | `CSR of signing_request
+      | `CERT of t
+    ]
+
+    let key_id = function
+      | `RSA p -> Nocrypto.Hash.digest `SHA1 (PK.rsa_public_to_cstruct p)
+      | `EC_pub _ -> invalid_arg "ECDSA not implemented"
+
+    let subject_key_id = function
+      | `CSR csr ->
+         let info = (fst csr).CertificateRequest.info in
+         key_id info.CertificateRequest.public_key
+      | `CERT cert ->
+         key_id (public_key cert)
+end

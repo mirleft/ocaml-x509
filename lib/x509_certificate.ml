@@ -28,6 +28,8 @@ let issuer { asn ; _ } = asn.tbs_cert.issuer
 
 let subject { asn ; _ } = asn.tbs_cert.subject
 
+let serial { asn ; _ } = asn.tbs_cert.serial
+
 let distinguished_name_to_string = X509_types.dn_to_string
 
 let parse_certificate cs =
