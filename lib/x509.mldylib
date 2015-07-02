@@ -1,11 +1,13 @@
 # OASIS_START
-# DO NOT EDIT (digest: f5a4558b073eb9be824e80115bd83598)
+# DO NOT EDIT (digest: 567ae77d646bd0958916fbf690f3e2ea)
 X509
 X509_common
 Registry
 Asn_grammars
 X509_certificate
 X509_types
+X509_extension_types
+X509_request_types
 X509_extension
 X509_authenticator
 X509_encoding

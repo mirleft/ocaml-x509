@@ -5,6 +5,8 @@ open X509_common
 open Registry
 open Asn_grammars
 
+include X509_types
+
 (*
  * There are two reasons to carry Cstruct.t around:
  * - we still need to hack on the cstruct to get bytes to hash
@@ -20,15 +22,11 @@ type t = {
   raw : Cstruct.t
 }
 
-type component = X509_types.component
-
-type distinguished_name = X509_types.distinguished_name
-
 let issuer { asn ; _ } = asn.tbs_cert.issuer
 
 let subject { asn ; _ } = asn.tbs_cert.subject
 
-let distinguished_name_to_string = X509_types.dn_to_string
+let serial { asn ; _ } = asn.tbs_cert.serial
 
 let parse_certificate cs =
   match certificate_of_cstruct cs with
@@ -43,9 +41,9 @@ let sexp_of_t cert = Sexplib.Sexp.List
     [ Sexplib.Sexp.Atom "CERTIFICATE" ;
       Sexplib.Sexp.Atom (Cstruct.to_string (Hash.digest `SHA256 cert.raw)) ]
 
-type key_type = X509_types.keytype
-type public_key = X509_types.public_key
-type private_key = X509_types.private_key
+let key_id = function
+  | `RSA p -> Hash.digest `SHA1 (PK.rsa_public_to_cstruct p)
+  | `EC_pub _ -> invalid_arg "ECDSA not implemented"
 
 let private_key_to_keytype = function
   | `RSA _ -> `RSA

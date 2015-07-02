@@ -740,6 +740,8 @@ end
 module CertificateRequest = struct
   open Registry
 
+  open X509_request_types
+
   let attributes =
     let f = function
       | (oid, [`C1 p]) when oid = PKCS9.challenge_password -> `Password p
@@ -757,12 +759,6 @@ module CertificateRequest = struct
          (set_of (choice2
                     utf8_string
                     Extension.extensions_der)))
-
-  type certificate_request_info = {
-    subject : distinguished_name ;
-    public_key : public_key ;
-    extensions : request_extensions list ;
-  }
 
   let certificate_request_info =
     let f = function
@@ -784,7 +780,7 @@ module CertificateRequest = struct
     projections_of der certificate_request_info
 
   type certificate_request = {
-    info : certificate_request_info ;
+    info : request_info ;
     signature_algorithm : Algorithm.t ;
     signature : Cstruct.t
   }
@@ -820,7 +816,7 @@ type tBSCertificate = {
   pk_info    : public_key ;
   issuer_id  : Cstruct.t option ;
   subject_id : Cstruct.t option ;
-  extensions : (bool * extension) list
+  extensions : (bool * X509_extension_types.t) list
 }
 
 type certificate = {

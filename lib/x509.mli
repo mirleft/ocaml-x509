@@ -55,6 +55,13 @@ val supports_keytype : t -> key_type -> bool
 (** The polymorphic variant of public keys. *)
 type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
 
+(** [key_id public_key] return the 160-bit SHA-1 hash
+    of the BIT STRING subjectPublicKey (excluding the tag, length, and
+    number of unused bits) for the publicKeyInfo in [input].
+
+    RFC 5280, 4.2.1.2., variant (1) *)
+val key_id: public_key -> Cstruct.t
+
 (** The polymorphic variant of private keys. *)
 type private_key = [ `RSA of Nocrypto.Rsa.priv ]
 
@@ -118,6 +125,9 @@ val subject : t -> distinguished_name
 (** [issuer t] is [dn], the issuer as distinguished name of the
     certificate. *)
 val issuer : t -> distinguished_name
+
+(** [serial t] is [sn], the serial number of the certificate. *)
+val serial : t -> Z.t
 
 (** X.509v3 extensions *)
 module Extension : sig
@@ -221,6 +231,17 @@ module CA : sig
     | `Name of string
     | `Extensions of (bool * Extension.t) list
   ]
+
+  (** The raw request info of a signing request *)
+  type request_info = {
+    subject    : distinguished_name ;
+    public_key : public_key ;
+    extensions : request_extensions list ;
+  }
+
+  (** [info signing_request] is [request_info], the information
+      inside the signing request *)
+  val info : signing_request -> request_info
 
   (** [request subject ~digest ~extensions private] creates
       [signing_request], a self-signed certificate request using the
