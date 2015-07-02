@@ -1,4 +1,4 @@
-0.4.0 (master):
+0.4.0 (2015-07-02):
 * certificate signing request support (PKCS10)
 * basic CA functionality (in CA module): create and sign certificate signing requests
 * PEM encoding of X.509 certificates, RSA public and private keys, and certificate signing requests
