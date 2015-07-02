@@ -80,7 +80,7 @@ type host = [ `Strict of string | `Wildcard of string ]
 
 (** [supports_hostname certificate host] is [result], whether the
     [certificate] contains the given [host], using
-    {!cert_hostnames}. *)
+    {!hostnames}. *)
 val supports_hostname : t -> host -> bool
 
 (** [common_name_to_string certificate] is [common_name], the common
@@ -306,7 +306,7 @@ module Validation : sig
       from some [anchors] to the server certificate is validated.  The
       path length constraints are checked.  Finally, the server
       certificate is checked to contain the given [host], using
-      {!cert_hostnames}.  The returned certificate is the root of the
+      {!hostnames}.  The returned certificate is the root of the
       chain, a member of the given list of [anchors]. *)
   val verify_chain_of_trust :
     ?host:host -> ?time:float -> anchors:(t list) -> t list -> result
@@ -317,7 +317,7 @@ module Validation : sig
       The certificate has to be valid in the given [time].  If a
       [host] is provided, the certificate is checked for this name.
       The [`Wildcard hostname] of the fingerprint list must match the
-      name in the certificate, using {!cert_hostnames}.  *)
+      name in the certificate, using {!hostnames}.  *)
   val trust_fingerprint :
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
