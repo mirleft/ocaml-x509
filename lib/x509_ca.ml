@@ -2,6 +2,8 @@ open X509_certificate
 
 open Asn_grammars
 
+include X509_request_types
+
 let raw_sign raw digest key =
   let hash = Nocrypto.Hash.digest digest raw in
   let sigval = pkcs1_digest_info_to_cstruct (digest, hash) in
@@ -10,7 +12,7 @@ let raw_sign raw digest key =
 
 type signing_request = CertificateRequest.certificate_request * Cstruct.t option
 
-type request_extensions = X509_types.request_extensions
+let info (sr, _) = sr.CertificateRequest.info
 
 let validate_signature ({ CertificateRequest.info ; signature ; signature_algorithm }, raw) =
   let raw = match raw with
@@ -21,7 +23,7 @@ let validate_signature ({ CertificateRequest.info ; signature ; signature_algori
     raw
     signature_algorithm
     signature
-    info.CertificateRequest.public_key
+    info.public_key
 
 let parse_signing_request cs =
   match CertificateRequest.certificate_request_of_cs cs with
@@ -37,7 +39,7 @@ let cs_of_signing_request (csr, raw) =
 let request subject ?(digest = `SHA256) ?(extensions = []) = function
   | `RSA priv ->
     let public_key = `RSA (Nocrypto.Rsa.pub_of_priv priv) in
-    let info = { CertificateRequest.subject ; public_key ; extensions } in
+    let info : request_info = { subject ; public_key ; extensions } in
     let info_cs = CertificateRequest.certificate_request_info_to_cs info in
     let signature = raw_sign info_cs digest (`RSA priv) in
     let signature_algorithm = Algorithm.of_signature_algorithm `RSA digest in
@@ -60,8 +62,8 @@ let sign signing_request
       signature = signature_algo ;
       issuer = issuer ;
       validity = (valid_from, valid_until) ;
-      subject = info.CertificateRequest.subject ;
-      pk_info = info.CertificateRequest.public_key ;
+      subject = info.subject ;
+      pk_info = info.public_key ;
       issuer_id = None ;
       subject_id = None ;
       extensions
@@ -75,25 +77,3 @@ let sign signing_request
   } in
   let raw = certificate_to_cstruct asn in
   { asn ; raw }
-
-module Util = struct
-    let extensions signing_request =
-      let info = (fst signing_request).CertificateRequest.info in
-      info.CertificateRequest.extensions
-
-    type input = [
-      | `CSR of signing_request
-      | `CERT of t
-    ]
-
-    let key_id = function
-      | `RSA p -> Nocrypto.Hash.digest `SHA1 (PK.rsa_public_to_cstruct p)
-      | `EC_pub _ -> invalid_arg "ECDSA not implemented"
-
-    let subject_key_id = function
-      | `CSR csr ->
-         let info = (fst csr).CertificateRequest.info in
-         key_id info.CertificateRequest.public_key
-      | `CERT cert ->
-         key_id (public_key cert)
-end

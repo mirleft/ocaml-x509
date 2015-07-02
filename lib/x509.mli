@@ -232,6 +232,17 @@ module CA : sig
     | `Extensions of (bool * Extension.t) list
   ]
 
+  (** The raw request info of a signing request *)
+  type request_info = {
+    subject    : distinguished_name ;
+    public_key : public_key ;
+    extensions : request_extensions list ;
+  }
+
+  (** [info signing_request] is [request_info], the information
+      inside the signing request *)
+  val info : signing_request -> request_info
+
   (** [request subject ~digest ~extensions private] creates
       [signing_request], a self-signed certificate request using the
       given digest (defaults to [`SHA256]) and list of extensions. *)
@@ -242,26 +253,6 @@ module CA : sig
       signed with given private key and issuer; digest defaults to
       [`SHA256]. *)
   val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
-
-  module Util : sig
-
-      (** [extensions signing_request] return the list of
-          certificate requests extensions contained in [signing_request]. *)
-      val extensions: signing_request -> request_extensions list
-
-      (** The polymorphic variant of subject_key_id input *)
-      type input = [
-        | `CSR of signing_request
-        | `CERT of t
-      ]
-
-      (** [subject_key_id input] return the 160-bit SHA-1 hash
-          of the BIT STRING subjectPublicKey (excluding the tag, length, and
-          number of unused bits) for the publicKeyInfo in [input].
-
-          RFC 5280, 4.2.1.2., variant (1) *)
-      val subject_key_id: input -> Cstruct.t
-  end
 end
 
 (** Validation logic: error variant and functions. *)
