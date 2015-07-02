@@ -6,7 +6,7 @@ let raw_sign raw digest key =
   let hash = Nocrypto.Hash.digest digest raw in
   let sigval = pkcs1_digest_info_to_cstruct (digest, hash) in
   match key with
-    | `RSA priv -> Nocrypto.Rsa.PKCS1.sign ~key:priv sigval
+    | `RSA priv -> Nocrypto.Rsa.PKCS1.sig_encode ~key:priv sigval
 
 type signing_request = CertificateRequest.certificate_request * Cstruct.t option
 

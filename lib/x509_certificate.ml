@@ -136,7 +136,7 @@ let is_self_signed cert = issuer_matches_subject cert cert
 let validate_raw_signature raw signature_algo signature_val pk_info =
   match pk_info with
   | `RSA issuing_key ->
-    ( match Rsa.PKCS1.verify ~key:issuing_key signature_val with
+    ( match Rsa.PKCS1.sig_decode ~key:issuing_key signature_val with
       | None           -> false
       | Some signature ->
         match
