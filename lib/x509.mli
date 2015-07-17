@@ -250,7 +250,7 @@ module CA : sig
 
   (** [sign signing_request ~digest ~valid_from ~valid_until ~serial
       ~extensions private issuer] is [certificate], a signed
-      certificate signed.  Public key and subject are taken from the
+      certificate.  Public key and subject are taken from the
       [signing_request], passed [extensions] are added to the X.509
       certificate.  The [private] key and [issuer] are used.  Digest
       defaults to [`SHA256]. *)
