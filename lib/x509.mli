@@ -249,9 +249,11 @@ module CA : sig
   val request : distinguished_name -> ?digest:Nocrypto.Hash.hash -> ?extensions:request_extensions list -> private_key -> signing_request
 
   (** [sign signing_request ~digest ~valid_from ~valid_until ~serial
-      ~extensions private issuer] is [certificate], the certificate
-      signed with given private key and issuer; digest defaults to
-      [`SHA256]. *)
+      ~extensions private issuer] is [certificate], a signed
+      certificate signed.  Public key and subject are taken from the
+      [signing_request], passed [extensions] are added to the X.509
+      certificate.  The [private] key and [issuer] are used.  Digest
+      defaults to [`SHA256]. *)
   val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
 end
 
