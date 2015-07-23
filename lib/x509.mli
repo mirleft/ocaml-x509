@@ -253,7 +253,9 @@ module CA : sig
       certificate.  Public key and subject are taken from the
       [signing_request], passed [extensions] are added to the X.509
       certificate.  The [private] key and [issuer] are used.  Digest
-      defaults to [`SHA256]. *)
+      defaults to [`SHA256]. Note that the extensions in the CSR are
+      ignored. To use the extensions from csr pass
+      [~extensions:((info csr).extensions)] as argument. *)
   val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
 end
 
