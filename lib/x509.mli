@@ -297,8 +297,10 @@ module CA : sig
       certificate.  The [private] key is used to sign the certificate,
       the [issuer] is recorded in the certificate.  The digest
       defaults to [`SHA256].  The [serial] defaults to a random value
-      between 1 and 2^64.  Please note that the extensions in the
-      [signing_request] are ignored, you can pass them using:
+      between 1 and 2^64.  Certificate version is always 3.  Please
+      note that the extensions in the [signing_request] are ignored,
+      you can pass them using:
+
 {[match
   try Some (List.find (function `Extensions _ -> true | _ -> false) (info csr).extensions)
   with Not_found -> None
