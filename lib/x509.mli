@@ -131,6 +131,10 @@ type distinguished_name = component list
     representation of the {{!distinguished_name}dn}. *)
 val distinguished_name_to_string : distinguished_name -> string
 
+(** [fingerprint cert hash] is [Cstruct.t],
+    a hash digest of [cert] produced by the [hash] algorithm *)
+val fingerprint : t -> Nocrypto.Hash.hash -> Cstruct.t
+
 (** [subject certificate] is [dn], the subject as
     {{!distinguished_name}dn} of the [certificate]. *)
 val subject : t -> distinguished_name
