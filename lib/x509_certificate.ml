@@ -22,7 +22,7 @@ type t = {
   raw : Cstruct.t
 }
 
-let fingerprint cert hash = Hash.digest hash cert.raw
+let fingerprint hash cert = Hash.digest hash cert.raw
 
 let issuer { asn ; _ } = asn.tbs_cert.issuer
 
