@@ -325,19 +325,19 @@ module Validation : sig
   (** The polymorphic variant of validation errors. *)
   type validation_error = [
     | `InvalidSignature of t * t
-    | `CertificateExpired of t
+    | `CertificateExpired of t * float option
     | `InvalidExtensions of t
     | `InvalidVersion of t
-    | `InvalidPathlen of t
+    | `InvalidPathlen of t * int
     | `SelfSigned of t
     | `NoTrustAnchor
     | `InvalidServerExtensions of t
-    | `InvalidServerName of t
+    | `InvalidServerName of t * host option
     | `InvalidCA of t
     | `IssuerSubjectMismatch of t * t
     | `AuthorityKeyIdSubjectKeyIdMismatch of t * t
-    | `ServerNameNotPresent of t
-    | `InvalidFingerprint of t
+    | `ServerNameNotPresent of t * string
+    | `InvalidFingerprint of t * Cstruct.t
     | `EmptyCertificateChain
   ]
 
