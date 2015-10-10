@@ -338,7 +338,7 @@ module Validation = struct
     | `IssuerSubjectMismatch of t * t
     | `AuthorityKeyIdSubjectKeyIdMismatch of t * t
     | `ServerNameNotPresent of t * string
-    | `InvalidFingerprint of t * Cstruct.t
+    | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
     | `EmptyCertificateChain
   ] with sexp
 
@@ -350,8 +350,8 @@ module Validation = struct
   let validation_error_to_string v =
     let cn = common_name_to_string in
     match v with
-    | `InvalidFingerprint (c, fp) ->
-       cn c ^ " (fp: " ^ to_hex (fingerprint `SHA256 c) ^ ") does not match the given fingerprint " ^ to_hex fp
+    | `InvalidFingerprint (c, c_fp, fp) ->
+       cn c ^ " (fp: " ^ to_hex c_fp ^ ") does not match the given fingerprint " ^ to_hex fp
     | `InvalidSignature (t, c) -> "certificate " ^ cn t ^ " does not sign " ^ cn c
     | `CertificateExpired (c, now) ->
        let f = string_of_float in
@@ -496,9 +496,10 @@ module Validation = struct
         let cert_fp = Hash.digest hash server.raw in
         (try Ok (List.find (fun (_, fp) -> Uncommon.Cs.equal fp cert_fp) fingerprints)
          with Not_found ->
-           try let tst = supports_hostname server in
-               let f = List.find (fun (n, _) -> tst (`Wildcard n)) fingerprints in
-               fail (`InvalidFingerprint (server, snd f))
+           try
+             let tst = supports_hostname server in
+             let f = List.find (fun (n, _) -> tst (`Wildcard n)) fingerprints in
+             fail (`InvalidFingerprint (server, cert_fp, snd f))
            with Not_found -> fail (`ServerNameNotPresent (server, common_name_to_string server))
         ) >>= fun (name, _) ->
         if maybe_validate_hostname server (Some (`Wildcard name)) then

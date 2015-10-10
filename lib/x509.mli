@@ -337,7 +337,7 @@ module Validation : sig
     | `IssuerSubjectMismatch of t * t
     | `AuthorityKeyIdSubjectKeyIdMismatch of t * t
     | `ServerNameNotPresent of t * string
-    | `InvalidFingerprint of t * Cstruct.t
+    | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
     | `EmptyCertificateChain
   ]
 
