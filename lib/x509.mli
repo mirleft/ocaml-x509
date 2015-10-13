@@ -131,9 +131,9 @@ type distinguished_name = component list
     representation of the {{!distinguished_name}dn}. *)
 val distinguished_name_to_string : distinguished_name -> string
 
-(** [fingerprint cert hash] is [Cstruct.t],
-    a hash digest of [cert] produced by the [hash] algorithm *)
-val fingerprint : t -> Nocrypto.Hash.hash -> Cstruct.t
+(** [fingerprint hash cert] is [digest],
+    the digest of [cert] using the specified [hash] algorithm *)
+val fingerprint : Nocrypto.Hash.hash -> t -> Cstruct.t
 
 (** [subject certificate] is [dn], the subject as
     {{!distinguished_name}dn} of the [certificate]. *)
@@ -325,19 +325,19 @@ module Validation : sig
   (** The polymorphic variant of validation errors. *)
   type validation_error = [
     | `InvalidSignature of t * t
-    | `CertificateExpired of t
+    | `CertificateExpired of t * float option
     | `InvalidExtensions of t
     | `InvalidVersion of t
-    | `InvalidPathlen of t
+    | `InvalidPathlen of t * int
     | `SelfSigned of t
     | `NoTrustAnchor
     | `InvalidServerExtensions of t
-    | `InvalidServerName of t
+    | `InvalidServerName of t * host option
     | `InvalidCA of t
     | `IssuerSubjectMismatch of t * t
     | `AuthorityKeyIdSubjectKeyIdMismatch of t * t
-    | `ServerNameNotPresent of t
-    | `InvalidFingerprint of t
+    | `ServerNameNotPresent of t * string
+    | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
     | `EmptyCertificateChain
   ]
 
