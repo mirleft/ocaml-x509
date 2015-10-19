@@ -378,18 +378,28 @@ module Validation : sig
   val verify_chain_of_trust :
     ?host:host -> ?time:float -> anchors:(t list) -> t list -> result
 
-  (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates] is
-      [result], the first element of [certificates] is verified
-      against the given [fingerprints] map (hostname to fingerprint).
-      The certificate has to be valid in the given [time].  If a
-      [host] is provided, the certificate is checked for this name.
-      The [`Wildcard hostname] of the fingerprint list must match the
-      name in the certificate, using {!hostnames}.  *)
+  (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates]
+      is [result], the first element of [certificates] is verified to
+      match the given [fingerprints] map (hostname to fingerprint)
+      using {!fingerprint}.  The certificate has to be valid in the
+      given [time].  If a [host] is provided, the certificate is
+      checked for this name.  The [`Wildcard hostname] of the
+      fingerprint list must match the name in the certificate, using
+      {!hostnames}.
+
+      @deprecated "Pin public keys, not certificates (use [trust_key_fingerprint] instead)." *)
   val trust_cert_fingerprint :
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
-    [@deprecated "Pin public keys, not certificates (use trust_key_fingerprint instead)."]
 
+  (** [trust_key_fingerprint ~time ~hash ~fingerprints certificates]
+      is [result], the first element of [certificates] is verified
+      against the given [fingerprints] map (hostname to public key
+      fingerprint) using {!key_fingerprint}.  The certificate has to
+      be valid in the given [time].  If a [host] is provided, the
+      certificate is checked for this name.  The [`Wildcard hostname]
+      of the fingerprint list must match the name in the certificate,
+      using {!hostnames}. *)
   val trust_key_fingerprint :
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
@@ -425,11 +435,17 @@ module Authenticator : sig
   (** [server_cert_fingerprint ~time hash fingerprints] is an
       [authenticator] which uses the given [time] and list of
       [fingerprints] to verify the first element of the certificate
-      chain, using {!Validation.trust_fingerprint}. *)
+      chain, using {!Validation.trust_cert_fingerprint}.
+
+      @deprecated "Pin public keys, not certificates (use [server_key_fingerprint] instead)." *)
   val server_cert_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
-    [@deprecated "Pin public keys, not certificates (use server_key_fingerprint instead)."]
 
+  (** [server_key_fingerprint ~time hash fingerprints] is an
+      [authenticator] which uses the given [time] and list of
+      [fingerprints] to verify that the fingerprint of the first
+      element of the certificate chain matches the given fingerprint,
+      using {!Validation.trust_key_fingerprint}. *)
   val server_key_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
 
