@@ -72,6 +72,12 @@ type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
     {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.2}RFC5280, 4.2.1.2, variant (1)} *)
 val key_id: public_key -> Cstruct.t
 
+(** [key_fingerprint ?hash public_key] is [result], the hash (by
+    default SHA256) of the DER encoded public key (equivalent to
+    `openssl x509 -noout -pubkey | openssl pkey -pubin -outform DER |
+    openssl dgst -HASH`).  *)
+val key_fingerprint : ?hash:Nocrypto.Hash.hash -> public_key -> Cstruct.t
+
 (** The polymorphic variant of private keys, with
     {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
     {{!Encoding.Pem.Private_key}encoding and decoding to PEM}. *)

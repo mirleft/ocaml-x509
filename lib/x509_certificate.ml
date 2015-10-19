@@ -66,6 +66,9 @@ let key_id = function
   | `RSA p -> Hash.digest `SHA1 (PK.rsa_public_to_cstruct p)
   | `EC_pub _ -> invalid_arg "ECDSA not implemented"
 
+let key_fingerprint ?(hash = `SHA256) pub =
+  Hash.digest hash (Asn_grammars.PK.pub_info_to_cstruct pub)
+
 let private_key_to_keytype = function
   | `RSA _ -> `RSA
 
