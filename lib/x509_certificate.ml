@@ -496,7 +496,7 @@ module Validation = struct
     | [] -> `Fail `EmptyCertificateChain
     | server::_ ->
       let verify_fingerprint server fingerprints =
-        let cert_fp = Hash.digest hash server.raw in
+        let cert_fp = fingerprint hash server in
         (try Ok (List.find (fun (_, fp) -> Uncommon.Cs.equal fp cert_fp) fingerprints)
          with Not_found ->
            try
