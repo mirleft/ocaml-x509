@@ -388,6 +388,7 @@ module Validation : sig
   val trust_cert_fingerprint :
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
+    [@deprecated "Pin public keys, not certificates (use trust_key_fingerprint instead)."]
 
   val trust_key_fingerprint :
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
@@ -427,6 +428,7 @@ module Authenticator : sig
       chain, using {!Validation.trust_fingerprint}. *)
   val server_cert_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
+    [@deprecated "Pin public keys, not certificates (use server_key_fingerprint instead)."]
 
   val server_key_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
