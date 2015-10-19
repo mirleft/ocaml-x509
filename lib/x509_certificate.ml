@@ -491,7 +491,7 @@ module Validation = struct
       (fun cert -> is_success @@ is_ca_cert_valid time cert)
       cas
 
-  let trust_fingerprint ?host ?time ~hash ~fingerprints =
+  let trust_cert_fingerprint ?host ?time ~hash ~fingerprints =
     function
     | [] -> `Fail `EmptyCertificateChain
     | server::_ ->

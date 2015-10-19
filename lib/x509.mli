@@ -378,14 +378,14 @@ module Validation : sig
   val verify_chain_of_trust :
     ?host:host -> ?time:float -> anchors:(t list) -> t list -> result
 
-  (** [trust_fingerprint ~time ~hash ~fingerprints certificates] is
+  (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified
       against the given [fingerprints] map (hostname to fingerprint).
       The certificate has to be valid in the given [time].  If a
       [host] is provided, the certificate is checked for this name.
       The [`Wildcard hostname] of the fingerprint list must match the
       name in the certificate, using {!hostnames}.  *)
-  val trust_fingerprint :
+  val trust_cert_fingerprint :
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
 
@@ -417,11 +417,11 @@ module Authenticator : sig
       using {!Validation.verify_chain_of_trust}. *)
   val chain_of_trust : ?time:float -> t list -> a
 
-  (** [server_fingerprint ~time hash fingerprints] is an
+  (** [server_cert_fingerprint ~time hash fingerprints] is an
       [authenticator] which uses the given [time] and list of
       [fingerprints] to verify the first element of the certificate
       chain, using {!Validation.trust_fingerprint}. *)
-  val server_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
+  val server_cert_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
 
   (** [null] is [authenticator], which always returns [`Ok]. (Useful
