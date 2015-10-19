@@ -19,6 +19,10 @@ let server_cert_fingerprint ?time ~hash ~fingerprints =
   fun ?host certificates ->
     Validation.trust_cert_fingerprint ?host ?time ~hash ~fingerprints certificates
 
+let server_key_fingerprint ?time ~hash ~fingerprints =
+  fun ?host certificates ->
+    Validation.trust_key_fingerprint ?host ?time ~hash ~fingerprints certificates
+
 let null ?host:_ _ = `Ok None
 
 open Sexplib

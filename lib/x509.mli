@@ -389,6 +389,10 @@ module Validation : sig
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
 
+  val trust_key_fingerprint :
+    ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
+    fingerprints:(string * Cstruct.t) list -> t list -> result
+
   (** [valid_cas ~time certificates] is [valid_certificates], only
       those certificates whose validity period matches the given time,
       and the certificate must be eligible for acting as a CA
@@ -422,6 +426,9 @@ module Authenticator : sig
       [fingerprints] to verify the first element of the certificate
       chain, using {!Validation.trust_fingerprint}. *)
   val server_cert_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
+    fingerprints:(string * Cstruct.t) list -> a
+
+  val server_key_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
 
   (** [null] is [authenticator], which always returns [`Ok]. (Useful
