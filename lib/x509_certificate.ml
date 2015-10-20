@@ -66,6 +66,9 @@ let key_id = function
   | `RSA p -> Hash.digest `SHA1 (PK.rsa_public_to_cstruct p)
   | `EC_pub _ -> invalid_arg "ECDSA not implemented"
 
+let key_fingerprint ?(hash = `SHA256) pub =
+  Hash.digest hash (Asn_grammars.PK.pub_info_to_cstruct pub)
+
 let private_key_to_keytype = function
   | `RSA _ -> `RSA
 
@@ -488,18 +491,18 @@ module Validation = struct
       (fun cert -> is_success @@ is_ca_cert_valid time cert)
       cas
 
-  let trust_fingerprint ?host ?time ~hash ~fingerprints =
+  let fingerprint_verification ?host ?time fingerprints fp =
     function
     | [] -> `Fail `EmptyCertificateChain
     | server::_ ->
       let verify_fingerprint server fingerprints =
-        let cert_fp = Hash.digest hash server.raw in
-        (try Ok (List.find (fun (_, fp) -> Uncommon.Cs.equal fp cert_fp) fingerprints)
+        let fingerprint = fp server in
+        (try Ok (List.find (fun (_, fp) -> Uncommon.Cs.equal fp fingerprint) fingerprints)
          with Not_found ->
            try
              let tst = supports_hostname server in
              let f = List.find (fun (n, _) -> tst (`Wildcard n)) fingerprints in
-             fail (`InvalidFingerprint (server, cert_fp, snd f))
+             fail (`InvalidFingerprint (server, fingerprint, snd f))
            with Not_found -> fail (`ServerNameNotPresent (server, common_name_to_string server))
         ) >>= fun (name, _) ->
         if maybe_validate_hostname server (Some (`Wildcard name)) then
@@ -515,6 +518,14 @@ module Validation = struct
         | _    , false -> fail (`InvalidServerName (server, host))
       in
       lower res
+
+  let trust_key_fingerprint ?host ?time ~hash ~fingerprints =
+    let fp cert = key_fingerprint ~hash (public_key cert) in
+    fingerprint_verification ?host ?time fingerprints fp
+
+  let trust_cert_fingerprint ?host ?time ~hash ~fingerprints =
+    let fp = fingerprint hash in
+    fingerprint_verification ?host ?time fingerprints fp
 
 end
 

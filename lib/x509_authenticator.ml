@@ -15,9 +15,13 @@ let chain_of_trust ?time cas =
   fun ?host certificates ->
     Validation.verify_chain_of_trust ?host ?time ~anchors:cas certificates
 
-let server_fingerprint ?time ~hash ~fingerprints =
+let server_key_fingerprint ?time ~hash ~fingerprints =
   fun ?host certificates ->
-    Validation.trust_fingerprint ?host ?time ~hash ~fingerprints certificates
+    Validation.trust_key_fingerprint ?host ?time ~hash ~fingerprints certificates
+
+let server_cert_fingerprint ?time ~hash ~fingerprints =
+  fun ?host certificates ->
+    Validation.trust_cert_fingerprint ?host ?time ~hash ~fingerprints certificates
 
 let null ?host:_ _ = `Ok None
 

@@ -72,6 +72,12 @@ type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
     {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.2}RFC5280, 4.2.1.2, variant (1)} *)
 val key_id: public_key -> Cstruct.t
 
+(** [key_fingerprint ?hash public_key] is [result], the hash (by
+    default SHA256) of the DER encoded public key (equivalent to
+    `openssl x509 -noout -pubkey | openssl pkey -pubin -outform DER |
+    openssl dgst -HASH`).  *)
+val key_fingerprint : ?hash:Nocrypto.Hash.hash -> public_key -> Cstruct.t
+
 (** The polymorphic variant of private keys, with
     {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
     {{!Encoding.Pem.Private_key}encoding and decoding to PEM}. *)
@@ -372,14 +378,29 @@ module Validation : sig
   val verify_chain_of_trust :
     ?host:host -> ?time:float -> anchors:(t list) -> t list -> result
 
-  (** [trust_fingerprint ~time ~hash ~fingerprints certificates] is
-      [result], the first element of [certificates] is verified
-      against the given [fingerprints] map (hostname to fingerprint).
-      The certificate has to be valid in the given [time].  If a
-      [host] is provided, the certificate is checked for this name.
-      The [`Wildcard hostname] of the fingerprint list must match the
-      name in the certificate, using {!hostnames}.  *)
-  val trust_fingerprint :
+  (** [trust_key_fingerprint ~time ~hash ~fingerprints certificates]
+      is [result], the first element of [certificates] is verified
+      against the given [fingerprints] map (hostname to public key
+      fingerprint) using {!key_fingerprint}.  The certificate has to
+      be valid in the given [time].  If a [host] is provided, the
+      certificate is checked for this name.  The [`Wildcard hostname]
+      of the fingerprint list must match the name in the certificate,
+      using {!hostnames}. *)
+  val trust_key_fingerprint :
+    ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
+    fingerprints:(string * Cstruct.t) list -> t list -> result
+
+  (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates]
+      is [result], the first element of [certificates] is verified to
+      match the given [fingerprints] map (hostname to fingerprint)
+      using {!fingerprint}.  The certificate has to be valid in the
+      given [time].  If a [host] is provided, the certificate is
+      checked for this name.  The [`Wildcard hostname] of the
+      fingerprint list must match the name in the certificate, using
+      {!hostnames}.
+
+      @deprecated "Pin public keys, not certificates (use [trust_key_fingerprint] instead)." *)
+  val trust_cert_fingerprint :
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
 
@@ -411,11 +432,21 @@ module Authenticator : sig
       using {!Validation.verify_chain_of_trust}. *)
   val chain_of_trust : ?time:float -> t list -> a
 
-  (** [server_fingerprint ~time hash fingerprints] is an
+  (** [server_key_fingerprint ~time hash fingerprints] is an
+      [authenticator] which uses the given [time] and list of
+      [fingerprints] to verify that the fingerprint of the first
+      element of the certificate chain matches the given fingerprint,
+      using {!Validation.trust_key_fingerprint}. *)
+  val server_key_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
+    fingerprints:(string * Cstruct.t) list -> a
+
+  (** [server_cert_fingerprint ~time hash fingerprints] is an
       [authenticator] which uses the given [time] and list of
       [fingerprints] to verify the first element of the certificate
-      chain, using {!Validation.trust_fingerprint}. *)
-  val server_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
+      chain, using {!Validation.trust_cert_fingerprint}.
+
+      @deprecated "Pin public keys, not certificates (use [server_key_fingerprint] instead)." *)
+  val server_cert_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
 
   (** [null] is [authenticator], which always returns [`Ok]. (Useful
