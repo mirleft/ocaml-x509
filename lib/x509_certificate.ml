@@ -519,12 +519,12 @@ module Validation = struct
       in
       lower res
 
-  let trust_cert_fingerprint ?host ?time ~hash ~fingerprints =
-    let fp = fingerprint hash in
-    fingerprint_verification ?host ?time fingerprints fp
-
   let trust_key_fingerprint ?host ?time ~hash ~fingerprints =
     let fp cert = key_fingerprint ~hash (public_key cert) in
+    fingerprint_verification ?host ?time fingerprints fp
+
+  let trust_cert_fingerprint ?host ?time ~hash ~fingerprints =
+    let fp = fingerprint hash in
     fingerprint_verification ?host ?time fingerprints fp
 
 end
