@@ -319,10 +319,11 @@ module Validation = struct
 
     let is_success = function Ok _ -> true | _ -> false
 
-    let rec iter_m f = function
-      | []    -> Ok ()
-      | x::xs -> f x >>= fun _ -> iter_m f xs
-
+    let rec any_m e f = function
+      | []    -> fail e
+      | x::xs -> match f x with
+                 | Ok x -> Ok x
+                 | Error e -> any_m e f xs
   end
 
   include Control
@@ -458,16 +459,28 @@ module Validation = struct
       | Ok _    -> Ok (Some x)
       | Error _ -> validate_anchors pathlen cert xs
 
-  let verify_chain ?host ?time (server, certs) =
-    let rec climb pathlen cert = function
-      | super :: certs ->
-        signs pathlen super cert >>= fun () ->
-        climb (succ pathlen) super certs
-      | [] -> Ok (pathlen, cert)
+  let rec find_valid_path ?time pathlen current intermediate anchors =
+    let step e =
+      match issuer intermediate current with
+      | [] when is_self_signed current -> fail (`SelfSigned current)
+      | [] -> fail `NoTrustAnchor
+      | xs ->
+         let check ic =
+           is_cert_valid time ic    >>= fun () ->
+           signs pathlen ic current >>= fun () ->
+           let pl = succ pathlen
+           and rest = List.filter ((<>) ic) intermediate
+           in
+           find_valid_path ?time pl ic rest anchors
+         in
+         any_m e check xs
     in
-    is_server_cert_valid ?host time server >>= fun () ->
-    iter_m (is_cert_valid time) certs      >>= fun () ->
-    climb 0 server certs
+    match issuer anchors current with
+    | [] -> step `NoTrustAnchor
+    | ta ->
+       match validate_anchors pathlen current ta with
+       | Ok x -> Ok x
+       | Error e -> step e
 
   type result = [
     | `Ok   of t option
@@ -476,15 +489,15 @@ module Validation = struct
 
   let verify_chain_of_trust ?host ?time ~anchors = function
     | [] -> `Fail `EmptyCertificateChain
-    | server :: certs ->
-      let res =
-        verify_chain ?host ?time (server, certs) >>= fun (pathlen, cert) ->
-        match List.filter (validate_time time) (issuer anchors cert) with
-        | [] when is_self_signed cert -> fail (`SelfSigned cert)
-        | []                          -> fail `NoTrustAnchor
-        | anchors                     -> validate_anchors pathlen cert anchors
-      in
-      lower res
+    | server :: intermediate ->
+       let res =
+         (* first, check the server certificate *)
+         is_server_cert_valid ?host time server >>= fun () ->
+         (* build all the paths, hope there's a good one *)
+         let valid_anchors = List.filter (validate_time time) anchors in
+         find_valid_path ?time 0 server intermediate valid_anchors
+       in
+       lower res
 
   let valid_cas ?time cas =
     List.filter
