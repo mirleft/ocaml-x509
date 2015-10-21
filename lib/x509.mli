@@ -358,9 +358,9 @@ module Validation : sig
 
   (** {2 Validation functions} *)
 
-  (** The result of a validation: either success (optionally returning the used trust anchor), or failure *)
+  (** The result of a validation: either success (optionally returning the certificate chain and trust anchor), or failure *)
   type result = [
-    | `Ok of t option
+    | `Ok of (t list * t) option
     | `Fail of validation_error
   ]
 

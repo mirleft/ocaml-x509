@@ -456,22 +456,21 @@ module Validation = struct
   let rec validate_anchors pathlen cert = function
     | []    -> fail `NoTrustAnchor
     | x::xs -> match signs pathlen x cert with
-      | Ok _    -> Ok (Some x)
+      | Ok _    -> Ok x
       | Error _ -> validate_anchors pathlen cert xs
 
-  let rec find_valid_path ?time pathlen current intermediate anchors =
+  let rec find_valid_path ?time sofar current intermediate anchors =
+    let pathlen = List.length sofar in
     let step e =
       match issuer intermediate current with
       | [] when is_self_signed current -> fail (`SelfSigned current)
       | [] -> fail `NoTrustAnchor
       | xs ->
          let check ic =
+           let rest = List.filter ((<>) ic) intermediate in
            is_cert_valid time ic    >>= fun () ->
            signs pathlen ic current >>= fun () ->
-           let pl = succ pathlen
-           and rest = List.filter ((<>) ic) intermediate
-           in
-           find_valid_path ?time pl ic rest anchors
+           find_valid_path ?time (current :: sofar) ic rest anchors
          in
          any_m e check xs
     in
@@ -479,11 +478,11 @@ module Validation = struct
     | [] -> step `NoTrustAnchor
     | ta ->
        match validate_anchors pathlen current ta with
-       | Ok x -> Ok x
+       | Ok trust -> Ok (Some (List.rev sofar, trust))
        | Error e -> step e
 
   type result = [
-    | `Ok   of t option
+    | `Ok   of (t list * t) option
     | `Fail of validation_error
   ]
 
@@ -495,7 +494,7 @@ module Validation = struct
          is_server_cert_valid ?host time server >>= fun () ->
          (* build all the paths, hope there's a good one *)
          let valid_anchors = List.filter (validate_time time) anchors in
-         find_valid_path ?time 0 server intermediate valid_anchors
+         find_valid_path ?time [] server intermediate valid_anchors
        in
        lower res
 
