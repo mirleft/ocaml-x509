@@ -1,8 +1,8 @@
 # OASIS_START
-# DO NOT EDIT (digest: db3cfd47c32afd0b5e0022a65d8c374d)
+# DO NOT EDIT (digest: cd46d9106a0bf20273fb9c14b2445d52)
 version = "0.4.0"
 description = "X509 support for OCaml"
-requires = "cstruct sexplib.syntax nocrypto asn1-combinators"
+requires = "cstruct nocrypto asn1-combinators"
 archive(byte) = "x509.cma"
 archive(byte, plugin) = "x509.cma"
 archive(native) = "x509.cmxa"
