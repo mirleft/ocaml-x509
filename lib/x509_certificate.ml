@@ -166,7 +166,7 @@ let validate_raw_signature raw signature_algo signature_val pk_info =
           Algorithm.to_signature_algorithm signature_algo
         with
         | Some (algo, hash), Some (`RSA, h) when h = algo ->
-          Uncommon.Cs.equal hash (Hash.digest algo raw)
+          Cstruct.equal hash (Hash.digest algo raw)
         | _ -> false )
   | _ -> false
 
@@ -218,7 +218,7 @@ let cacert_fingerprints =
 
 let is_cacert raw =
   let fp = Hash.digest `SHA256 raw in
-  List.exists (fun x -> Uncommon.Cs.equal x fp) cacert_fingerprints
+  List.exists (fun x -> Cstruct.equal x fp) cacert_fingerprints
 
 let validate_ca_extensions { asn ; raw } =
   let cert = asn in
@@ -291,7 +291,7 @@ let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
   with
   | (_, None) | (None, _)                       -> true (* not mandatory *)
   | Some (_, `Authority_key_id (Some auth, _, _)),
-    Some (_, `Subject_key_id au)                -> Uncommon.Cs.equal auth au
+    Some (_, `Subject_key_id au)                -> Cstruct.equal auth au
   (* TODO: check exact rules in RFC5280 *)
   | Some (_, `Authority_key_id (None, _, _)), _ -> true (* not mandatory *)
   | _, _                                        -> false
@@ -497,7 +497,7 @@ module Validation = struct
     | server::_ ->
       let verify_fingerprint server fingerprints =
         let fingerprint = fp server in
-        (try Ok (List.find (fun (_, fp) -> Uncommon.Cs.equal fp fingerprint) fingerprints)
+        (try Ok (List.find (fun (_, fp) -> Cstruct.equal fp fingerprint) fingerprints)
          with Not_found ->
            try
              let tst = supports_hostname server in
