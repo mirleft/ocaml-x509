@@ -49,10 +49,10 @@ let to_hex cs =
     let high = (0xf0 land i) lsr 4
     and low = 0x0f land i
     in
-    String.set s idx (v_to_h high) ;
-    String.set s (succ idx) (v_to_h low)
+    Bytes.set s idx (v_to_h high) ;
+    Bytes.set s (succ idx) (v_to_h low)
   in
-  let s = String.make (Cstruct.len cs * 3 - 1) ':' in
+  let s = Bytes.make (Cstruct.len cs * 3 - 1) ':' in
   for i = 0 to pred (Cstruct.len cs) do
     i_to_h (Cstruct.get_uint8 cs i) (i * 3) s
   done ;
