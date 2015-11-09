@@ -328,23 +328,28 @@ module Validation : sig
 
   (** {2 Validation failure} *)
 
+  (** The polymorphic variant of a leaf certificate validation error. *)
+  type leaf_validation_error = [
+    | `LeafCertificateExpired of t * float option
+    | `LeafInvalidName of t * host option
+    | `LeafInvalidVersion of t
+    | `LeafInvalidExtensions of t
+  ]
+
+  (** The polymorphic variant of a fingerprint validation error. *)
+  type fingerprint_validation_error = [
+    | `ServerNameNotPresent of t * string
+    | `NameNotInList of t
+    | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
+  ]
+
   (** The polymorphic variant of validation errors. *)
   type validation_error = [
-    | `InvalidSignature of t * t
-    | `CertificateExpired of t * float option
-    | `InvalidExtensions of t
-    | `InvalidVersion of t
-    | `InvalidPathlen of t * int
-    | `SelfSigned of t
     | `NoTrustAnchor
-    | `InvalidServerExtensions of t
-    | `InvalidServerName of t * host option
-    | `InvalidCA of t
-    | `IssuerSubjectMismatch of t * t
-    | `AuthorityKeyIdSubjectKeyIdMismatch of t * t
-    | `ServerNameNotPresent of t * string
-    | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
     | `EmptyCertificateChain
+    | `InvalidChain
+    | `Leaf of leaf_validation_error
+    | `Fingerprint of fingerprint_validation_error
   ]
 
   (** [validation_error_of_sexp sexp] is [validation_error], the unmarshalled [sexp]. *)

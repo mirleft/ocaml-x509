@@ -327,22 +327,44 @@ module Validation = struct
 
   include Control
 
-  type validation_error = [
-    | `InvalidSignature of t * t
-    | `CertificateExpired of t * float option
-    | `InvalidExtensions of t
-    | `InvalidVersion of t
-    | `InvalidPathlen of t * int
-    | `SelfSigned of t
-    | `NoTrustAnchor
-    | `InvalidServerExtensions of t
-    | `InvalidServerName of t * host option
-    | `InvalidCA of t
-    | `IssuerSubjectMismatch of t * t
-    | `AuthorityKeyIdSubjectKeyIdMismatch of t * t
+  type ca_error = [
+    | `CAIssuerSubjectMismatch of t
+    | `CAInvalidVersion of t
+    | `CAInvalidSelfSignature of t
+    | `CACertificateExpired of t * float option
+    | `CAInvalidExtensions of t
+  ] with sexp
+
+  type leaf_validation_error = [
+    | `LeafCertificateExpired of t * float option
+    | `LeafInvalidName of t * host option
+    | `LeafInvalidVersion of t
+    | `LeafInvalidExtensions of t
+  ] with sexp
+
+  type chain_validation_error = [
+    | `IntermediateInvalidExtensions of t
+    | `IntermediateCertificateExpired of t * float option
+    | `IntermediateInvalidVersion of t
+
+    | `ChainIssuerSubjectMismatch of t * t
+    | `ChainAuthorityKeyIdSubjectKeyIdMismatch of t * t
+    | `ChainInvalidSignature of t * t
+    | `ChainInvalidPathlen of t * int
+  ] with sexp
+
+  type fingerprint_validation_error = [
     | `ServerNameNotPresent of t * string
+    | `NameNotInList of t
     | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
+  ] with sexp
+
+  type validation_error = [
+    | `NoTrustAnchor
     | `EmptyCertificateChain
+    | `InvalidChain
+    | `Leaf of leaf_validation_error
+    | `Fingerprint of fingerprint_validation_error
   ] with sexp
 
   let string_of_version = function
@@ -350,13 +372,8 @@ module Validation = struct
     | `V2 -> "2"
     | `V3 -> "3"
 
-  let validation_error_to_string v =
-    let cn = common_name_to_string in
-    match v with
-    | `InvalidFingerprint (c, c_fp, fp) ->
-       cn c ^ " (fp: " ^ to_hex c_fp ^ ") does not match the given fingerprint " ^ to_hex fp
-    | `InvalidSignature (t, c) -> "certificate " ^ cn t ^ " does not sign " ^ cn c
-    | `CertificateExpired (c, now) ->
+  let leaf_validation_error_to_string = function
+    | `LeafCertificateExpired (c, now) ->
        let f = string_of_float in
        let now = match now with
          | None -> "none"
@@ -365,34 +382,39 @@ module Validation = struct
        and f t = f (Asn.Time.to_posix_time t)
        in
        let valid = "(valid from " ^ f fr ^ " until " ^ f un ^ ")" in
-       "certificate " ^ cn c ^ " is expired " ^ valid ^ ", now: " ^ now
-    | `InvalidExtensions c -> "invalid (intermediate CA/CA) extensions: " ^ cn c
-    | `InvalidVersion c ->
-       let ver = string_of_version (c.asn.tbs_cert.version) in
-       "certificate " ^ cn c ^ " is X.509 version " ^ ver  ^ ", but version 3 is needed for extensions"
-    | `InvalidPathlen (c, length) ->
-       let i = string_of_int in
-       let plen = match extn_basic_constr c.asn with
-         | Some (_, `Basic_constraints (_, Some p)) -> i p
-         | _ -> "none"
-       in
-       "certificate " ^ cn c ^ " has a path length of " ^ plen ^ ", but " ^ i length ^ " is needed"
-    | `SelfSigned c -> "self signed certificate " ^ cn c
-    | `NoTrustAnchor -> "no trust anchor"
-    | `InvalidServerExtensions c -> "invalid server extensions: " ^ common_name_to_string c
-    | `InvalidServerName (c, n) ->
+       "certificate " ^ common_name_to_string c ^ " is expired " ^ valid ^
+         ", now: " ^ now
+    | `LeafInvalidName (c, n) ->
        let n = match n with
          | Some (`Wildcard s) -> "wildcard " ^ s
          | Some (`Strict s) -> s
          | None -> "none"
        in
-       n ^ " is not contained in the certificate " ^ cn c
-    | `InvalidCA c -> "invalid CA (issuer does not match subject): " ^ common_name_to_string c
-    | `IssuerSubjectMismatch (t, c) -> "issuer of " ^ common_name_to_string c ^ " does not match subject of " ^ common_name_to_string t
-    | `AuthorityKeyIdSubjectKeyIdMismatch (t, c) -> "authority Key ID of " ^ common_name_to_string c ^ " does not match Subject Key ID of " ^ common_name_to_string t
-    | `ServerNameNotPresent (_, n) -> "common name of the certificate, " ^ n ^ ", is not present in the fingerprint list"
-    | `EmptyCertificateChain -> "provided certificate chain is empty"
+       n ^ " is not contained in the certificate " ^ common_name_to_string c
+    | `LeafInvalidVersion c ->
+       let ver = string_of_version (c.asn.tbs_cert.version) in
+       "certificate " ^ common_name_to_string c ^ " is X.509 version " ^ ver  ^
+         ", but version 3 is needed for extensions"
+    | `LeafInvalidExtensions c ->
+       "invalid server extensions: " ^ common_name_to_string c
 
+  let fingerprint_validation_error_to_string = function
+    | `ServerNameNotPresent (c, n) ->
+       "fingerprint matches " ^ n ^ " in the fingerprint list, which is not a" ^
+         " common name of the certificate " ^ common_name_to_string c
+    | `NameNotInList c ->
+       "common name of the certificate, " ^ common_name_to_string c ^
+         ", is not present in the fingerprint list"
+    | `InvalidFingerprint (c, c_fp, fp) ->
+       common_name_to_string c ^ " (fp: " ^ to_hex c_fp ^ ") does not match" ^
+         " the given fingerprint " ^ to_hex fp
+
+  let validation_error_to_string = function
+    | `NoTrustAnchor -> "no trust anchor"
+    | `EmptyCertificateChain -> "provided certificate chain is empty"
+    | `InvalidChain -> "invalid certificate chain"
+    | `Leaf l -> leaf_validation_error_to_string l
+    | `Fingerprint f -> fingerprint_validation_error_to_string f
 
   (* TODO RFC 5280: A certificate MUST NOT include more than one
      instance of a particular extension. *)
@@ -404,9 +426,9 @@ module Validation = struct
       validate_ca_extensions cert
     with
     | (true, true, true) -> success
-    | (false, _, _)      -> fail (`CertificateExpired (cert, now))
-    | (_, false, _)      -> fail (`InvalidVersion cert)
-    | (_, _, false)      -> fail (`InvalidExtensions cert)
+    | (false, _, _)      -> fail (`IntermediateCertificateExpired (cert, now))
+    | (_, false, _)      -> fail (`IntermediateInvalidVersion cert)
+    | (_, _, false)      -> fail (`IntermediateInvalidExtensions cert)
 
   let is_ca_cert_valid now cert =
     match
@@ -417,11 +439,11 @@ module Validation = struct
       valid_trust_anchor_extensions cert
     with
     | (true, true, true, true, true) -> success
-    | (false, _, _, _, _)            -> fail (`InvalidCA cert)
-    | (_, false, _, _, _)            -> fail (`InvalidVersion cert)
-    | (_, _, false, _, _)            -> fail (`InvalidSignature (cert, cert))
-    | (_, _, _, false, _)            -> fail (`CertificateExpired (cert, now))
-    | (_, _, _, _, false)            -> fail (`InvalidExtensions cert)
+    | (false, _, _, _, _)            -> fail (`CAIssuerSubjectMismatch cert)
+    | (_, false, _, _, _)            -> fail (`CAInvalidVersion cert)
+    | (_, _, false, _, _)            -> fail (`CAInvalidSelfSignature cert)
+    | (_, _, _, false, _)            -> fail (`CACertificateExpired (cert, now))
+    | (_, _, _, _, false)            -> fail (`CAInvalidExtensions cert)
 
   let is_server_cert_valid ?host now cert =
     match
@@ -431,10 +453,10 @@ module Validation = struct
       validate_server_extensions cert
     with
     | (true, true, true, true) -> success
-    | (false, _, _, _)         -> fail (`CertificateExpired (cert, now))
-    | (_, false, _, _)         -> fail (`InvalidServerName (cert, host))
-    | (_, _, false, _)         -> fail (`InvalidVersion cert)
-    | (_, _, _, false)         -> fail (`InvalidServerExtensions cert)
+    | (false, _, _, _)         -> fail (`LeafCertificateExpired (cert, now))
+    | (_, false, _, _)         -> fail (`LeafInvalidName (cert, host))
+    | (_, _, false, _)         -> fail (`LeafInvalidVersion cert)
+    | (_, _, _, false)         -> fail (`LeafInvalidExtensions cert)
 
   let signs pathlen trusted cert =
     match
@@ -444,10 +466,10 @@ module Validation = struct
       validate_path_len pathlen trusted
     with
     | (true, true, true, true) -> success
-    | (false, _, _, _)         -> fail (`IssuerSubjectMismatch (trusted, cert))
-    | (_, false, _, _)         -> fail (`AuthorityKeyIdSubjectKeyIdMismatch (trusted, cert))
-    | (_, _, false, _)         -> fail (`InvalidSignature (trusted, cert))
-    | (_, _, _, false)         -> fail (`InvalidPathlen (trusted, pathlen))
+    | (false, _, _, _)         -> fail (`ChainIssuerSubjectMismatch (trusted, cert))
+    | (_, false, _, _)         -> fail (`ChainAuthorityKeyIdSubjectKeyIdMismatch (trusted, cert))
+    | (_, _, false, _)         -> fail (`ChainInvalidSignature (trusted, cert))
+    | (_, _, _, false)         -> fail (`ChainInvalidPathlen (trusted, pathlen))
 
   let issuer trusted cert =
     List.filter (fun p -> issuer_matches_subject p cert) trusted
@@ -458,15 +480,29 @@ module Validation = struct
       | Ok _    -> Ok (Some x)
       | Error _ -> validate_anchors pathlen cert xs
 
+  let cert_valid time c =
+    match is_cert_valid time c with
+    | Ok () -> Ok ()
+    | Error _ -> Error `InvalidChain
+
+  let server_cert_valid ?host time server =
+    match is_server_cert_valid ?host time server with
+    | Ok () -> Ok ()
+    | Error e -> Error (`Leaf e)
+
+  let sig_valid len super cert = match signs len super cert with
+    | Ok () -> Ok ()
+    | Error _ -> Error `InvalidChain
+
   let verify_chain ?host ?time (server, certs) =
     let rec climb pathlen cert = function
       | super :: certs ->
-        signs pathlen super cert >>= fun () ->
+        sig_valid pathlen super cert >>= fun () ->
         climb (succ pathlen) super certs
       | [] -> Ok (pathlen, cert)
     in
-    is_server_cert_valid ?host time server >>= fun () ->
-    iter_m (is_cert_valid time) certs      >>= fun () ->
+    server_cert_valid ?host time server >>= fun () ->
+    iter_m (cert_valid time) certs      >>= fun () ->
     climb 0 server certs
 
   type result = [
@@ -480,9 +516,8 @@ module Validation = struct
       let res =
         verify_chain ?host ?time (server, certs) >>= fun (pathlen, cert) ->
         match List.filter (validate_time time) (issuer anchors cert) with
-        | [] when is_self_signed cert -> fail (`SelfSigned cert)
-        | []                          -> fail `NoTrustAnchor
-        | anchors                     -> validate_anchors pathlen cert anchors
+        | []      -> fail `NoTrustAnchor
+        | anchors -> validate_anchors pathlen cert anchors
       in
       lower res
 
@@ -503,22 +538,21 @@ module Validation = struct
           if maybe_validate_hostname server (Some (`Wildcard name)) then
             Ok None
           else
-            fail (`ServerNameNotPresent (server, name))
+            fail (`Fingerprint (`ServerNameNotPresent (server, name)))
         else
           let name_matches (n, _) = supports_hostname server (`Wildcard n) in
           if List.exists name_matches fingerprints then
             let (_, fp) = List.find name_matches fingerprints in
-            fail (`InvalidFingerprint (server, fingerprint, fp))
+            fail (`Fingerprint (`InvalidFingerprint (server, fingerprint, fp)))
           else
-            let cname = common_name_to_string server in
-            fail (`ServerNameNotPresent (server, cname))
+            fail (`Fingerprint (`NameNotInList server))
       in
 
       let res =
         match validate_time time server, maybe_validate_hostname server host with
         | true , true  -> verify_fingerprint server fingerprints
-        | false, _     -> fail (`CertificateExpired (server, time))
-        | _    , false -> fail (`InvalidServerName (server, host))
+        | false, _     -> fail (`Leaf (`LeafCertificateExpired (server, time)))
+        | _    , false -> fail (`Leaf (`LeafInvalidName (server, host)))
       in
       lower res
 
