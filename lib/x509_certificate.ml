@@ -497,18 +497,21 @@ module Validation = struct
     | server::_ ->
       let verify_fingerprint server fingerprints =
         let fingerprint = fp server in
-        (try Ok (List.find (fun (_, fp) -> Cstruct.equal fp fingerprint) fingerprints)
-         with Not_found ->
-           try
-             let tst = supports_hostname server in
-             let f = List.find (fun (n, _) -> tst (`Wildcard n)) fingerprints in
-             fail (`InvalidFingerprint (server, fingerprint, snd f))
-           with Not_found -> fail (`ServerNameNotPresent (server, common_name_to_string server))
-        ) >>= fun (name, _) ->
-        if maybe_validate_hostname server (Some (`Wildcard name)) then
-          Ok None
+        let fp_matches (_, fingerprint') = Cstruct.equal fingerprint' fingerprint in
+        if List.exists fp_matches fingerprints then
+          let name, _ = List.find fp_matches fingerprints in
+          if maybe_validate_hostname server (Some (`Wildcard name)) then
+            Ok None
+          else
+            fail (`ServerNameNotPresent (server, name))
         else
-          fail (`ServerNameNotPresent (server, name))
+          let name_matches (n, _) = supports_hostname server (`Wildcard n) in
+          if List.exists name_matches fingerprints then
+            let (_, fp) = List.find name_matches fingerprints in
+            fail (`InvalidFingerprint (server, fingerprint, fp))
+          else
+            let cname = common_name_to_string server in
+            fail (`ServerNameNotPresent (server, cname))
       in
 
       let res =
