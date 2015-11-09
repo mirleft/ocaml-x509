@@ -327,6 +327,20 @@ module Validation = struct
 
   include Control
 
+  let string_of_version = function
+    | `V1 -> "1"
+    | `V2 -> "2"
+    | `V3 -> "3"
+
+  let expired c now =
+    let now = match now with
+      | None -> "none"
+      | Some t -> string_of_float t
+    and fr, un = c.asn.tbs_cert.validity
+    and f t = string_of_float (Asn.Time.to_posix_time t)
+    in
+    ("(valid from " ^ f fr ^ " until " ^ f un ^ ")", now)
+
   type ca_error = [
     | `CAIssuerSubjectMismatch of t
     | `CAInvalidVersion of t
@@ -334,6 +348,24 @@ module Validation = struct
     | `CACertificateExpired of t * float option
     | `CAInvalidExtensions of t
   ] with sexp
+
+  let ca_error_to_string = function
+    | `CAIssuerSubjectMismatch c ->
+       "invalid CA (issuer does not match subject): " ^ common_name_to_string c
+    | `CAInvalidVersion c ->
+       let ver = string_of_version (c.asn.tbs_cert.version) in
+       "CA certificate " ^ common_name_to_string c ^ " is X.509 version " ^
+         ver  ^ ", but version 3 is needed for extensions"
+    | `CAInvalidExtensions c ->
+       "invalid CA extensions: " ^ common_name_to_string c
+    | `CAInvalidSelfSignature c ->
+       let n = common_name_to_string c in
+       "CA certificate " ^ n ^ " does not have a proper self-signature"
+    | `CACertificateExpired (c, now) ->
+       let valid, now = expired c now
+       and n = common_name_to_string c
+       in
+       "CA certificate " ^ n ^ " is expired " ^ valid ^ ", now: " ^ now
 
   type leaf_validation_error = [
     | `LeafCertificateExpired of t * float option
@@ -367,21 +399,9 @@ module Validation = struct
     | `Fingerprint of fingerprint_validation_error
   ] with sexp
 
-  let string_of_version = function
-    | `V1 -> "1"
-    | `V2 -> "2"
-    | `V3 -> "3"
-
   let leaf_validation_error_to_string = function
     | `LeafCertificateExpired (c, now) ->
-       let f = string_of_float in
-       let now = match now with
-         | None -> "none"
-         | Some t -> f t
-       and fr, un = c.asn.tbs_cert.validity
-       and f t = f (Asn.Time.to_posix_time t)
-       in
-       let valid = "(valid from " ^ f fr ^ " until " ^ f un ^ ")" in
+       let valid, now = expired c now in
        "certificate " ^ common_name_to_string c ^ " is expired " ^ valid ^
          ", now: " ^ now
     | `LeafInvalidName (c, n) ->
@@ -444,6 +464,11 @@ module Validation = struct
     | (_, _, false, _, _)            -> fail (`CAInvalidSelfSignature cert)
     | (_, _, _, false, _)            -> fail (`CACertificateExpired (cert, now))
     | (_, _, _, _, false)            -> fail (`CAInvalidExtensions cert)
+
+  let valid_ca ?time cacert =
+    match is_ca_cert_valid time cacert with
+    | Ok () -> `Ok
+    | Error e -> `Error e
 
   let is_server_cert_valid ?host now cert =
     match

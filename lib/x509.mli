@@ -409,12 +409,34 @@ module Validation : sig
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
 
+  (** {2 Certificate Authorities} *)
+
+  (** The polymorphic variant of CA certificates. *)
+  type ca_error = [
+    | `CAIssuerSubjectMismatch of t
+    | `CAInvalidVersion of t
+    | `CAInvalidSelfSignature of t
+    | `CACertificateExpired of t * float option
+    | `CAInvalidExtensions of t
+  ]
+
+  (** [ca_error_of_sexp sexp] is [ca_error], the unmarshalled [sexp]. *)
+  val ca_error_of_sexp : Sexplib.Sexp.t -> ca_error
+
+  (** [sexp_of_ca_error ca_error] is [sexp], the marshalled [ca_error]. *)
+  val sexp_of_ca_error : ca_error -> Sexplib.Sexp.t
+
+  (** [ca_error_to_string validation_error] is [string], the string representation of the [ca_error]. *)
+  val ca_error_to_string : ca_error -> string
+
+  (** [valid_ca ~time certificate] is [result], which is `Ok if the given
+      certificate is self-signed, it is valid, its extensions are appropriate
+      for a CA (either a X.509 version 1 certificate or BasicConstraints is
+      present and true, KeyUsage extension contains keyCertSign). *)
+  val valid_ca : ?time:float -> t -> [ `Ok | `Error of ca_error ]
+
   (** [valid_cas ~time certificates] is [valid_certificates], only
-      those certificates whose validity period matches the given time,
-      and the certificate must be eligible for acting as a CA
-      (self-signed, if X.509v3, the basic constraint extension must be
-      present and true, and the key usage extension must contain
-      keyCertSign). *)
+      those certificates which pass the [!valid_ca] check. *)
   val valid_cas : ?time:float -> t list -> t list
 
 end
