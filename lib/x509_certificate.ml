@@ -298,8 +298,20 @@ let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
 
 
 module Validation = struct
-  (* Control flow stuff. Should be imported from a single place. *)
+  (* t -> t list (* set *) -> t list list *)
+  let rec build_chains fst rst =
+    match List.filter (fun x -> Name.equal (issuer fst) (subject x)) rst with
+    | [] -> [[fst]]
+    | xs ->
+       let tails =
+         List.fold_left
+           (fun acc x -> acc @ build_chains x (List.filter (fun y -> x <> y) xs))
+           [[]]
+           xs
+       in
+       List.map (fun x -> fst :: x) tails
 
+  (* Control flow stuff. Should be imported from a single place. *)
   module Control = struct
 
     type ('a, 'e) or_error =
@@ -392,7 +404,6 @@ module Validation = struct
   ] with sexp
 
   type validation_error = [
-    | `NoTrustAnchor
     | `EmptyCertificateChain
     | `InvalidChain
     | `Leaf of leaf_validation_error
@@ -430,7 +441,6 @@ module Validation = struct
          " the given fingerprint " ^ to_hex fp
 
   let validation_error_to_string = function
-    | `NoTrustAnchor -> "no trust anchor"
     | `EmptyCertificateChain -> "provided certificate chain is empty"
     | `InvalidChain -> "invalid certificate chain"
     | `Leaf l -> leaf_validation_error_to_string l
@@ -505,46 +515,49 @@ module Validation = struct
       | Ok _    -> Ok (Some x)
       | Error _ -> validate_anchors pathlen cert xs
 
-  let cert_valid time c =
-    match is_cert_valid time c with
-    | Ok () -> Ok ()
-    | Error _ -> Error `InvalidChain
-
-  let server_cert_valid ?host time server =
-    match is_server_cert_valid ?host time server with
+  let lift_leaf f x =
+    match f x with
     | Ok () -> Ok ()
     | Error e -> Error (`Leaf e)
 
-  let sig_valid len super cert = match signs len super cert with
-    | Ok () -> Ok ()
-    | Error _ -> Error `InvalidChain
-
-  let verify_chain ?host ?time (server, certs) =
-    let rec climb pathlen cert = function
-      | super :: certs ->
-        sig_valid pathlen super cert >>= fun () ->
-        climb (succ pathlen) super certs
-      | [] -> Ok (pathlen, cert)
+  let verify_single_chain ?time anchors chain =
+    let rec climb pathlen = function
+      | sub :: super :: certs ->
+         is_cert_valid time super >>= fun () ->
+         signs pathlen super sub >>= fun () ->
+         climb (succ pathlen) (super :: certs)
+      | [c] ->
+         let anchors = issuer anchors c in
+         validate_anchors pathlen c anchors
+      | [] -> fail `EmptyCertificateChain
     in
-    server_cert_valid ?host time server >>= fun () ->
-    iter_m (cert_valid time) certs      >>= fun () ->
-    climb 0 server certs
+    climb 0 chain
 
   type result = [
     | `Ok   of t option
     | `Fail of validation_error
   ]
 
+  let rec any_m e f = function
+    | [] -> Error e
+    | c::cs -> match f c with
+               | Ok ta -> Ok ta (* inject c *)
+               | Error _ -> any_m e f cs
+
   let verify_chain_of_trust ?host ?time ~anchors = function
     | [] -> `Fail `EmptyCertificateChain
     | server :: certs ->
-      let res =
-        verify_chain ?host ?time (server, certs) >>= fun (pathlen, cert) ->
-        match List.filter (validate_time time) (issuer anchors cert) with
-        | []      -> fail `NoTrustAnchor
-        | anchors -> validate_anchors pathlen cert anchors
-      in
-      lower res
+       let res =
+         (* verify server! *)
+         lift_leaf (is_server_cert_valid ?host time) server >>= fun () ->
+         (* build all paths *)
+         let paths = build_chains server certs
+         and anchors = List.filter (validate_time time) anchors
+         in
+         (* exists there one which is good? *)
+         any_m `InvalidChain (verify_single_chain ?time anchors) paths
+       in
+       lower res
 
   let valid_cas ?time cas =
     List.filter

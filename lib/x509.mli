@@ -345,7 +345,6 @@ module Validation : sig
 
   (** The polymorphic variant of validation errors. *)
   type validation_error = [
-    | `NoTrustAnchor
     | `EmptyCertificateChain
     | `InvalidChain
     | `Leaf of leaf_validation_error
