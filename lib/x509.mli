@@ -459,7 +459,7 @@ module Validation : sig
 
   (** The result of a validation: either success (optionally returning the used trust anchor), or failure *)
   type result = [
-    | `Ok of t option
+    | `Ok of (t list * t) option
     | `Fail of validation_error
   ]
 
@@ -468,7 +468,8 @@ module Validation : sig
       function, the first certificate of the chain is verified to be a valid
       leaf certificate (no BasicConstraints extension) and contains the given
       [host] (using {!hostnames}); if some path is valid, using {!verify_chain},
-      the result will be [Ok] and contain the used trust anchor. *)
+      the result will be [Ok] and contain the actual certificate chain and the
+      trust anchor. *)
   val verify_chain_of_trust :
     ?host:host -> ?time:float -> anchors:(t list) -> t list -> result
 

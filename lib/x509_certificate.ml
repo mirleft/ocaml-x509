@@ -588,14 +588,14 @@ module Validation = struct
        lower res
 
   type result = [
-    | `Ok   of t option
+    | `Ok   of (t list * t) option
     | `Fail of validation_error
   ]
 
   let rec any_m e f = function
     | [] -> Error e
     | c::cs -> match f c with
-               | Ok ta -> Ok (Some ta) (* inject c *)
+               | Ok ta -> Ok (Some (c, ta))
                | Error _ -> any_m e f cs
 
   let verify_chain_of_trust ?host ?time ~anchors = function
