@@ -299,13 +299,13 @@ let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
 
 module Validation = struct
   (* t -> t list (* set *) -> t list list *)
-  let rec build_chains fst rst =
+  let rec build_paths fst rst =
     match List.filter (fun x -> Name.equal (issuer fst) (subject x)) rst with
     | [] -> [[fst]]
     | xs ->
        let tails =
          List.fold_left
-           (fun acc x -> acc @ build_chains x (List.filter (fun y -> x <> y) xs))
+           (fun acc x -> acc @ build_paths x (List.filter (fun y -> x <> y) xs))
            [[]]
            xs
        in
@@ -395,6 +395,14 @@ module Validation = struct
     | `ChainAuthorityKeyIdSubjectKeyIdMismatch of t * t
     | `ChainInvalidSignature of t * t
     | `ChainInvalidPathlen of t * int
+
+    | `EmptyCertificateChain
+    | `NoTrustAnchor of t
+  ] with sexp
+
+  type chain_error = [
+    | `Leaf of leaf_validation_error
+    | `Chain of chain_validation_error
   ] with sexp
 
   type fingerprint_validation_error = [
@@ -445,6 +453,37 @@ module Validation = struct
     | `InvalidChain -> "invalid certificate chain"
     | `Leaf l -> leaf_validation_error_to_string l
     | `Fingerprint f -> fingerprint_validation_error_to_string f
+
+  let chain_validation_error_to_string = function
+    | `IntermediateInvalidExtensions c ->
+       "invalid intermediate certificate extensions: " ^ common_name_to_string c
+    | `IntermediateCertificateExpired (c, now) ->
+       let valid, now = expired c now
+       and n = common_name_to_string c
+       in
+       "Intermediate certificate " ^ n ^ " is expired " ^ valid ^ ", now: " ^ now
+    | `IntermediateInvalidVersion c ->
+       let ver = string_of_version (c.asn.tbs_cert.version) in
+       "Intermediate certificate " ^ common_name_to_string c ^ " is X.509 version " ^
+         ver  ^ ", but version 3 is needed for extensions"
+    | `ChainIssuerSubjectMismatch (c, parent) ->
+       "invalid chain: issuer of " ^ common_name_to_string c ^
+         " does not match subject of " ^ common_name_to_string parent
+    | `ChainAuthorityKeyIdSubjectKeyIdMismatch (c, parent) ->
+       "invalid chain: authority key id extension of " ^ common_name_to_string c ^
+         " does not match subject key id extension of " ^ common_name_to_string parent
+    | `ChainInvalidSignature (c, parent) ->
+       "invalid chain: the certificate " ^ common_name_to_string c ^
+         " is not signed by " ^ common_name_to_string parent
+    | `ChainInvalidPathlen (c, pathlen) ->
+       "invalid chain: the path length of " ^ common_name_to_string c ^
+         " is smaller than the required path length " ^ string_of_int pathlen
+    | `EmptyCertificateChain -> "Certificate chain is empty"
+    | `NoTrustAnchor c -> "No trust anchor found for " ^ common_name_to_string c
+
+  let chain_error_to_string = function
+    | `Leaf l -> leaf_validation_error_to_string l
+    | `Chain c -> chain_validation_error_to_string c
 
   (* TODO RFC 5280: A certificate MUST NOT include more than one
      instance of a particular extension. *)
@@ -510,9 +549,9 @@ module Validation = struct
     List.filter (fun p -> issuer_matches_subject p cert) trusted
 
   let rec validate_anchors pathlen cert = function
-    | []    -> fail `NoTrustAnchor
+    | []    -> fail (`NoTrustAnchor cert)
     | x::xs -> match signs pathlen x cert with
-      | Ok _    -> Ok (Some x)
+      | Ok _    -> Ok x
       | Error _ -> validate_anchors pathlen cert xs
 
   let lift_leaf f x =
@@ -533,6 +572,21 @@ module Validation = struct
     in
     climb 0 chain
 
+  let lift_chain f x =
+    match f x with
+    | Ok x -> Ok x
+    | Error e -> Error (`Chain e)
+
+  let verify_chain ?host ?time ~anchors = function
+    | [] -> `Fail (`Chain `EmptyCertificateChain)
+    | server :: certs ->
+       let anchors = List.filter (validate_time time) anchors in
+       let res =
+         lift_leaf (is_server_cert_valid ?host time) server >>= fun () ->
+         lift_chain (verify_single_chain ?time anchors) (server :: certs)
+       in
+       lower res
+
   type result = [
     | `Ok   of t option
     | `Fail of validation_error
@@ -541,7 +595,7 @@ module Validation = struct
   let rec any_m e f = function
     | [] -> Error e
     | c::cs -> match f c with
-               | Ok ta -> Ok ta (* inject c *)
+               | Ok ta -> Ok (Some ta) (* inject c *)
                | Error _ -> any_m e f cs
 
   let verify_chain_of_trust ?host ?time ~anchors = function
@@ -551,7 +605,7 @@ module Validation = struct
          (* verify server! *)
          lift_leaf (is_server_cert_valid ?host time) server >>= fun () ->
          (* build all paths *)
-         let paths = build_chains server certs
+         let paths = build_paths server certs
          and anchors = List.filter (validate_time time) anchors
          in
          (* exists there one which is good? *)

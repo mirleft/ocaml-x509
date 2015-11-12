@@ -37,7 +37,7 @@
 
     Missing is the handling of certificate revocation lists, online
     certificate status protocol, some X.509v3 extensions (such as
-    policy and name constraints).  The only key type supported is
+    policy and name constraints).  The only supported key type is
     RSA. *)
 
 (** {1 Abstract certificate type} *)
@@ -321,12 +321,58 @@ with
   val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
 end
 
-(** Validation logic: error variant and functions. *)
+(** X.509 Certificate Chain Validation. *)
 module Validation : sig
+  (** A chain of pairwise signed X.509 certificates is sent to the endpoint,
+      which use these to authenticate the other endpoint.  Usually a set of
+      trust anchors is configured on the endpoint, and the chain needs to be
+      rooted in one of the trust anchors.  In reality, chains may be incomplete
+      or reversed, and there can be multiple paths from the leaf certificate to
+      a trust anchor.
 
-  (** {1 Validation} *)
+      RFC 5280 specifies a {{:https://tools.ietf.org/html/rfc5280#section-6}path
+      validation} algorithm for authenticating chains, but this does not handle
+      multiple possible paths.  {{:https://tools.ietf.org/html/rfc4158}RFC 4158}
+      describes possible path building strategies.
 
-  (** {2 Validation failure} *)
+      This module provides path building, chain of trust verification, trust
+      anchor (certificate authority) validation, and validation via a
+      fingerprint list (for a trust on first use implementation).
+  *)
+
+
+  (** {2 Certificate Authorities} *)
+
+  (** The polymorphic variant of possible certificate authorities failures. *)
+  type ca_error = [
+    | `CAIssuerSubjectMismatch of t
+    | `CAInvalidVersion of t
+    | `CAInvalidSelfSignature of t
+    | `CACertificateExpired of t * float option
+    | `CAInvalidExtensions of t
+  ]
+
+  (** [ca_error_of_sexp sexp] is [ca_error], the unmarshalled [sexp]. *)
+  val ca_error_of_sexp : Sexplib.Sexp.t -> ca_error
+
+  (** [sexp_of_ca_error ca_error] is [sexp], the marshalled [ca_error]. *)
+  val sexp_of_ca_error : ca_error -> Sexplib.Sexp.t
+
+  (** [ca_error_to_string validation_error] is [string], the string representation of the [ca_error]. *)
+  val ca_error_to_string : ca_error -> string
+
+  (** [valid_ca ~time certificate] is [result], which is `Ok if the given
+      certificate is self-signed, it is valid at [time], its extensions are not
+      present (if X.509 version 1 certificate), or are appropriate for a CA
+      (BasicConstraints is present and true, KeyUsage extension contains
+      keyCertSign). *)
+  val valid_ca : ?time:float -> t -> [ `Ok | `Error of ca_error ]
+
+  (** [valid_cas ~time certificates] is [valid_certificates], only
+      those certificates which pass the [!valid_ca] check. *)
+  val valid_cas : ?time:float -> t list -> t list
+
+  (** {2 Chain of trust verification} *)
 
   (** The polymorphic variant of a leaf certificate validation error. *)
   type leaf_validation_error = [
@@ -335,6 +381,57 @@ module Validation : sig
     | `LeafInvalidVersion of t
     | `LeafInvalidExtensions of t
   ]
+
+  (** The polymorphic variant of a chain validation error. *)
+  type chain_validation_error = [
+    | `IntermediateInvalidExtensions of t
+    | `IntermediateCertificateExpired of t * float option
+    | `IntermediateInvalidVersion of t
+
+    | `ChainIssuerSubjectMismatch of t * t
+    | `ChainAuthorityKeyIdSubjectKeyIdMismatch of t * t
+    | `ChainInvalidSignature of t * t
+    | `ChainInvalidPathlen of t * int
+
+    | `EmptyCertificateChain
+    | `NoTrustAnchor of t
+  ]
+
+  (** [build_paths server rest] is [paths], which are all possible certificate
+      paths starting with [server].  These chains (C1..Cn) fulfill the predicate
+      that each certificate Cn is issued by the next one in the chain (C(n+1)):
+      the issuer of Cn matches the subject of C(n+1).  This is as described in
+      {{:https://tools.ietf.org/html/rfc4158}RFC 4158}. *)
+  val build_paths : t -> t list -> t list list
+
+  (** The polymorphic variant of a chain validation error: either the leaf
+      certificate is problematic, or the chain itself. *)
+  type chain_error = [
+    | `Leaf of leaf_validation_error
+    | `Chain of chain_validation_error
+  ]
+
+  (** [chain_error_of_sexp sexp] is [chain_error], the unmarshalled [sexp]. *)
+  val chain_error_of_sexp : Sexplib.Sexp.t -> chain_error
+
+  (** [sexp_of_chain_error chain_error] is [sexp], the marshalled [chain_error]. *)
+  val sexp_of_chain_error : chain_error -> Sexplib.Sexp.t
+
+  (** [chain_error_to_string validation_error] is [string], the string representation of the [chain_error]. *)
+  val chain_error_to_string : chain_error -> string
+
+  (** [verify_chain ~host ~time ~anchors chain] is [result], either [Ok] and the
+      trust anchor used to verify the chain, or [Fail] and the chain error.  RFC
+      5280 describes the implemented
+      {{:https://tools.ietf.org/html/rfc5280#section-6.1}path validation}
+      algorithm: The validity period of the given certificates is checked
+      against the [time].  The X509v3 extensions of the [chain] are checked,
+      then a chain of trust from [anchors] to the server certificate is
+      validated.  The path length constraints are checked.  The server
+      certificate is checked to contain the given [host], using {!hostnames}.
+      The returned certificate is the root of the chain, a member of the given
+      list of [anchors]. *)
+  val verify_chain : ?host:host -> ?time:float -> anchors:(t list) -> t list -> [ `Ok of t | `Fail of chain_error ]
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
@@ -360,27 +457,22 @@ module Validation : sig
   (** [validation_error_to_string validation_error] is [string], the string representation of the [validation_error]. *)
   val validation_error_to_string : validation_error -> string
 
-  (** {2 Validation functions} *)
-
   (** The result of a validation: either success (optionally returning the used trust anchor), or failure *)
   type result = [
     | `Ok of t option
     | `Fail of validation_error
   ]
 
-  (** [verify_chain_of_trust ~host ~time ~anchors certificates] is
-      [result], where the [certificates] are verified using the
-      algorithm from
-      {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC5280}: The
-      validity period of the given certificates is checked against the
-      [time].  The X509v3 extensions of the [stack] are checked, then
-      a chain of trust from some [anchors] to the server certificate
-      is validated.  The path length constraints are checked.
-      Finally, the server certificate is checked to contain the given
-      [host], using {!hostnames}.  The returned certificate is the
-      root of the chain, a member of the given list of [anchors]. *)
+  (** [verify_chain_of_trust ~host ~time ~anchors certificates] is [result].
+      First, all possible paths are constructed using the {!build_paths}
+      function, the first certificate of the chain is verified to be a valid
+      leaf certificate (no BasicConstraints extension) and contains the given
+      [host] (using {!hostnames}); if some path is valid, using {!verify_chain},
+      the result will be [Ok] and contain the used trust anchor. *)
   val verify_chain_of_trust :
     ?host:host -> ?time:float -> anchors:(t list) -> t list -> result
+
+  (** {2 Fingerprint verification} *)
 
   (** [trust_key_fingerprint ~time ~hash ~fingerprints certificates]
       is [result], the first element of [certificates] is verified
@@ -403,41 +495,10 @@ module Validation : sig
       fingerprint list must match the name in the certificate, using
       {!hostnames}.
 
-      @deprecated "Pin public keys, not certificates (use [trust_key_fingerprint] instead)." *)
+      @deprecated "Pin public keys, not certificates (use {!trust_key_fingerprint} instead)." *)
   val trust_cert_fingerprint :
     ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
-
-  (** {2 Certificate Authorities} *)
-
-  (** The polymorphic variant of CA certificates. *)
-  type ca_error = [
-    | `CAIssuerSubjectMismatch of t
-    | `CAInvalidVersion of t
-    | `CAInvalidSelfSignature of t
-    | `CACertificateExpired of t * float option
-    | `CAInvalidExtensions of t
-  ]
-
-  (** [ca_error_of_sexp sexp] is [ca_error], the unmarshalled [sexp]. *)
-  val ca_error_of_sexp : Sexplib.Sexp.t -> ca_error
-
-  (** [sexp_of_ca_error ca_error] is [sexp], the marshalled [ca_error]. *)
-  val sexp_of_ca_error : ca_error -> Sexplib.Sexp.t
-
-  (** [ca_error_to_string validation_error] is [string], the string representation of the [ca_error]. *)
-  val ca_error_to_string : ca_error -> string
-
-  (** [valid_ca ~time certificate] is [result], which is `Ok if the given
-      certificate is self-signed, it is valid, its extensions are appropriate
-      for a CA (either a X.509 version 1 certificate or BasicConstraints is
-      present and true, KeyUsage extension contains keyCertSign). *)
-  val valid_ca : ?time:float -> t -> [ `Ok | `Error of ca_error ]
-
-  (** [valid_cas ~time certificates] is [valid_certificates], only
-      those certificates which pass the [!valid_ca] check. *)
-  val valid_cas : ?time:float -> t list -> t list
-
 end
 
 (** Authenticators of certificate chains *)
@@ -454,7 +515,7 @@ module Authenticator : sig
       uses the given [time] and list of [trust_anchors] to verify the
       certificate chain. This is an implementation of the algorithm
       described in
-      {{!https://tools.ietf.org/html/rfc5280#section-6.1}RFC5280},
+      {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC5280},
       using {!Validation.verify_chain_of_trust}. *)
   val chain_of_trust : ?time:float -> t list -> a
 
@@ -471,7 +532,7 @@ module Authenticator : sig
       [fingerprints] to verify the first element of the certificate
       chain, using {!Validation.trust_cert_fingerprint}.
 
-      @deprecated "Pin public keys, not certificates (use [server_key_fingerprint] instead)." *)
+      @deprecated "Pin public keys, not certificates (use {!server_key_fingerprint} instead)." *)
   val server_cert_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
 
