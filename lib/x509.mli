@@ -1,7 +1,7 @@
 (** X509 encoding, generation, and validation.
 
     [X509] is a module for handling X.509 certificates, as described
-    in {{:https://tools.ietf.org/html/rfc5280}RFC5280}.  X.509
+    in {{:https://tools.ietf.org/html/rfc5280}RFC 5280}.  X.509
     describes a hierarchical public key infrastructure, where all
     trust is delegated to certificate authorities (CA).  The task of a
     CA is to sign certificate signing requests (CSR), which turns them
@@ -24,14 +24,14 @@
 
     This module provides {{!Encoding}parsers and unparsers} (PEM
     encoding) of ASN.1 encoded X.509 certificates, public and private
-    RSA keys ({{:http://tools.ietf.org/html/rfc5208}PKCS 8, RFC5208}),
+    RSA keys ({{:http://tools.ietf.org/html/rfc5208}PKCS 8, RFC 5208}),
     and certificate signing requests
-    ({{:http://tools.ietf.org/html/rfc2986}PKCS 10, RFC2986}) (both
+    ({{:http://tools.ietf.org/html/rfc2986}PKCS 10, RFC 2986}) (both
     require parts of {{:https://tools.ietf.org/html/rfc2985}PKCS9,
-    RFC2985}), {{!Validation} validation} of certificates, and
+    RFC 2985}), {{!Validation} validation} of certificates, and
     construction of {{!Authenticator} authenticators}.  Name
     validation, as defined in
-    {{:https://tools.ietf.org/html/rfc6125}RFC6125}, is also
+    {{:https://tools.ietf.org/html/rfc6125}RFC 6125}, is also
     implemented.  The {{!CA}CA} module provides functionality to
     create and sign CSR.
 
@@ -69,7 +69,7 @@ type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
     STRING subjectPublicKey (excluding tag, length, and number of
     unused bits) for publicKeyInfo of [public_key].
 
-    {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.2}RFC5280, 4.2.1.2, variant (1)} *)
+    {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.2}RFC 5280, 4.2.1.2, variant (1)} *)
 val key_id: public_key -> Cstruct.t
 
 (** [key_fingerprint ?hash public_key] is [result], the hash (by
@@ -226,7 +226,7 @@ module Extension : sig
   type authority_key_id = Cstruct.t option * general_name list * Z.t option
 
   (** The private key usage period, as defined in
-  {{:https://tools.ietf.org/html/rfc3280#section-4.2.1.4}RFC3280}. *)
+  {{:https://tools.ietf.org/html/rfc3280#section-4.2.1.4}RFC 3280}. *)
   type priv_key_usage_period = [
     | `Interval   of Asn.Time.t * Asn.Time.t
     | `Not_after  of Asn.Time.t
@@ -274,7 +274,7 @@ module CA : sig
 
   (** The polymorphic variant of certificate request extensions, as
       defined in {{:http://tools.ietf.org/html/rfc2985}PKCS 9
-      (RFC2985)}. *)
+      (RFC 2985)}. *)
   type request_extensions = [
     | `Password of string
     | `Name of string
@@ -516,7 +516,7 @@ module Authenticator : sig
       uses the given [time] and list of [trust_anchors] to verify the
       certificate chain. This is an implementation of the algorithm
       described in
-      {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC5280},
+      {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC 5280},
       using {!Validation.verify_chain_of_trust}. *)
   val chain_of_trust : ?time:float -> t list -> a
 
