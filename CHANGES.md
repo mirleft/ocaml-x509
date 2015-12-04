@@ -5,6 +5,7 @@
 * trust_fingerprint / server_fingerprint are renamed to trust_cert_fingerprint / server_cert_fingerprint (now deprecated!)
 * fingerprint public keys (rather than certificates): trust_key_fingerprint / server_key_fingerprint
 * build certificate paths from the received set (RFC 4158) instead of requiring a strict chain (#74)
+* the given trust anchors to `Authenticator.chain_of_trust` are not validated (to contain KeyUsage / BasicConstraint extensions) anymore, users can use `valid_ca` and `valid_cas` to filter CAs upfront
 
 0.4.0 (2015-07-02):
 * certificate signing request support (PKCS10)
