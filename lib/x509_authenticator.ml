@@ -11,7 +11,6 @@ type a = ?host:host -> t list -> Validation.result
    * authentication. This has repercussions to long-lived authenticators; reconsider.
    * *)
 let chain_of_trust ?time cas =
-  let cas = Validation.valid_cas ?time cas in
   fun ?host certificates ->
     Validation.verify_chain_of_trust ?host ?time ~anchors:cas certificates
 

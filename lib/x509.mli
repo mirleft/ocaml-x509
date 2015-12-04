@@ -369,7 +369,7 @@ module Validation : sig
   val valid_ca : ?time:float -> t -> [ `Ok | `Error of ca_error ]
 
   (** [valid_cas ~time certificates] is [valid_certificates], only
-      those certificates which pass the [!valid_ca] check. *)
+      those certificates which pass the {!valid_ca} check. *)
   val valid_cas : ?time:float -> t list -> t list
 
   (** {2 Chain of trust verification} *)
@@ -517,7 +517,10 @@ module Authenticator : sig
       certificate chain. This is an implementation of the algorithm
       described in
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC 5280},
-      using {!Validation.verify_chain_of_trust}. *)
+      using {!Validation.verify_chain_of_trust}.  The given trust
+      anchors are not checked to be valid trust anchors any further
+      (you have to do this manually with {!Validation.valid_ca} or
+      {!Validation.valid_cas})!  *)
   val chain_of_trust : ?time:float -> t list -> a
 
   (** [server_key_fingerprint ~time hash fingerprints] is an
