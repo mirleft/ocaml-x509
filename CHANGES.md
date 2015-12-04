@@ -1,3 +1,11 @@
+0.5.0 (2015-12-04):
+* avoid dependency on sexplib.syntax (#55)
+* document how to combine extensions and a CSR into a certificate (@reynir, #63 #64)
+* expose `fingerprint : t -> hash -> Cstruct.t`, the hash of the certificate (@cfcs, #66)
+* trust_fingerprint / server_fingerprint are renamed to trust_cert_fingerprint / server_cert_fingerprint (now deprecated!)
+* fingerprint public keys (rather than certificates): trust_key_fingerprint / server_key_fingerprint
+* build certificate paths from the received set (RFC 4158) instead of requiring a strict chain (#74)
+
 0.4.0 (2015-07-02):
 * certificate signing request support (PKCS10)
 * basic CA functionality (in CA module): create and sign certificate signing requests
