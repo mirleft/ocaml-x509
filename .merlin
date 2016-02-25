@@ -1,0 +1,10 @@
+S lib
+
+B _build/**
+
+PKG cstruct
+PKG sexplib
+PKG nocrypto
+PKG bytes
+PKG asn1-combinators
+PKG oUnit
