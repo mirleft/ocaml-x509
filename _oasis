@@ -18,8 +18,8 @@ Library "x509"
                     X509_types, X509_extension_types, X509_request_types,
                     X509_extension, X509_authenticator,
                     X509_encoding, X509_pem, X509_ca
-  BuildDepends    : bytes, cstruct, sexplib.syntax, nocrypto, asn1-combinators
-  XMETARequires   : bytes, cstruct, nocrypto, asn1-combinators
+  BuildDepends    : bytes, cstruct, sexplib, ppx_sexp_conv, nocrypto, asn1-combinators
+  XMETARequires   : bytes, cstruct, sexplib, nocrypto, asn1-combinators
   ByteOpt         : -w A-4-33-40-41-42-43-34-44
 
 Library "tests"
