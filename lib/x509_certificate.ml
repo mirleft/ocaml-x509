@@ -209,7 +209,7 @@ let validate_path_len pathlen { asn = cert ; _ } =
   | `V3, Some (_ , `Basic_constraints (true, Some n)) -> n >= pathlen
   | _                                                 -> false
 
-let validate_ca_extensions { asn = cert ; _ } =
+let validate_ca_extensions ( cert : certificate ) =
   let open Extension in
   (* comments from RFC5280 *)
   (* 4.2.1.9 Basic Constraints *)
@@ -269,7 +269,7 @@ let validate_server_extensions { asn = cert ; _ } =
 let valid_trust_anchor_extensions cert =
   match cert.asn.tbs_cert.version with
   | `V1 | `V2 -> true
-  | `V3       -> validate_ca_extensions cert
+  | `V3       -> validate_ca_extensions cert.asn
 
 let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
   let open Extension in
@@ -479,7 +479,7 @@ module Validation = struct
     match
       validate_time now cert,
       version_matches_extensions cert,
-      validate_ca_extensions cert
+      validate_ca_extensions cert.asn
     with
     | (true, true, true) -> success
     | (false, _, _)      -> fail (`IntermediateCertificateExpired (cert, now))
