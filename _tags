@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 1b153a2fbbdcb55cb6a5d72eac29d95d)
+# DO NOT EDIT (digest: a33781f86b738b92936ca4d1fc296bb5)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -22,7 +22,8 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_bytes
 <lib/*.ml{,i,y}>: pkg_cstruct
 <lib/*.ml{,i,y}>: pkg_nocrypto
-<lib/*.ml{,i,y}>: pkg_sexplib.syntax
+<lib/*.ml{,i,y}>: pkg_ppx_sexp_conv
+<lib/*.ml{,i,y}>: pkg_sexplib
 # Library tests
 "tests/tests.cmxs": use_tests
 # Executable test_runner
@@ -32,7 +33,8 @@ true: annot, bin_annot
 "tests/unittestrunner.native": pkg_cstruct.unix
 "tests/unittestrunner.native": pkg_nocrypto
 "tests/unittestrunner.native": pkg_oUnit
-"tests/unittestrunner.native": pkg_sexplib.syntax
+"tests/unittestrunner.native": pkg_ppx_sexp_conv
+"tests/unittestrunner.native": pkg_sexplib
 "tests/unittestrunner.native": use_tests
 "tests/unittestrunner.native": use_x509
 <tests/*.ml{,i,y}>: pkg_asn1-combinators
@@ -41,7 +43,8 @@ true: annot, bin_annot
 <tests/*.ml{,i,y}>: pkg_cstruct.unix
 <tests/*.ml{,i,y}>: pkg_nocrypto
 <tests/*.ml{,i,y}>: pkg_oUnit
-<tests/*.ml{,i,y}>: pkg_sexplib.syntax
+<tests/*.ml{,i,y}>: pkg_ppx_sexp_conv
+<tests/*.ml{,i,y}>: pkg_sexplib
 <tests/*.ml{,i,y}>: use_tests
 <tests/*.ml{,i,y}>: use_x509
 # OASIS_STOP

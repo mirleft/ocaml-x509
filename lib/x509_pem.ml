@@ -50,25 +50,27 @@ let rec lines cs =
     | '\n' -> chop cs i 1
     | _    -> eol (i + 1) in
   match catch eol 0 with
-  | Some (a, b) -> [< 'tok_of_line a ; lines b >]
-  | None        -> [< 'tok_of_line cs >]
+  | Some (a, b) -> tok_of_line a :: lines b
+  | None        -> [ tok_of_line cs ]
 
 let combine ilines =
 
-  let rec accumulate t acc = parser
-    | [< ' `Empty ; lines >] -> accumulate t acc lines
-    | [< ' `Data cs ; lines >] -> accumulate t (cs :: acc) lines
-    | [< ' `End t' when t = t' >] -> Cs.concat (List.rev acc)
+  let rec accumulate t acc = function
+    | `Empty :: tail -> accumulate t acc tail
+    | `Data cs :: tail -> accumulate t (cs :: acc) tail
+    | `End t' :: tail when t = t' -> (Cs.concat (List.rev acc), tail)
+    | _ -> assert false
 
-  and block = parser
-    | [< ' `Begin t ; body = accumulate t [] ; tail >] ->
+  and block = function
+    | `Begin t :: tail ->
+      let body, tail = accumulate t [] tail in
       ( match catch Nocrypto.Base64.decode body with
         | None      -> invalid_arg "PEM: malformed Base64 data"
         | Some data -> (t, data) :: block tail )
-    | [< ' _ ; lines >] -> block lines
-    | [< >] -> []
-
-  in block ilines
+    | [] -> []
+    | xs -> block xs
+  in
+  block ilines
 
 let parse = o combine lines
 

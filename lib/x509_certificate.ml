@@ -122,7 +122,7 @@ let split_labels name =
 
 let o f g x = f (g x)
 
-type host = [ `Strict of string | `Wildcard of string ] with sexp
+type host = [ `Strict of string | `Wildcard of string ] [@@deriving sexp]
 
 (* we limit our validation to a single '*' character at the beginning (left-most label)! *)
 let wildcard_matches host cert =
@@ -346,7 +346,7 @@ module Validation = struct
     | `CAInvalidSelfSignature of t
     | `CACertificateExpired of t * float option
     | `CAInvalidExtensions of t
-  ] with sexp
+  ] [@@deriving sexp]
 
   let ca_error_to_string = function
     | `CAIssuerSubjectMismatch c ->
@@ -371,7 +371,7 @@ module Validation = struct
     | `LeafInvalidName of t * host option
     | `LeafInvalidVersion of t
     | `LeafInvalidExtensions of t
-  ] with sexp
+  ] [@@deriving sexp]
 
   type chain_validation_error = [
     | `IntermediateInvalidExtensions of t
@@ -385,25 +385,25 @@ module Validation = struct
 
     | `EmptyCertificateChain
     | `NoTrustAnchor of t
-  ] with sexp
+  ] [@@deriving sexp]
 
   type chain_error = [
     | `Leaf of leaf_validation_error
     | `Chain of chain_validation_error
-  ] with sexp
+  ] [@@deriving sexp]
 
   type fingerprint_validation_error = [
     | `ServerNameNotPresent of t * string
     | `NameNotInList of t
     | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
-  ] with sexp
+  ] [@@deriving sexp]
 
   type validation_error = [
     | `EmptyCertificateChain
     | `InvalidChain
     | `Leaf of leaf_validation_error
     | `Fingerprint of fingerprint_validation_error
-  ] with sexp
+  ] [@@deriving sexp]
 
   let leaf_validation_error_to_string = function
     | `LeafCertificateExpired (c, now) ->
