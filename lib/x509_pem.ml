@@ -58,13 +58,13 @@ let combine ilines =
   let rec accumulate t acc = function
     | `Empty :: tail -> accumulate t acc tail
     | `Data cs :: tail -> accumulate t (cs :: acc) tail
-    | `End t' :: tail when t = t' -> (Cs.concat (List.rev acc), tail)
+    | `End t' :: tail when t = t' -> (Cstruct.concat (List.rev acc), tail)
     | _ -> assert false
 
   and block = function
     | `Begin t :: tail ->
       let body, tail = accumulate t [] tail in
-      ( match catch Nocrypto.Base64.decode body with
+      ( match Nocrypto.Base64.decode body with
         | None      -> invalid_arg "PEM: malformed Base64 data"
         | Some data -> (t, data) :: block tail )
     | [] -> []
@@ -95,7 +95,7 @@ let unparse ~tag value =
   let first = [ open_begin ; tag ; close ; nl ]
   and last = [ open_end ; tag ; close ; nl ]
   in
-  Cs.concat (first @ lines @ last)
+  Cstruct.concat (first @ lines @ last)
 
 module Certificate = struct
 
@@ -116,7 +116,7 @@ module Certificate = struct
     unparse ~tag:"CERTIFICATE" (X509_certificate.cs_of_cert v)
 
   let to_pem_cstruct cs =
-    Cs.concat (List.map to_pem_cstruct1 cs)
+    Cstruct.concat (List.map to_pem_cstruct1 cs)
 end
 
 module Certificate_signing_request = struct
@@ -140,7 +140,7 @@ module Certificate_signing_request = struct
     unparse ~tag:"CERTIFICATE REQUEST" (X509_ca.cs_of_signing_request v)
 
   let to_pem_cstruct cs =
-    Cs.concat (List.map to_pem_cstruct1 cs)
+    Cstruct.concat (List.map to_pem_cstruct1 cs)
 end
 
 module Public_key = struct
@@ -161,7 +161,7 @@ module Public_key = struct
     unparse ~tag:"PUBLIC KEY" (Asn_grammars.PK.pub_info_to_cstruct v)
 
   let to_pem_cstruct cs =
-    Cs.concat (List.map to_pem_cstruct1 cs)
+    Cstruct.concat (List.map to_pem_cstruct1 cs)
 end
 
 module Private_key = struct
@@ -186,5 +186,5 @@ module Private_key = struct
     | `RSA v -> unparse ~tag:"RSA PRIVATE KEY" (Asn_grammars.PK.rsa_private_to_cstruct v)
 
   let to_pem_cstruct cs =
-    Cs.concat (List.map to_pem_cstruct1 cs)
+    Cstruct.concat (List.map to_pem_cstruct1 cs)
 end
