@@ -16,6 +16,7 @@ remove: [ "ocamlfind" "remove" "x509" ]
 
 depends: [
   "ocamlfind" {build}
+  "oasis" {build}
   "ocamlbuild" {build}
   "cstruct" {>= "1.6.0"}
   "ppx_sexp_conv"
