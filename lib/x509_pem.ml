@@ -59,7 +59,8 @@ let combine ilines =
     | `Empty :: tail -> accumulate t acc tail
     | `Data cs :: tail -> accumulate t (cs :: acc) tail
     | `End t' :: tail when t = t' -> (Cstruct.concat (List.rev acc), tail)
-    | _ -> assert false
+    | _ :: tail -> (Cs.empty, tail)
+    | [] -> (Cs.empty, [])
 
   and block = function
     | `Begin t :: tail ->
