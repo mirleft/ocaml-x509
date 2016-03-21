@@ -6,7 +6,7 @@ Authors:     Hannes Mehnert <hannes@mehnert.org>, David Kaloper <david@numm.org>
 Maintainers: David Kaloper <david@numm.org>, Hannes Mehnert <hannes@mehnert.org>
 Homepage:    https://github.com/mirleft/ocaml-x509
 License:     FreeBSD
-Plugins:     META (0.4), DevFiles (0.4)
+Plugins:     META (0.4)
 BuildTools:  ocamlbuild
 Description:
   X509 support for OCaml
