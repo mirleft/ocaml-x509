@@ -1,3 +1,7 @@
+0.5.1 (2016-03-21):
+* use ppx_sexp_conv instead of sexplib.syntax
+* no more Stream syntax, use lists
+
 0.5.0 (2015-12-04):
 * avoid dependency on sexplib.syntax (#55)
 * document how to combine extensions and a CSR into a certificate (@reynir, #63 #64)
