@@ -68,8 +68,8 @@ let combine ilines =
       ( match Nocrypto.Base64.decode body with
         | None      -> invalid_arg "PEM: malformed Base64 data"
         | Some data -> (t, data) :: block tail )
-    | [] -> []
-    | xs -> block xs
+    | _::xs -> block xs
+    | []    -> []
   in
   block ilines
 
