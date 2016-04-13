@@ -1,3 +1,6 @@
+0.5.2 (2016-04-13):
+* fix building of certificate paths
+
 0.5.1 (2016-03-21):
 * use ppx_sexp_conv instead of sexplib.syntax
 * no more Stream syntax, use lists

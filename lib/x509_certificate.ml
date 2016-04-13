@@ -292,7 +292,7 @@ module Validation = struct
     | xs ->
        let tails =
          List.fold_left
-           (fun acc x -> acc @ build_paths x (List.filter (fun y -> x <> y) xs))
+           (fun acc x -> acc @ build_paths x (List.filter (fun y -> x <> y) rst))
            [[]]
            xs
        in
