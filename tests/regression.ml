@@ -21,8 +21,22 @@ let test_jc_ca _ =
   | `Ok _ -> ()
   | _ -> assert_failure ("something went wrong with jc_ca")
 
+let telesec = cert "telesec"
+let jfd = [ cert "jabber.fu-berlin.de" ; cert "fu-berlin" ; cert "dfn" ]
+
+let test_jfd_ca _ =
+  match Validation.verify_chain_of_trust ~host:(`Strict "jabber.fu-berlin.de") ~anchors:[telesec] (jfd@[telesec]) with
+  | `Ok _ -> ()
+  | _ -> assert_failure ("something went wrong with jfd_ca")
+
+let test_jfd_ca' _ =
+  match Validation.verify_chain_of_trust ~host:(`Strict "jabber.fu-berlin.de") ~anchors:[telesec] jfd with
+  | `Ok _ -> ()
+  | _ -> assert_failure ("something went wrong with jfd_ca'")
 
 let regression_tests = [
   "RSA: key too small (jc_jc)" >:: test_jc_jc ;
-  "jc_ca" >:: test_jc_ca
+  "jc_ca" >:: test_jc_ca ;
+  "jfd_ca" >:: test_jfd_ca ;
+  "jfd_ca'" >:: test_jfd_ca'
 ]
