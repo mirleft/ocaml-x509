@@ -1,8 +1,9 @@
 language: c
-install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-opam.sh
+install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-opam.sh
 script: bash -ex .travis-opam.sh
 env:
   - PACKAGE="x509" OCAML_VERSION=4.02 PINS="nocrypto asn1-combinators"
+  - PACKAGE="x509" OCAML_VERSION=4.03 PINS="nocrypto asn1-combinators"
 notifications:
   email: false
 
