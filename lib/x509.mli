@@ -566,6 +566,14 @@ module Encoding : sig
       representation of the [certificate]. *)
   val cs_of_cert  : t -> Cstruct.t
 
+  (** [parse_signing_request cstruct] is [signing_request option],
+      the ASN.1 decoded [cstruct] or [None]. *)
+  val parse_signing_request : Cstruct.t -> CA.signing_request option
+
+  (** [cs_of_signing_request sr] is [cstruct], the ASN.1 encoded
+      representation of the [sr]. *)
+  val cs_of_signing_request  : CA.signing_request -> Cstruct.t
+
   (** [pkcs1_digest_info_of_cstruct data] is [hash, signature option],
       the hash and raw signature. *)
   val pkcs1_digest_info_of_cstruct : Cstruct.t ->
