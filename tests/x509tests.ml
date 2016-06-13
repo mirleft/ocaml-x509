@@ -2,18 +2,20 @@ open OUnit2
 
 open X509
 
-let cs_mmap file =
-  Unix_cstruct.of_fd Unix.(openfile file [O_RDONLY] 0)
-
-let load file =
-  cs_mmap ("./tests/testcertificates/" ^ file ^ ".pem")
+let with_loaded_file file ~f =
+  let fullpath = "./tests/testcertificates/" ^ file ^ ".pem" in
+  let fd = Unix.(openfile fullpath [O_RDONLY] 0) in
+  let buf = Unix_cstruct.of_fd fd in
+  try let r = f buf in Unix.close fd; r
+  with e -> Unix.close fd; raise e
 
 let priv =
-  match Encoding.Pem.Private_key.of_pem_cstruct1 (load "private/cakey") with
+  match with_loaded_file "private/cakey"
+          ~f:Encoding.Pem.Private_key.of_pem_cstruct1  with
   | `RSA x -> x
 
 let cert name =
-  Encoding.Pem.Certificate.of_pem_cstruct1 (load name)
+  with_loaded_file name ~f:Encoding.Pem.Certificate.of_pem_cstruct1
 
 let invalid_cas = [
   "cacert-basicconstraint-ca-false";
@@ -56,7 +58,8 @@ let valid_ca_tests = [
 ]
 
 let first_cert name =
-  Encoding.Pem.Certificate.of_pem_cstruct1 (load ("first/" ^ name))
+  with_loaded_file ("first/" ^ name)
+    ~f:Encoding.Pem.Certificate.of_pem_cstruct1
 
 (* ok, now some real certificates *)
 let first_certs = [
@@ -179,7 +182,8 @@ let intermediate_cas = [
 ]
 
 let im_cert name =
-  Encoding.Pem.Certificate.of_pem_cstruct1 (load ("intermediate/" ^ name))
+  with_loaded_file ("intermediate/" ^ name)
+    ~f:Encoding.Pem.Certificate.of_pem_cstruct1
 
 let second_certs = [
   ("second", [ "second.foobar.com" ], true, (* no subjAltName *)
@@ -207,7 +211,8 @@ let second_certs = [
 ]
 
 let second_cert name =
-  Encoding.Pem.Certificate.of_pem_cstruct1 (load ("intermediate/second/" ^ name))
+  with_loaded_file ("intermediate/second/" ^ name)
+    ~f:Encoding.Pem.Certificate.of_pem_cstruct1 
 
 let second_cert_tests =
   List.mapi
