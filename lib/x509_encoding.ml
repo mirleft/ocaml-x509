@@ -3,6 +3,10 @@ let cs_of_cert = X509_certificate.cs_of_cert
 
 let parse = X509_certificate.parse_certificate
 
+let parse_signing_request = X509_ca.parse_signing_request
+
+let cs_of_signing_request = X509_ca.cs_of_signing_request
+
 let pkcs1_digest_info_of_cstruct : Cstruct.t -> (Nocrypto.Hash.hash * Cstruct.t) option =
   Asn_grammars.pkcs1_digest_info_of_cstruct
 
