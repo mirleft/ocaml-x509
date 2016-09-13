@@ -153,6 +153,9 @@ val issuer : t -> distinguished_name
     [certificate]. *)
 val serial : t -> Z.t
 
+(** [validity certificate] is [from, until], the validity of the certificate. *)
+val validity : t -> Asn.Time.t * Asn.Time.t
+
 (** X.509v3 extensions *)
 module Extension : sig
 
