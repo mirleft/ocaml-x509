@@ -30,6 +30,8 @@ let subject { asn ; _ } = asn.tbs_cert.subject
 
 let serial { asn ; _ } = asn.tbs_cert.serial
 
+let validity { asn ; _ } = asn.tbs_cert.validity
+
 let parse_certificate cs =
   match certificate_of_cstruct cs with
   | None     -> None
