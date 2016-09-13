@@ -1,3 +1,7 @@
+0.5.3 (2016-09-13):
+* provide Encoding.parse_signing_request and Encoding.cs_of_signing_request (#81)
+* provide validity : t -> (Time.t * Time.t) (#86, fixes #85)
+
 0.5.2 (2016-04-13):
 * fix building of certificate paths
 
