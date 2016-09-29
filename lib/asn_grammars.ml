@@ -139,6 +139,9 @@ module Name = struct
     in
     rdn_sequence (* A vacuous choice, in the standard. *)
 
+  let (name_of_cstruct, name_to_cstruct) =
+    projections_of der name
+
   (* rfc5280 section 7.1. -- we're too strict on strings and should preserve the
    * order. *)
   let equal n1 n2 = compare_unordered_lists compare n1 n2 = 0

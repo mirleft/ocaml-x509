@@ -569,6 +569,10 @@ module Encoding : sig
       representation of the [certificate]. *)
   val cs_of_cert  : t -> Cstruct.t
 
+  (** [cs_of_distinguished_name dn] is [cstruct], the ASN.1 encoded
+      representation of the distinguished name [dn]. *)
+  val cs_of_distinguished_name : distinguished_name -> Cstruct.t
+
   (** [parse_signing_request cstruct] is [signing_request option],
       the ASN.1 decoded [cstruct] or [None]. *)
   val parse_signing_request : Cstruct.t -> CA.signing_request option
