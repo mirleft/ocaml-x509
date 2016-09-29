@@ -6,4 +6,10 @@ env:
   - PACKAGE="x509" OCAML_VERSION=4.03 PINS="nocrypto asn1-combinators"
 notifications:
   email: false
-
+os:
+  - linux
+  - osx
+matrix:
+  exclude:
+    - os: osx
+      env: PACKAGE="x509" OCAML_VERSION=4.03 PINS="nocrypto asn1-combinators"
