@@ -1,0 +1,12 @@
+true : bin_annot, principal
+true : warn(+A-4-41-44)
+true : package(asn1-combinators, bytes, cstruct, nocrypto, sexplib)
+
+<lib> : include
+<lib/x509_certificate.ml> : package(ppx_sexp_conv)
+
+"tests" : include
+<tests/regression.ml> : package(oUnit cstruct.unix)
+<tests/unittests.ml> : package(oUnit)
+<tests/x509tests.ml> : package(oUnit)
+<tests/unittestrunner.{ml,byte,native}> : package(oUnit cstruct.unix)
