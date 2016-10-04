@@ -38,7 +38,11 @@
     Missing is the handling of certificate revocation lists, online
     certificate status protocol, some X.509v3 extensions (such as
     policy and name constraints).  The only supported key type is
-    RSA. *)
+    RSA.
+
+    {e %%VERSION%% - {{:%%PKG_HOMEPAGE%% }homepage}} *)
+
+
 
 (** {1 Abstract certificate type} *)
 
