@@ -1,5 +1,5 @@
 version = "%%VERSION_NUM%%"
-description = "X509 support for OCaml"
+description = "Pure X.509 Public Key Infrastructure in OCaml"
 requires = "bytes cstruct sexplib nocrypto asn1-combinators"
 archive(byte) = "x509.cma"
 archive(native) = "x509.cmxa"
