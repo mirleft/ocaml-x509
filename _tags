@@ -1,4 +1,4 @@
-true : bin_annot, principal, safe_string
+true : color(always), bin_annot, principal, safe_string
 true : warn(+A-4-41-42-44)
 true : package(result asn1-combinators cstruct nocrypto sexplib astring)
 
@@ -6,3 +6,5 @@ true : package(result asn1-combinators cstruct nocrypto sexplib astring)
 <lib/x509_certificate.ml> : package(ppx_sexp_conv)
 
 <tests/*> : package(oUnit cstruct.unix)
+
+<random>: -traverse
