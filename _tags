@@ -1,5 +1,5 @@
-true : bin_annot, principal
-true : warn(+A-4-41-44)
+true : bin_annot, principal, safe_string
+true : warn(+A-4-41-42-44)
 true : package(asn1-combinators, bytes, cstruct, nocrypto, sexplib)
 
 <lib> : include

@@ -952,7 +952,6 @@ let  extn_subject_alt_name
       ~f:(fun (crit, ext) ->
             match pred ext with None -> None | Some x -> Some (crit, x))
   in
-  let open Extension in
   (f @@ function `Subject_alt_name  _ as x -> Some x | _ -> None),
   (f @@ function `Issuer_alt_name   _ as x -> Some x | _ -> None),
   (f @@ function `Authority_key_id  _ as x -> Some x | _ -> None),

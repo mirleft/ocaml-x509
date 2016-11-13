@@ -2,7 +2,6 @@ open Sexplib.Conv
 open Nocrypto
 
 open X509_common
-open Registry
 open Asn_grammars
 
 include X509_types
@@ -58,7 +57,7 @@ let to_hex cs =
   for i = 0 to pred (Cstruct.len cs) do
     i_to_h (Cstruct.get_uint8 cs i) (i * 3) s
   done ;
-  s
+  Bytes.to_string s
 
 let sexp_of_t cert = Sexplib.Sexp.List
     [ Sexplib.Sexp.Atom "CERTIFICATE" ;
@@ -102,7 +101,6 @@ let common_name_to_string { asn = cert ; _ } =
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
 let hostnames { asn = cert ; _ } : string list =
-  let open Extension in
   match extn_subject_alt_name cert, subject_common_name cert with
     | Some (_, `Subject_alt_name names), _    ->
        List_ext.filter_map
@@ -204,7 +202,6 @@ let validate_path_len pathlen { asn = cert ; _ } =
   (* intermediate CAs are checked by is_cert_valid, which checks that the CA extensions are there *)
   (* whereas trust anchor are ok with getting V1/2 certificates *)
   (* TODO: make it configurable whether to accept V1/2 certificates at all *)
-  let open Extension in
   match cert.tbs_cert.version, extn_basic_constr cert with
   | (`V1 | `V2), _                                    -> true
   | `V3, Some (_ , `Basic_constraints (true, None))   -> true
@@ -212,7 +209,6 @@ let validate_path_len pathlen { asn = cert ; _ } =
   | _                                                 -> false
 
 let validate_ca_extensions { asn = cert ; _ } =
-  let open Extension in
   (* comments from RFC5280 *)
   (* 4.2.1.9 Basic Constraints *)
   (* Conforming CAs MUST include this extension in all CA certificates used *)
@@ -256,7 +252,6 @@ let validate_ca_extensions { asn = cert ; _ } =
     cert.tbs_cert.extensions
 
 let validate_server_extensions { asn = cert ; _ } =
-  let open Extension in
   List.for_all (function
       | (_, `Basic_constraints (true, _))  -> false
       | (_, `Basic_constraints (false, _)) -> true
@@ -274,7 +269,6 @@ let valid_trust_anchor_extensions cert =
   | `V3       -> validate_ca_extensions cert
 
 let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
-  let open Extension in
   match
     extn_authority_key_id cert, extn_subject_key_id trusted
   with
