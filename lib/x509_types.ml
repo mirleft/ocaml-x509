@@ -39,7 +39,7 @@ let component_to_string = function
   | `Initials s -> "Initials=" ^ s
   | `Pseudonym s -> "Pseudonym=" ^ s
   | `Generation s -> "Generation=" ^ s
-  | `Other (oid, s) -> Asn.OID.to_string oid ^ "=" ^ s
+  | `Other (oid, s) -> Format.asprintf "%a=%s" Asn.OID.pp oid s
 
 let distinguished_name_to_string dn =
   Astring.String.concat ~sep:"/" (List.map component_to_string dn)
