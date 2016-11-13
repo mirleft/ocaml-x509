@@ -25,7 +25,6 @@ depends: [
   "sexplib"
   "asn1-combinators" {>= "0.1.1"}
   "nocrypto" {>= "0.5.3"}
-  "base-bytes"
   "astring"
   "ounit" {test}
 ]

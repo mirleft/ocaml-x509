@@ -268,10 +268,10 @@ let second_wildcard_cert_ca_test (cavalid, ca, x) =
                   [ "a.b.foobar.com" ; "f.foobar.com.com" ; "f.f.f." ; "foobar.com.uk" ; "foooo.bar.com" ; "foobar.com" ])
        intermediate_cas)
 
-let second_no_cn_cert_ca_test (cavalid, ca, x) =
+let second_no_cn_cert_ca_test (_, ca, x) =
   List.flatten
     (List.map
-       (fun (imvalid, im) ->
+       (fun (_, im) ->
         let chain = [im_cert im] in
         let c = second_cert "second-no-cn" in
         ("verification CA " ^ x ^ " cn blablbalbala" >:: strict_test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
