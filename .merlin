@@ -8,3 +8,4 @@ PKG nocrypto
 PKG bytes
 PKG asn1-combinators
 PKG oUnit
+PKG astring

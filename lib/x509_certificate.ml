@@ -1,5 +1,6 @@
 open Sexplib.Conv
 open Nocrypto
+open Astring
 
 open X509_common
 open Asn_grammars
@@ -106,15 +107,15 @@ let hostnames { asn = cert ; _ } : string list =
        List_ext.filter_map
          names
          ~f:(function
-              | `DNS x -> Some (String.lowercase x)
+              | `DNS x -> Some (String.Ascii.lowercase x)
               | _      -> None)
-    | _                              , Some x -> [String.lowercase x]
+    | _                              , Some x -> [String.Ascii.lowercase x]
     | _                              , _      -> []
 
 (* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
   forbidden: multiple dots "..", trailing dot "foo." *)
 let split_labels name =
-  let labels = String_ext.split '.' name in
+  let labels = String.cuts ~sep:"." name in
   if List.exists (fun s -> s = "") labels then
     None
   else
@@ -141,8 +142,8 @@ let wildcard_matches host cert =
          List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
 
 let supports_hostname cert = function
-  | `Strict name   -> List.mem (String.lowercase name) (hostnames cert)
-  | `Wildcard name -> let name = String.lowercase name in
+  | `Strict name   -> List.mem (String.Ascii.lowercase name) (hostnames cert)
+  | `Wildcard name -> let name = String.Ascii.lowercase name in
                              List.mem name (hostnames cert) ||
                                wildcard_matches name cert
 
