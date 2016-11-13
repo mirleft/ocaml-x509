@@ -21,6 +21,7 @@ depends: [
   "ocamlbuild" {build}
   "ppx_sexp_conv" {build}
   "topkg" {build}
+  "result"
   "cstruct" {>= "1.6.0"}
   "sexplib"
   "asn1-combinators" {>= "0.1.1"}
