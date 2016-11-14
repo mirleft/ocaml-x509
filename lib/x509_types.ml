@@ -17,7 +17,7 @@ type component = [
   | `Pseudonym    of string
   | `Generation   of string
 
-  | `Other        of Asn.OID.t * string
+  | `Other        of Asn.oid * string
 ]
 
 type distinguished_name = component list
@@ -46,10 +46,10 @@ let distinguished_name_to_string dn =
 
 type public_key = [
   | `RSA    of Nocrypto.Rsa.pub
-  | `EC_pub of Asn.OID.t
+  | `EC_pub of Asn.oid
 ]
 
 type private_key = [ `RSA of Nocrypto.Rsa.priv ]
 
-type key_type = [ `RSA | `EC of Asn.OID.t ]
+type key_type = [ `RSA | `EC of Asn.oid ]
 
