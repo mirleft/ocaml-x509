@@ -39,9 +39,9 @@ type general_name = [
 type authority_key_id = Cstruct.t option * general_name list * Z.t option
 
 type priv_key_usage_period = [
-  | `Interval   of Asn.Time.t * Asn.Time.t
-  | `Not_after  of Asn.Time.t
-  | `Not_before of Asn.Time.t
+  | `Interval   of Ptime.t * Ptime.t
+  | `Not_after  of Ptime.t
+  | `Not_before of Ptime.t
 ]
 
 type name_constraint = (general_name * int * int option) list

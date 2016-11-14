@@ -158,7 +158,7 @@ val issuer : t -> distinguished_name
 val serial : t -> Z.t
 
 (** [validity certificate] is [from, until], the validity of the certificate. *)
-val validity : t -> Asn.Time.t * Asn.Time.t
+val validity : t -> Ptime.t * Ptime.t
 
 (** X.509v3 extensions *)
 module Extension : sig
@@ -235,9 +235,9 @@ module Extension : sig
   (** The private key usage period, as defined in
   {{:https://tools.ietf.org/html/rfc3280#section-4.2.1.4}RFC 3280}. *)
   type priv_key_usage_period = [
-    | `Interval   of Asn.Time.t * Asn.Time.t
-    | `Not_after  of Asn.Time.t
-    | `Not_before of Asn.Time.t
+    | `Interval   of Ptime.t * Ptime.t
+    | `Not_after  of Ptime.t
+    | `Not_before of Ptime.t
   ]
 
   (** Name constraints, as defined in
@@ -332,7 +332,7 @@ with
  | Some (`Extensions x) -> x
  | None -> []
 ]}. *)
-  val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
+  val sign : signing_request -> valid_from:Ptime.t -> valid_until:Ptime.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
 end
 
 (** X.509 Certificate Chain Validation. *)

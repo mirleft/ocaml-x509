@@ -810,7 +810,7 @@ type tBSCertificate = {
   serial     : Z.t ;
   signature  : Algorithm.t ;
   issuer     : distinguished_name ;
-  validity   : Asn.Time.t * Asn.Time.t ;
+  validity   : Ptime.t * Ptime.t ;
   subject    : distinguished_name ;
   pk_info    : public_key ;
   issuer_id  : Cstruct.t option ;
@@ -833,15 +833,11 @@ let version =
 let certificate_sn = integer
 
 let time =
-  map
-    (function `C1 t -> t | `C2 t -> t)
-    (fun t ->
-       let year, _, _ = t.Asn.Time.date in
-       if year < 2050 then
-         `C1 t
-       else
-         `C2 t)
-    (choice2 utc_time generalized_time)
+  let f = function `C1 t -> t | `C2 t -> t
+  and g t =
+    let (y, _, _) = Ptime.to_date t in
+    if y < 2050 then `C1 t else `C2 t in
+  map f g (choice2 utc_time generalized_time)
 
 let validity =
   sequence2
