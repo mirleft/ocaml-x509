@@ -23,17 +23,17 @@ let compare_unordered_lists cmp l1 l2 =
   in
   loop List.(sort cmp l1, sort cmp l2)
 
-let (case_of, case_of_2) =
-  let hash_of_assoc xs =
-    let ht = Hashtbl.create 16 in
-    List.iter (fun (k, v) -> Hashtbl.add ht k v) xs ; ht
-  in
-  ((fun ~default xs ->
-      let ht = hash_of_assoc xs in
-      fun a -> try Hashtbl.find ht a with Not_found -> default a),
-   (fun ~default xs ->
-      let ht = hash_of_assoc xs in
-      fun (a, b) -> (try Hashtbl.find ht a with Not_found -> default a) b))
+module OID_H = Hashtbl (struct
+  type t = Asn.oid let (equal, hash) = Asn.OID.(equal, hash)
+end)
+
+let case_of_oid ~default xs =
+  let ht = OID_H.of_assoc xs in fun a ->
+    try OID_H.find ht a with Not_found -> default a
+
+let case_of_oid_f ~default xs =
+  let ht = OID_H.of_assoc xs in fun (a, b) ->
+    (try OID_H.find ht a with Not_found -> default a) b
 
 (*
  * A way to parse by propagating (and contributing to) exceptions, so those can
@@ -82,7 +82,7 @@ module Name = struct
   let name =
     let open Registry in
 
-    let a_f = case_of_2 [
+    let a_f = case_of_oid_f [
       (domain_component              , fun x -> `DC           x) ;
       (X520.common_name              , fun x -> `CN           x) ;
       (X520.serial_number            , fun x -> `Serialnumber x) ;
@@ -343,7 +343,7 @@ module Algorithm = struct
         | _             -> parse_error "Algorithm: expected parameter OID"
       and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid) in
 
-      case_of_2 ~default [
+      case_of_oid_f ~default [
 
       (ANSI_X9_62.ec_pub_key, oid (fun id -> EC_pub id)) ;
 
@@ -441,7 +441,7 @@ module Extension = struct
   let ext_key_usage =
     let open ID.Extended_usage in
 
-    let f = case_of [
+    let f = case_of_oid [
       (any              , `Any             ) ;
       (server_auth      , `Server_auth     ) ;
       (client_auth      , `Client_auth     ) ;
@@ -572,7 +572,7 @@ module Extension = struct
 
   (* XXX 4.2.1.4. - cert policies! ( and other x509 extensions ) *)
 
-  let reparse_extension_exn = case_of_2 [
+  let reparse_extension_exn = case_of_oid_f [
 
     (ID.subject_alternative_name, fun cs ->
       `Subject_alt_name (gen_names_of_cs cs)) ;
