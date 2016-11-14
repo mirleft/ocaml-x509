@@ -1,8 +1,8 @@
 open Sexplib.Conv
 open Nocrypto
+open Astring
 
 open X509_common
-open Registry
 open Asn_grammars
 
 include X509_types
@@ -58,7 +58,7 @@ let to_hex cs =
   for i = 0 to pred (Cstruct.len cs) do
     i_to_h (Cstruct.get_uint8 cs i) (i * 3) s
   done ;
-  s
+  Bytes.to_string s
 
 let sexp_of_t cert = Sexplib.Sexp.List
     [ Sexplib.Sexp.Atom "CERTIFICATE" ;
@@ -102,21 +102,20 @@ let common_name_to_string { asn = cert ; _ } =
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
 let hostnames { asn = cert ; _ } : string list =
-  let open Extension in
   match extn_subject_alt_name cert, subject_common_name cert with
     | Some (_, `Subject_alt_name names), _    ->
        List_ext.filter_map
          names
          ~f:(function
-              | `DNS x -> Some (String.lowercase x)
+              | `DNS x -> Some (String.Ascii.lowercase x)
               | _      -> None)
-    | _                              , Some x -> [String.lowercase x]
+    | _                              , Some x -> [String.Ascii.lowercase x]
     | _                              , _      -> []
 
 (* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
   forbidden: multiple dots "..", trailing dot "foo." *)
 let split_labels name =
-  let labels = String_ext.split '.' name in
+  let labels = String.cuts ~sep:"." name in
   if List.exists (fun s -> s = "") labels then
     None
   else
@@ -143,8 +142,8 @@ let wildcard_matches host cert =
          List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
 
 let supports_hostname cert = function
-  | `Strict name   -> List.mem (String.lowercase name) (hostnames cert)
-  | `Wildcard name -> let name = String.lowercase name in
+  | `Strict name   -> List.mem (String.Ascii.lowercase name) (hostnames cert)
+  | `Wildcard name -> let name = String.Ascii.lowercase name in
                              List.mem name (hostnames cert) ||
                                wildcard_matches name cert
 
@@ -204,7 +203,6 @@ let validate_path_len pathlen { asn = cert ; _ } =
   (* intermediate CAs are checked by is_cert_valid, which checks that the CA extensions are there *)
   (* whereas trust anchor are ok with getting V1/2 certificates *)
   (* TODO: make it configurable whether to accept V1/2 certificates at all *)
-  let open Extension in
   match cert.tbs_cert.version, extn_basic_constr cert with
   | (`V1 | `V2), _                                    -> true
   | `V3, Some (_ , `Basic_constraints (true, None))   -> true
@@ -212,7 +210,6 @@ let validate_path_len pathlen { asn = cert ; _ } =
   | _                                                 -> false
 
 let validate_ca_extensions { asn = cert ; _ } =
-  let open Extension in
   (* comments from RFC5280 *)
   (* 4.2.1.9 Basic Constraints *)
   (* Conforming CAs MUST include this extension in all CA certificates used *)
@@ -256,7 +253,6 @@ let validate_ca_extensions { asn = cert ; _ } =
     cert.tbs_cert.extensions
 
 let validate_server_extensions { asn = cert ; _ } =
-  let open Extension in
   List.for_all (function
       | (_, `Basic_constraints (true, _))  -> false
       | (_, `Basic_constraints (false, _)) -> true
@@ -274,7 +270,6 @@ let valid_trust_anchor_extensions cert =
   | `V3       -> validate_ca_extensions cert
 
 let ext_authority_matches_subject { asn = trusted ; _ } { asn = cert ; _ } =
-  let open Extension in
   match
     extn_authority_key_id cert, extn_subject_key_id trusted
   with

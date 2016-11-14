@@ -41,7 +41,8 @@ let component_to_string = function
   | `Generation s -> "Generation=" ^ s
   | `Other (oid, s) -> Asn.OID.to_string oid ^ "=" ^ s
 
-let distinguished_name_to_string dn = String.concat "/" (List.map component_to_string dn)
+let distinguished_name_to_string dn =
+  Astring.String.concat ~sep:"/" (List.map component_to_string dn)
 
 type public_key = [
   | `RSA    of Nocrypto.Rsa.pub
