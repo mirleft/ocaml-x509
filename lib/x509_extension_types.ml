@@ -21,11 +21,11 @@ type extended_key_usage = [
   | `Ipsec_user
   | `Time_stamping
   | `Ocsp_signing
-  | `Other of Asn.OID.t
+  | `Other of Asn.oid
 ]
 
 type general_name = [
-  | `Other         of (Asn.OID.t * string)
+  | `Other         of (Asn.oid * string)
   | `Rfc_822       of string
   | `DNS           of string
   | `X400_address  of unit
@@ -33,23 +33,23 @@ type general_name = [
   | `EDI_party     of (string option * string)
   | `URI           of string
   | `IP            of Cstruct.t
-  | `Registered_id of Asn.OID.t
+  | `Registered_id of Asn.oid
 ]
 
 type authority_key_id = Cstruct.t option * general_name list * Z.t option
 
 type priv_key_usage_period = [
-  | `Interval   of Asn.Time.t * Asn.Time.t
-  | `Not_after  of Asn.Time.t
-  | `Not_before of Asn.Time.t
+  | `Interval   of Ptime.t * Ptime.t
+  | `Not_after  of Ptime.t
+  | `Not_before of Ptime.t
 ]
 
 type name_constraint = (general_name * int * int option) list
 
-type policy = [ `Any | `Something of Asn.OID.t ]
+type policy = [ `Any | `Something of Asn.oid ]
 
 type t = [
-  | `Unsupported       of Asn.OID.t * Cstruct.t
+  | `Unsupported       of Asn.oid * Cstruct.t
   | `Subject_alt_name  of general_name list
   | `Authority_key_id  of authority_key_id
   | `Subject_key_id    of Cstruct.t
