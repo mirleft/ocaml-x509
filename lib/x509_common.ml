@@ -1,3 +1,4 @@
+include Result
 
 module List_ext = struct
 
