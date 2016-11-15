@@ -59,7 +59,7 @@ val sexp_of_t : t -> Sexplib.Sexp.t
 (** {1 Basic operations on a certificate} *)
 
 (** The polymorphic variant of public key types. *)
-type key_type = [ `RSA | `EC of Asn.OID.t ]
+type key_type = [ `RSA | `EC of Asn.oid ]
 
 (** [supports_keytype certificate key_type] is [result], whether public key of the [certificate] matches the given [key_type]. *)
 val supports_keytype : t -> key_type -> bool
@@ -67,7 +67,7 @@ val supports_keytype : t -> key_type -> bool
 (** The polymorphic variant of public keys, with
     {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
     {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
-type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
+type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.oid ]
 
 (** [key_id public_key] is [result], the 160-bit [`SHA1] hash of the BIT
     STRING subjectPublicKey (excluding tag, length, and number of
@@ -131,7 +131,7 @@ type component = [
   | `Pseudonym    of string
   | `Generation   of string
 
-  | `Other        of Asn.OID.t * string
+  | `Other        of Asn.oid * string
 ]
 
 (** A distinguished name is a list of {!component}. *)
@@ -158,7 +158,7 @@ val issuer : t -> distinguished_name
 val serial : t -> Z.t
 
 (** [validity certificate] is [from, until], the validity of the certificate. *)
-val validity : t -> Asn.Time.t * Asn.Time.t
+val validity : t -> Ptime.t * Ptime.t
 
 (** X.509v3 extensions *)
 module Extension : sig
@@ -200,7 +200,7 @@ module Extension : sig
     | `Ipsec_user
     | `Time_stamping
     | `Ocsp_signing
-    | `Other of Asn.OID.t
+    | `Other of Asn.oid
   ]
 
   (** [supports_extended_usage ~not_present certificate
@@ -216,7 +216,7 @@ module Extension : sig
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.7}IssuerAltName}
       extension. *)
   type general_name = [
-    | `Other         of (Asn.OID.t * string)
+    | `Other         of (Asn.oid * string)
     | `Rfc_822       of string
     | `DNS           of string
     | `X400_address  of unit
@@ -224,7 +224,7 @@ module Extension : sig
     | `EDI_party     of (string option * string)
     | `URI           of string
     | `IP            of Cstruct.t
-    | `Registered_id of Asn.OID.t
+    | `Registered_id of Asn.oid
   ]
 
   (** The authority key identifier, as present in the
@@ -235,9 +235,9 @@ module Extension : sig
   (** The private key usage period, as defined in
   {{:https://tools.ietf.org/html/rfc3280#section-4.2.1.4}RFC 3280}. *)
   type priv_key_usage_period = [
-    | `Interval   of Asn.Time.t * Asn.Time.t
-    | `Not_after  of Asn.Time.t
-    | `Not_before of Asn.Time.t
+    | `Interval   of Ptime.t * Ptime.t
+    | `Not_after  of Ptime.t
+    | `Not_before of Ptime.t
   ]
 
   (** Name constraints, as defined in
@@ -248,13 +248,13 @@ module Extension : sig
   (** Certificate policies, the
   {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.4}policy
   extension}. *)
-  type policy = [ `Any | `Something of Asn.OID.t ]
+  type policy = [ `Any | `Something of Asn.oid ]
 
   (** The polymorphic variant of
   {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3
   extensions}. *)
   type t = [
-    | `Unsupported       of Asn.OID.t * Cstruct.t
+    | `Unsupported       of Asn.oid * Cstruct.t
     | `Subject_alt_name  of general_name list
     | `Authority_key_id  of authority_key_id
     | `Subject_key_id    of Cstruct.t
@@ -325,7 +325,7 @@ with
  | Some (`Extensions x) -> x
  | None -> []
 ]}. *)
-  val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
+  val sign : signing_request -> valid_from:Ptime.t -> valid_until:Ptime.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
 end
 
 (** X.509 Certificate Chain Validation. *)
