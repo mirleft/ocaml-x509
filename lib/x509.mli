@@ -268,6 +268,9 @@ module Extension : sig
   ]
 end
 
+(** Returns [subject_alt_names] if extension if present, else [ [] ]. *)
+val subject_alt_names : t -> Extension.general_name list
+
 (** Certificate Authority operations *)
 module CA : sig
 

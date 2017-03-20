@@ -112,6 +112,11 @@ let hostnames { asn = cert ; _ } : string list =
     | _                              , Some x -> [String.Ascii.lowercase x]
     | _                              , _      -> []
 
+let subject_alt_names { asn = cert } =
+  match extn_subject_alt_name cert with
+  | Some (_, `Subject_alt_name names) -> names
+  | _ -> []
+
 (* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
   forbidden: multiple dots "..", trailing dot "foo." *)
 let split_labels name =
