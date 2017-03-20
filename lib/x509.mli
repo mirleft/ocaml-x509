@@ -254,6 +254,9 @@ module Extension : sig
       [Some (crit, data)] if an extension with [oid] is present. *)
   val unsupported : t -> Asn.OID.t -> (bool * Cstruct.t) option
 
+  (** Returns [subject_alt_names] if extension if present, else [ [] ]. *)
+  val subject_alt_names : t -> general_name list
+
   (** The polymorphic variant of
   {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3
   extensions}. *)
