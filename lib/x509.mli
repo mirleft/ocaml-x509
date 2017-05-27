@@ -250,6 +250,10 @@ module Extension : sig
   extension}. *)
   type policy = [ `Any | `Something of Asn.OID.t ]
 
+  (** [unsupported cert oid] is [None] if [oid] is not present as extension, or
+      [Some (crit, data)] if an extension with [oid] is present. *)
+  val unsupported : t -> Asn.OID.t -> (bool * Cstruct.t) option
+
   (** The polymorphic variant of
   {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3
   extensions}. *)

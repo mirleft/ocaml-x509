@@ -21,3 +21,5 @@ let supports_extended_usage ?(not_present = false) c u =
   match cert_extended_usage c with
   | Some x -> List.mem u x
   | None   -> not_present
+
+let unsupported { asn ; _ } oid = Asn_grammars.extn_unknown asn oid
