@@ -175,7 +175,9 @@ let validate_raw_signature raw signature_algo signature_val pk_info =
 let raw_cert_hack raw signature =
   let siglen = Cstruct.len signature in
   let off    = if siglen > 128 then 1 else 0 in
-  Cstruct.(sub raw 4 (len raw - (siglen + 4 + 19 + off)))
+  let snd    = Cstruct.get_uint8 raw 1 in
+  let lenl   = 2 + if 0x80 land snd = 0 then 0 else 0x7F land snd in
+  Cstruct.(sub raw lenl (len raw - (siglen + lenl + 19 + off)))
 
 let validate_signature { asn = trusted ; _ } cert =
   let tbs_raw = raw_cert_hack cert.raw cert.asn.signature_val in
