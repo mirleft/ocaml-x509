@@ -27,6 +27,7 @@ depends: [
   "nocrypto" {>= "0.5.3"}
   "astring"
   "ounit" {test}
+  "cstruct-unix" {test}
 ]
 
 tags: [ "org:mirage" ]

@@ -5,6 +5,4 @@ true : package(asn1-combinators cstruct nocrypto sexplib astring)
 <lib> : include
 <lib/x509_certificate.ml> : package(ppx_sexp_conv)
 
-<tests/*> : package(oUnit)
-<tests/regression.ml> : package(cstruct.unix)
-<tests/unittestrunner.{ml,byte,native}> : package(cstruct.unix)
+<tests/*> : package(oUnit cstruct.unix)

@@ -962,3 +962,10 @@ let  extn_subject_alt_name
   (f @@ function `Priv_key_period   _ as x -> Some x | _ -> None),
   (f @@ function `Name_constraints  _ as x -> Some x | _ -> None),
   (f @@ function `Policies          _ as x -> Some x | _ -> None)
+
+let extn_unknown cert oid =
+  List_ext.map_find cert.tbs_cert.extensions
+    ~f:(fun (crit, ext) ->
+        match ext with
+        | `Unsupported (o, v) when o = oid -> Some (crit, v)
+        | _ -> None)
