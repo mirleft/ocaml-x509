@@ -24,7 +24,7 @@ let supports_extended_usage ?(not_present = false) c u =
 
 let unsupported { asn ; _ } oid = Asn_grammars.extn_unknown asn oid
 
-let subject_alt_names { asn = cert } =
+let subject_alt_names { asn = cert ; _ } =
   match Asn_grammars.extn_subject_alt_name cert with
   | Some (_, `Subject_alt_name names) -> names
   | _ -> []
