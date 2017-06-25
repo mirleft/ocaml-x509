@@ -257,6 +257,27 @@ module Extension : sig
   (** Returns [subject_alt_names] if extension if present, else [ [] ]. *)
   val subject_alt_names : t -> general_name list
 
+  type reason = [
+    | `Unused
+    | `Key_compromise
+    | `CA_compromise
+    | `Affiliation_changed
+    | `Superseded
+    | `Cessation_of_operation
+    | `Certificate_hold
+    | `Privilege_withdrawn
+    | `AA_compromise
+  ]
+
+  type distribution_point =
+    [ `Full of general_name list
+    | `Relative of X509_types.distinguished_name ] option *
+    reason list option *
+    X509_types.distinguished_name option
+
+  (** Returns [crl_distribution_points] if extension if present, else [ [] ]. *)
+  val crl_distribution_points : t -> distribution_point list
+
   (** The polymorphic variant of
   {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3
   extensions}. *)
@@ -271,6 +292,7 @@ module Extension : sig
     | `Basic_constraints of (bool * int option)
     | `Priv_key_period   of priv_key_usage_period
     | `Name_constraints  of name_constraint * name_constraint
+    | `CRL_distribution_points of distribution_point list
     | `Policies          of policy list
   ]
 end

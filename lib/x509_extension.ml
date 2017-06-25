@@ -28,3 +28,8 @@ let subject_alt_names { asn = cert ; _ } =
   match Asn_grammars.extn_subject_alt_name cert with
   | Some (_, `Subject_alt_name names) -> names
   | _ -> []
+
+let crl_distribution_points { asn = cert ; _ } =
+  match Asn_grammars.extn_crl_distribution_points cert with
+  | Some (_, `CRL_distribution_points ps) -> ps
+  | _ -> []

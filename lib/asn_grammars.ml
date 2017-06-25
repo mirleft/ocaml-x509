@@ -564,6 +564,35 @@ module Extension = struct
           (optional ~label:"policyQualifiers" (sequence_of qualifier_info))
 
 
+  let reason = bit_string_flags [
+        0, `Unused
+      ; 1, `Key_compromise
+      ; 2, `CA_compromise
+      ; 3, `Affiliation_changed
+      ; 4, `Superseded
+      ; 5, `Cessation_of_operation
+      ; 6, `Certificate_hold
+      ; 7, `Privilege_withdrawn
+      ; 8, `AA_compromise
+      ]
+
+  let distribution_point_name =
+    map
+      (function | `C1 s -> `Full s | `C2 s -> `Relative s)
+      (function | `Full s -> `C1 s | `Relative s -> `C2 s)
+    @@
+    choice2
+      (implicit 0 gen_names)
+      (implicit 1 Name.name)
+
+  let distribution_point =
+    sequence3
+      (optional ~label:"distributionPoint" @@ explicit 0 distribution_point_name)
+      (optional ~label:"reasons"           @@ implicit 1 reason)
+      (optional ~label:"cRLIssuer"         @@ implicit 2 Name.name)
+
+  let crl_distribution_points = sequence_of distribution_point
+
   let gen_names_of_cs, gen_names_to_cs       = project_exn gen_names
   and auth_key_id_of_cs, auth_key_id_to_cs   = project_exn authority_key_id
   and subj_key_id_of_cs, subj_key_id_to_cs   = project_exn octet_string
@@ -572,6 +601,7 @@ module Extension = struct
   and basic_constr_of_cs, basic_constr_to_cs = project_exn basic_constraints
   and pr_key_peri_of_cs, pr_key_peri_to_cs   = project_exn priv_key_usage_period
   and name_con_of_cs, name_con_to_cs         = project_exn name_constraints
+  and crl_distrib_of_cs, crl_distrib_to_cs   = project_exn crl_distribution_points
   and cert_pol_of_cs, cert_pol_to_cs         = project_exn cert_policies
 
   (* XXX 4.2.1.4. - cert policies! ( and other x509 extensions ) *)
@@ -605,6 +635,9 @@ module Extension = struct
     (ID.name_constraints, fun cs ->
       `Name_constraints (name_con_of_cs cs)) ;
 
+    (ID.crl_distribution_points, fun cs ->
+      `CRL_distribution_points (crl_distrib_of_cs cs)) ;
+
     (ID.certificate_policies_2, fun cs ->
       `Policies (cert_pol_of_cs cs))
     ]
@@ -620,6 +653,7 @@ module Extension = struct
     | `Ext_key_usage     x -> (ID.extended_key_usage      , e_key_usage_to_cs  x)
     | `Priv_key_period   x -> (ID.private_key_usage_period, pr_key_peri_to_cs  x)
     | `Name_constraints  x -> (ID.name_constraints        , name_con_to_cs     x)
+    | `CRL_distribution_points x -> (ID.crl_distribution_points, crl_distrib_to_cs x)
     | `Policies          x -> (ID.certificate_policies_2  , cert_pol_to_cs     x)
     | `Unsupported (oid, cs) -> (oid, cs)
 
@@ -945,6 +979,7 @@ let  extn_subject_alt_name
    , extn_basic_constr
    , extn_priv_key_period
    , extn_name_constraints
+   , extn_crl_distribution_points
    , extn_policies
 =
   let f pred cert =
@@ -961,6 +996,7 @@ let  extn_subject_alt_name
   (f @@ function `Basic_constraints _ as x -> Some x | _ -> None),
   (f @@ function `Priv_key_period   _ as x -> Some x | _ -> None),
   (f @@ function `Name_constraints  _ as x -> Some x | _ -> None),
+  (f @@ function `CRL_distribution_points  _ as x -> Some x | _ -> None),
   (f @@ function `Policies          _ as x -> Some x | _ -> None)
 
 let extn_unknown cert oid =

@@ -48,6 +48,24 @@ type name_constraint = (general_name * int * int option) list
 
 type policy = [ `Any | `Something of Asn.OID.t ]
 
+type reason = [
+  | `Unused
+  | `Key_compromise
+  | `CA_compromise
+  | `Affiliation_changed
+  | `Superseded
+  | `Cessation_of_operation
+  | `Certificate_hold
+  | `Privilege_withdrawn
+  | `AA_compromise
+]
+
+type distribution_point =
+  [ `Full of general_name list
+  | `Relative of X509_types.distinguished_name ] option *
+  reason list option *
+  X509_types.distinguished_name option
+
 type t = [
   | `Unsupported       of Asn.OID.t * Cstruct.t
   | `Subject_alt_name  of general_name list
@@ -59,5 +77,6 @@ type t = [
   | `Basic_constraints of (bool * int option)
   | `Priv_key_period   of priv_key_usage_period
   | `Name_constraints  of name_constraint * name_constraint
+  | `CRL_distribution_points of distribution_point list
   | `Policies          of policy list
 ]
