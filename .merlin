@@ -1,8 +1,10 @@
 S lib
+S tests
 
 B _build/**
 
 PKG cstruct
+PKG cstruct-unix
 PKG sexplib
 PKG nocrypto
 PKG asn1-combinators

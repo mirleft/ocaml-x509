@@ -269,14 +269,30 @@ module Extension : sig
     | `AA_compromise
   ]
 
-  type distribution_point =
+  type distribution_point_name =
     [ `Full of general_name list
-    | `Relative of X509_types.distinguished_name ] option *
+    | `Relative of X509_types.distinguished_name ]
+
+  type distribution_point =
+    distribution_point_name option *
     reason list option *
     X509_types.distinguished_name option
 
   (** Returns [crl_distribution_points] if extension if present, else [ [] ]. *)
   val crl_distribution_points : t -> distribution_point list
+
+  type reason_code = [
+    | `Unspecified
+    | `Key_compromise
+    | `CA_compromise
+    | `Affiliation_changed
+    | `Superseded
+    | `Cessation_of_operation
+    | `Certificate_hold
+    | `Remove_from_CRL
+    | `Privilege_withdrawn
+    | `AA_compromise
+  ]
 
   (** The polymorphic variant of
   {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3
@@ -290,9 +306,16 @@ module Extension : sig
     | `Key_usage         of key_usage list
     | `Ext_key_usage     of extended_key_usage list
     | `Basic_constraints of (bool * int option)
+    | `CRL_number        of int
+    | `Delta_CRL_indicator of int
     | `Priv_key_period   of priv_key_usage_period
     | `Name_constraints  of name_constraint * name_constraint
     | `CRL_distribution_points of distribution_point list
+    | `Issuing_distribution_point of distribution_point_name option * bool * bool * reason list option * bool * bool
+    | `Freshest_CRL      of distribution_point list
+    | `Reason            of reason_code
+    | `Invalidity_date   of Asn.Time.t
+    | `Certificate_issuer of general_name list
     | `Policies          of policy list
   ]
 end
@@ -355,6 +378,31 @@ with
  | None -> []
 ]}. *)
   val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
+end
+
+(** X.509 Certificate Revocation Lists. *)
+module CRL : sig
+  type t
+
+  val issuer : t -> distinguished_name
+
+  val this_update : t -> Asn.Time.t
+
+  val next_update : t -> Asn.Time.t option
+
+  type revoked_cert = {
+    serial : Z.t ;
+    date : Asn.Time.t ;
+    extensions : (bool * Extension.t) list
+  }
+
+  val revoked_certificates : t -> revoked_cert list
+
+  val extensions : t -> (bool * Extension.t) list
+
+  val crl_number : t -> int option
+
+  val validate : t -> public_key -> bool
 end
 
 (** X.509 Certificate Chain Validation. *)
@@ -630,6 +678,14 @@ module Encoding : sig
   (** [rsa_public_of_cstruct buffer] is [pubkey], the public key of
       the ASN.1 encoded buffer. *)
   val rsa_public_of_cstruct : Cstruct.t -> Nocrypto.Rsa.pub option
+
+  (** [crl_to_cstruct crl] is [buffer], the ASN.1 DER encoding of the
+      given certificate revocation list. *)
+  val crl_to_cstruct : CRL.t -> Cstruct.t
+
+  (** [crl_of_cstruct buffer] is [crl], the certificate revocation list of
+      the ASN.1 encoded buffer. *)
+  val crl_of_cstruct : Cstruct.t -> CRL.t option
 
   (** Parser and unparser of PEM files *)
   module Pem : sig
