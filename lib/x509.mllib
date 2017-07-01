@@ -11,3 +11,5 @@ X509_authenticator
 X509_encoding
 X509_pem
 X509_ca
+X509_crl
+X509_crl_types
