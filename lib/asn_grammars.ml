@@ -1133,4 +1133,7 @@ module CRL = struct
 
   let (crl_of_cstruct, crl_to_cstruct) =
     projections_of der certificateList
+
+  let (tbs_CRL_of_cstruct, tbs_CRL_to_cstruct) =
+    projections_of der tBSCertList
 end
