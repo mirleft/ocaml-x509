@@ -35,13 +35,11 @@
     implemented.  The {{!CA}CA} module provides functionality to
     create and sign CSR.
 
-    Missing is the handling of certificate revocation lists, online
-    certificate status protocol, some X.509v3 extensions (such as
-    policy and name constraints).  The only supported key type is
-    RSA.
+    Missing is the handling of online certificate status protocol, some X.509v3
+    extensions (such as policy and name constraints).  The only supported key
+    type is RSA.
 
     {e %%VERSION%% - {{:%%PKG_HOMEPAGE%% }homepage}} *)
-
 
 
 (** {1 Abstract certificate type} *)
@@ -257,6 +255,7 @@ module Extension : sig
   (** Returns [subject_alt_names] if extension if present, else [ [] ]. *)
   val subject_alt_names : t -> general_name list
 
+  (** Type of allowed revocation reasons for a given distribution point. *)
   type reason = [
     | `Unused
     | `Key_compromise
@@ -269,10 +268,14 @@ module Extension : sig
     | `AA_compromise
   ]
 
+  (** Distribution point name, either a full one using general names, or a
+      relative one using a distinguished name. *)
   type distribution_point_name =
     [ `Full of general_name list
     | `Relative of X509_types.distinguished_name ]
 
+  (** Distribution point, consisting of an optional name, an optional list of
+      allowed reasons, and an optional issuer. *)
   type distribution_point =
     distribution_point_name option *
     reason list option *
@@ -281,6 +284,7 @@ module Extension : sig
   (** Returns [crl_distribution_points] if extension if present, else [ [] ]. *)
   val crl_distribution_points : t -> distribution_point list
 
+  (** The reason of a revoked certificate. *)
   type reason_code = [
     | `Unspecified
     | `Key_compromise
@@ -382,27 +386,68 @@ end
 
 (** X.509 Certificate Revocation Lists. *)
 module CRL : sig
+
+  (** A certificate revocation list is a signed structure consisting of an
+      issuer, a timestamp, possibly a timestamp when to expect the next update,
+      and a list of revoked certificates (represented by a serial, a revocation
+      date, and extensions (e.g. reason) - see RFC 5280 section 5.2 for a list
+      of available extensions (not enforced)).  It also may contain any
+      extensions, e.g. a CRL number and whether it is partial or complete. *)
+
+  (** The type of a revocation list, kept abstract. *)
   type t
 
+  (** [issuer t] is the issuer of the revocation list. *)
   val issuer : t -> distinguished_name
 
+  (** [this_update t] is the timestamp of the revocation list. *)
   val this_update : t -> Asn.Time.t
 
+  (** [next_update t] is either [None] or [Some ts], the timestamp of the next
+      update. *)
   val next_update : t -> Asn.Time.t option
 
+  (** The type of a revoked certificate, which consists of a serial number, the
+      revocation date, and possibly extensions.  See RFC 5280 setion 5.3 for
+      allowed extensions (not enforced). *)
   type revoked_cert = {
     serial : Z.t ;
     date : Asn.Time.t ;
     extensions : (bool * Extension.t) list
   }
 
+  (** [revoked_certificates t] is the list of revoked certificates of the
+      revocation list. *)
   val revoked_certificates : t -> revoked_cert list
 
+  (** [extensions t] is the list of extensions, see RFC 5280 section 5.2 for
+      possible values. *)
   val extensions : t -> (bool * Extension.t) list
 
+  (** [crl_number t] is the number of the CRL. *)
   val crl_number : t -> int option
 
+  (** [validate t pk] validates the digital signature of the revocation list. *)
   val validate : t -> public_key -> bool
+
+  (** [revoked ~digest ~issuer ~this_update ~next_update ~extensions certs priv]
+      constructs a revocation list with the given parameters. *)
+  val revoke : ?digest:Nocrypto.Hash.hash ->
+    issuer:distinguished_name ->
+    this_update:Asn.Time.t -> ?next_update:Asn.Time.t ->
+    ?extensions:(bool * Extension.t) list ->
+    revoked_cert list -> private_key -> t
+
+  (** [revoke_certificate cert ~this_update ~next_update t priv] adds [cert] to
+      the revocation list, increments its counter, adjusts [this_update] and
+      [next_update] timestamps, and digitally signs it using [priv]. *)
+  val revoke_certificate : revoked_cert ->
+    this_update:Asn.Time.t -> ?next_update:Asn.Time.t -> t -> private_key -> t
+
+  (** [revoke_certificates certs ~this_update ~next_update t priv] adds [certs]
+      to the revocation list, increments its counter, adjusts [this_update] and
+      [next_update] timestamps, and digitally signs it using [priv]. *)
+  val revoke_certificates : revoked_cert list -> this_update:Asn.Time.t -> ?next_update:Asn.Time.t -> t -> private_key -> t
 end
 
 (** X.509 Certificate Chain Validation. *)

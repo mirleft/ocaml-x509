@@ -32,3 +32,55 @@ let crl_number { asn ; _ } =
 let validate { raw ; asn } pub =
   let tbs_raw = X509_certificate.raw_cert_hack raw asn.signature_val in
   X509_certificate.validate_raw_signature tbs_raw asn.signature_algo asn.signature_val pub
+
+let sign_tbs (tbs : tBS_CRL) key =
+  let tbs_raw = tbs_CRL_to_cstruct tbs in
+  let digest = match Asn_grammars.Algorithm.to_signature_algorithm tbs.signature with
+    | Some (_, h) -> h
+    | _ -> invalid_arg "couldn't parse signature algorithm"
+  in
+  let signature_val = X509_ca.raw_sign tbs_raw digest key in
+  let asn = { tbs_crl = tbs ; signature_algo = tbs.signature ; signature_val } in
+  let raw = Asn_grammars.CRL.crl_to_cstruct asn in
+  { asn ; raw }
+
+let revoke
+    ?(digest = `SHA256)
+    ~issuer
+    ~this_update ?next_update
+    ?(extensions = [])
+    revoked_certs
+    key =
+  let signature =
+    Asn_grammars.Algorithm.of_signature_algorithm
+      (X509_certificate.private_key_to_keytype key) digest
+  in
+  let tbs_crl = {
+    version = `V2 ;
+    signature ;
+    issuer ;
+    this_update ; next_update ;
+    revoked_certs ;
+    extensions
+  }
+  in
+  sign_tbs tbs_crl key
+
+let revoke_certificates revoked ~this_update ?next_update ({ asn ; _ } as crl) key =
+  let tbs = asn.tbs_crl in
+  let extensions = match crl_number crl with
+    | None -> (false, `CRL_number 0) :: tbs.extensions
+    | Some x -> (false, `CRL_number (succ x)) ::
+                List.filter (function (_, `CRL_number _) -> false | _ -> true)
+                  tbs.extensions
+  in
+  let tbs = {
+    tbs with revoked_certs = tbs.revoked_certs @ revoked ;
+             this_update ; next_update ;
+             extensions
+  }
+  in
+  sign_tbs tbs key
+
+let revoke_certificate revoked ~this_update ?next_update crl key =
+  revoke_certificates [revoked] ~this_update ?next_update crl key
