@@ -33,6 +33,17 @@ let validate { raw ; asn } pub =
   let tbs_raw = X509_certificate.raw_cert_hack raw asn.signature_val in
   X509_certificate.validate_raw_signature tbs_raw asn.signature_algo asn.signature_val pub
 
+let verify ({ raw ; asn } as crl) ?time cert =
+  Asn_grammars.Name.equal asn.tbs_crl.issuer (X509_certificate.subject cert) &&
+  (let after x y =
+     x > Asn.Time.to_posix_time y
+   in
+   match time, asn.tbs_crl.next_update with
+   | None, _ -> true
+   | Some x, None -> after x asn.tbs_crl.this_update
+   | Some x, Some y -> after x asn.tbs_crl.this_update && x < Asn.Time.to_posix_time y) &&
+  validate crl (X509_certificate.public_key cert)
+
 let reason revoked =
   X509_common.List_ext.map_find revoked.extensions ~f:(fun (_, ext) ->
       match ext with
