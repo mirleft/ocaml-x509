@@ -395,17 +395,17 @@ module CRL : sig
       extensions, e.g. a CRL number and whether it is partial or complete. *)
 
   (** The type of a revocation list, kept abstract. *)
-  type t
+  type c
 
-  (** [issuer t] is the issuer of the revocation list. *)
-  val issuer : t -> distinguished_name
+  (** [issuer c] is the issuer of the revocation list. *)
+  val issuer : c -> distinguished_name
 
   (** [this_update t] is the timestamp of the revocation list. *)
-  val this_update : t -> Asn.Time.t
+  val this_update : c -> Asn.Time.t
 
   (** [next_update t] is either [None] or [Some ts], the timestamp of the next
       update. *)
-  val next_update : t -> Asn.Time.t option
+  val next_update : c -> Asn.Time.t option
 
   (** The type of a revoked certificate, which consists of a serial number, the
       revocation date, and possibly extensions.  See RFC 5280 setion 5.3 for
@@ -416,19 +416,28 @@ module CRL : sig
     extensions : (bool * Extension.t) list
   }
 
+  (** [reason revoked] extracts the [Reason] extension from [revoked] if
+      present. *)
+  val reason : revoked_cert -> Extension.reason_code option
+
   (** [revoked_certificates t] is the list of revoked certificates of the
       revocation list. *)
-  val revoked_certificates : t -> revoked_cert list
+  val revoked_certificates : c -> revoked_cert list
 
   (** [extensions t] is the list of extensions, see RFC 5280 section 5.2 for
       possible values. *)
-  val extensions : t -> (bool * Extension.t) list
+  val extensions : c -> (bool * Extension.t) list
 
   (** [crl_number t] is the number of the CRL. *)
-  val crl_number : t -> int option
+  val crl_number : c -> int option
 
   (** [validate t pk] validates the digital signature of the revocation list. *)
-  val validate : t -> public_key -> bool
+  val validate : c -> public_key -> bool
+
+  (** [is_revoked crls ~issuer ~cert] is [true] if there exists a revocation of
+      [cert] in [crls] which is signed by the [issuer].  The subject of [issuer]
+      must match the issuer of the crl. *)
+  val is_revoked : c list -> issuer:t -> cert:t -> bool
 
   (** [revoked ~digest ~issuer ~this_update ~next_update ~extensions certs priv]
       constructs a revocation list with the given parameters. *)
@@ -436,18 +445,19 @@ module CRL : sig
     issuer:distinguished_name ->
     this_update:Asn.Time.t -> ?next_update:Asn.Time.t ->
     ?extensions:(bool * Extension.t) list ->
-    revoked_cert list -> private_key -> t
+    revoked_cert list -> private_key -> c
 
   (** [revoke_certificate cert ~this_update ~next_update t priv] adds [cert] to
       the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificate : revoked_cert ->
-    this_update:Asn.Time.t -> ?next_update:Asn.Time.t -> t -> private_key -> t
+    this_update:Asn.Time.t -> ?next_update:Asn.Time.t -> c -> private_key -> c
 
   (** [revoke_certificates certs ~this_update ~next_update t priv] adds [certs]
       to the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
-  val revoke_certificates : revoked_cert list -> this_update:Asn.Time.t -> ?next_update:Asn.Time.t -> t -> private_key -> t
+  val revoke_certificates : revoked_cert list ->
+    this_update:Asn.Time.t -> ?next_update:Asn.Time.t -> c -> private_key -> c
 end
 
 (** X.509 Certificate Chain Validation. *)
@@ -524,6 +534,7 @@ module Validation : sig
 
     | `EmptyCertificateChain
     | `NoTrustAnchor of t
+    | `Revoked of t
   ]
 
   (** [build_paths server rest] is [paths], which are all possible certificate
@@ -549,9 +560,9 @@ module Validation : sig
   (** [chain_error_to_string validation_error] is [string], the string representation of the [chain_error]. *)
   val chain_error_to_string : chain_error -> string
 
-  (** [verify_chain ~host ~time ~anchors chain] is [result], either [Ok] and the
-      trust anchor used to verify the chain, or [Fail] and the chain error.  RFC
-      5280 describes the implemented
+  (** [verify_chain ~host ~time ~revoked ~anchors chain] is [result], either
+      [Ok] and the trust anchor used to verify the chain, or [Fail] and the
+      chain error.  RFC 5280 describes the implemented
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}path validation}
       algorithm: The validity period of the given certificates is checked
       against the [time].  The X509v3 extensions of the [chain] are checked,
@@ -560,7 +571,9 @@ module Validation : sig
       certificate is checked to contain the given [host], using {!hostnames}.
       The returned certificate is the root of the chain, a member of the given
       list of [anchors]. *)
-  val verify_chain : ?host:host -> ?time:Ptime.t -> anchors:(t list) -> t list -> [ `Ok of t | `Fail of chain_error ]
+  val verify_chain : ?host:host -> ?time:Ptime.t ->
+    ?revoked:(issuer:t -> cert:t -> bool) ->
+    anchors:(t list) -> t list -> [ `Ok of t | `Fail of chain_error ]
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
@@ -592,15 +605,20 @@ module Validation : sig
     | `Fail of validation_error
   ]
 
-  (** [verify_chain_of_trust ~host ~time ~anchors certificates] is [result].
-      First, all possible paths are constructed using the {!build_paths}
-      function, the first certificate of the chain is verified to be a valid
-      leaf certificate (no BasicConstraints extension) and contains the given
-      [host] (using {!hostnames}); if some path is valid, using {!verify_chain},
-      the result will be [Ok] and contain the actual certificate chain and the
-      trust anchor. *)
+  (** [verify_chain_of_trust ~host ~time ~revoked ~anchors certificates] is
+      [result].  First, all possible paths are constructed using the
+      {!build_paths} function, the first certificate of the chain is verified to
+      be a valid leaf certificate (no BasicConstraints extension) and contains
+      the given [host] (using {!hostnames}); if some path is valid, using
+      {!verify_chain}, the result will be [Ok] and contain the actual
+      certificate chain and the trust anchor. *)
   val verify_chain_of_trust :
+<<<<<<< HEAD
     ?host:host -> ?time:Ptime.t -> anchors:(t list) -> t list -> result
+=======
+    ?host:host -> ?time:float -> ?revoked:(issuer:t -> cert:t -> bool) ->
+    anchors:(t list) -> t list -> result
+>>>>>>> d653fbf... Revocation logic for authentication
 
   (** {2 Fingerprint verification} *)
 
@@ -650,7 +668,11 @@ module Authenticator : sig
       anchors are not checked to be valid trust anchors any further
       (you have to do this manually with {!Validation.valid_ca} or
       {!Validation.valid_cas})!  *)
+<<<<<<< HEAD
   val chain_of_trust : ?time:Ptime.t -> t list -> a
+=======
+  val chain_of_trust : ?time:float -> ?crls:CRL.c list -> t list -> a
+>>>>>>> d653fbf... Revocation logic for authentication
 
   (** [server_key_fingerprint ~time hash fingerprints] is an
       [authenticator] which uses the given [time] and list of
@@ -726,11 +748,11 @@ module Encoding : sig
 
   (** [crl_to_cstruct crl] is [buffer], the ASN.1 DER encoding of the
       given certificate revocation list. *)
-  val crl_to_cstruct : CRL.t -> Cstruct.t
+  val crl_to_cstruct : CRL.c -> Cstruct.t
 
   (** [crl_of_cstruct buffer] is [crl], the certificate revocation list of
       the ASN.1 encoded buffer. *)
-  val crl_of_cstruct : Cstruct.t -> CRL.t option
+  val crl_of_cstruct : Cstruct.t -> CRL.c option
 
   (** Parser and unparser of PEM files *)
   module Pem : sig
