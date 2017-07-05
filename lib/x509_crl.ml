@@ -1,7 +1,7 @@
 open Asn_grammars.CRL
 include X509_crl_types
 
-type t = {
+type c = {
   raw : Cstruct.t ;
   asn : Asn_grammars.CRL.t ;
 }
@@ -32,6 +32,32 @@ let crl_number { asn ; _ } =
 let validate { raw ; asn } pub =
   let tbs_raw = X509_certificate.raw_cert_hack raw asn.signature_val in
   X509_certificate.validate_raw_signature tbs_raw asn.signature_algo asn.signature_val pub
+
+let reason revoked =
+  X509_common.List_ext.map_find revoked.extensions ~f:(fun (_, ext) ->
+      match ext with
+      | `Reason x -> Some x
+      | _ -> None)
+
+let is_revoked crls ~issuer:super ~cert =
+  List.exists (fun crl ->
+      if
+        Asn_grammars.Name.equal (X509_certificate.subject super) (issuer crl) &&
+        validate crl (X509_certificate.public_key super)
+      then
+        try
+          let entry = List.find
+              (fun r -> Z.equal (X509_certificate.serial cert) r.serial)
+              (revoked_certificates crl)
+          in
+          match reason entry with
+          | None -> true
+          | Some `Remove_from_CRL -> false
+          | Some _ -> true
+        with Not_found -> false
+      else
+        false)
+    crls
 
 let sign_tbs (tbs : tBS_CRL) key =
   let tbs_raw = tbs_CRL_to_cstruct tbs in

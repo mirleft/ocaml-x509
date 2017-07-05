@@ -21,10 +21,10 @@ let rsa_public_to_cstruct : Nocrypto.Rsa.pub -> Cstruct.t =
 let rsa_public_of_cstruct : Cstruct.t -> Nocrypto.Rsa.pub option =
   Asn_grammars.PK.rsa_public_of_cstruct
 
-let crl_to_cstruct : X509_crl.t -> Cstruct.t =
+let crl_to_cstruct : X509_crl.c -> Cstruct.t =
   X509_crl.crl_to_cstruct
 
-let crl_of_cstruct : Cstruct.t -> X509_crl.t option =
+let crl_of_cstruct : Cstruct.t -> X509_crl.c option =
   X509_crl.crl_of_cstruct
 
 module Pem = X509_pem

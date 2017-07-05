@@ -384,6 +384,7 @@ module Validation = struct
 
     | `EmptyCertificateChain
     | `NoTrustAnchor of t
+    | `Revoked of t
   ] [@@deriving sexp]
 
   type chain_error = [
@@ -466,6 +467,7 @@ module Validation = struct
          " is smaller than the required path length " ^ string_of_int pathlen
     | `EmptyCertificateChain -> "Certificate chain is empty"
     | `NoTrustAnchor c -> "No trust anchor found for " ^ common_name_to_string c
+    | `Revoked c -> "Certificate " ^ common_name_to_string c ^ " is revoked"
 
   let chain_error_to_string = function
     | `Leaf l -> leaf_validation_error_to_string l
@@ -534,26 +536,27 @@ module Validation = struct
   let issuer trusted cert =
     List.filter (fun p -> issuer_matches_subject p cert) trusted
 
-  let rec validate_anchors pathlen cert = function
+  let rec validate_anchors revoked pathlen cert = function
     | []    -> fail (`NoTrustAnchor cert)
     | x::xs -> match signs pathlen x cert with
-      | Ok _    -> Ok x
-      | Error _ -> validate_anchors pathlen cert xs
+      | Ok _    -> if revoked ~issuer:x ~cert then fail (`Revoked cert) else Ok x
+      | Error _ -> validate_anchors revoked pathlen cert xs
 
   let lift_leaf f x =
     match f x with
     | Ok () -> Ok ()
     | Error e -> Error (`Leaf e)
 
-  let verify_single_chain ?time anchors chain =
+  let verify_single_chain ?time ?(revoked = fun ~issuer ~cert -> false) anchors chain =
     let rec climb pathlen = function
-      | sub :: super :: certs ->
-         is_cert_valid time super >>= fun () ->
-         signs pathlen super sub >>= fun () ->
-         climb (succ pathlen) (super :: certs)
+      | cert :: issuer :: certs ->
+         is_cert_valid time issuer >>= fun () ->
+         if revoked ~issuer ~cert then fail (`Revoked cert) else success >>= fun () ->
+         signs pathlen issuer cert >>= fun () ->
+         climb (succ pathlen) (issuer :: certs)
       | [c] ->
          let anchors = issuer anchors c in
-         validate_anchors pathlen c anchors
+         validate_anchors revoked pathlen c anchors
       | [] -> fail `EmptyCertificateChain
     in
     climb 0 chain
@@ -563,13 +566,13 @@ module Validation = struct
     | Ok x -> Ok x
     | Error e -> Error (`Chain e)
 
-  let verify_chain ?host ?time ~anchors = function
+  let verify_chain ?host ?time ?revoked ~anchors = function
     | [] -> `Fail (`Chain `EmptyCertificateChain)
     | server :: certs ->
        let anchors = List.filter (validate_time time) anchors in
        let res =
          lift_leaf (is_server_cert_valid ?host time) server >>= fun () ->
-         lift_chain (verify_single_chain ?time anchors) (server :: certs)
+         lift_chain (verify_single_chain ?time ?revoked anchors) (server :: certs)
        in
        lower res
 
@@ -584,7 +587,7 @@ module Validation = struct
                | Ok ta -> Ok (Some (c, ta))
                | Error _ -> any_m e f cs
 
-  let verify_chain_of_trust ?host ?time ~anchors = function
+  let verify_chain_of_trust ?host ?time ?revoked ~anchors = function
     | [] -> `Fail `EmptyCertificateChain
     | server :: certs ->
        let res =
@@ -595,7 +598,7 @@ module Validation = struct
          and anchors = List.filter (validate_time time) anchors
          in
          (* exists there one which is good? *)
-         any_m `InvalidChain (verify_single_chain ?time anchors) paths
+         any_m `InvalidChain (verify_single_chain ?time ?revoked anchors) paths
        in
        lower res
 
