@@ -434,6 +434,12 @@ module CRL : sig
   (** [validate t pk] validates the digital signature of the revocation list. *)
   val validate : c -> public_key -> bool
 
+  (** [verify t ~time cert] verifies that the issuer of [t] matches the subject
+      of [cert], and validates the digital signature of the revocation list.  If
+      [time] is provided, it must be after [this_update] and before
+      [next_update] of [t]. *)
+  val verify : c -> ?time:float -> t -> bool
+
   (** [is_revoked crls ~issuer ~cert] is [true] if there exists a revocation of
       [cert] in [crls] which is signed by the [issuer].  The subject of [issuer]
       must match the issuer of the crl. *)
