@@ -22,6 +22,11 @@ let supports_extended_usage ?(not_present = false) c u =
   | Some x -> List.mem u x
   | None   -> not_present
 
+let basic_constraints { asn ; _ } =
+  match Asn_grammars.extn_basic_constr asn with
+  | Some (_, `Basic_constraints data) -> Some data
+  | _ -> None
+
 let unsupported { asn ; _ } oid = Asn_grammars.extn_unknown asn oid
 
 let subject_alt_names { asn = cert ; _ } =

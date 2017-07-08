@@ -208,6 +208,9 @@ module Extension : sig
       extendedKeyUsage extension. *)
   val supports_extended_usage : ?not_present:bool -> t -> extended_key_usage -> bool
 
+  (** [basic_constraints cert] extracts the BasicConstraints extension, if present. *)
+  val basic_constraints : t -> (bool * int option) option
+
   (** A list of [general_name]s is the value of both
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}subjectAltName}
       and
