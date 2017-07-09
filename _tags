@@ -5,4 +5,4 @@ true : package(asn1-combinators cstruct nocrypto sexplib astring)
 <lib> : include
 <lib/x509_certificate.ml> : package(ppx_sexp_conv)
 
-<tests/*> : package(oUnit cstruct.unix)
+<tests/*> : package(oUnit cstruct.unix nocrypto.unix)

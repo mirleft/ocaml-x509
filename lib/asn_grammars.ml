@@ -564,6 +564,60 @@ module Extension = struct
           (optional ~label:"policyQualifiers" (sequence_of qualifier_info))
 
 
+  let reason = bit_string_flags [
+        0, `Unused
+      ; 1, `Key_compromise
+      ; 2, `CA_compromise
+      ; 3, `Affiliation_changed
+      ; 4, `Superseded
+      ; 5, `Cessation_of_operation
+      ; 6, `Certificate_hold
+      ; 7, `Privilege_withdrawn
+      ; 8, `AA_compromise
+      ]
+
+  let distribution_point_name =
+    map (function | `C1 s -> `Full s | `C2 s -> `Relative s)
+        (function | `Full s -> `C1 s | `Relative s -> `C2 s)
+    @@
+    choice2
+      (implicit 0 gen_names)
+      (implicit 1 Name.name)
+
+  let distribution_point =
+    sequence3
+      (optional ~label:"distributionPoint" @@ explicit 0 distribution_point_name)
+      (optional ~label:"reasons"           @@ implicit 1 reason)
+      (optional ~label:"cRLIssuer"         @@ implicit 2 Name.name)
+
+  let crl_distribution_points = sequence_of distribution_point
+
+  let issuing_distribution_point =
+    map (fun (a, b, c, d, e, f) -> (a, def  false b, def  false c, d, def  false e, def  false f))
+        (fun (a, b, c, d, e, f) -> (a, def' false b, def' false c, d, def' false e, def' false f))
+    @@
+    sequence6
+      (optional ~label:"distributionPoint"          @@ explicit 0 distribution_point_name)
+      (optional ~label:"onlyContainsUserCerts"      @@ implicit 1 bool)
+      (optional ~label:"onlyContainsCACerts"        @@ implicit 2 bool)
+      (optional ~label:"onlySomeReasons"            @@ implicit 3 reason)
+      (optional ~label:"indirectCRL"                @@ implicit 4 bool)
+      (optional ~label:"onlyContainsAttributeCerts" @@ implicit 5 bool)
+
+  let crl_reason =
+    enumerated [
+        0, `Unspecified
+      ; 1, `Key_compromise
+      ; 2, `CA_compromise
+      ; 3, `Affiliation_changed
+      ; 4, `Superseded
+      ; 5, `Cessation_of_operation
+      ; 6, `Certificate_hold
+      ; 8, `Remove_from_CRL
+      ; 9, `Privilege_withdrawn
+      ; 10, `AA_compromise
+      ]
+
   let gen_names_of_cs, gen_names_to_cs       = project_exn gen_names
   and auth_key_id_of_cs, auth_key_id_to_cs   = project_exn authority_key_id
   and subj_key_id_of_cs, subj_key_id_to_cs   = project_exn octet_string
@@ -572,7 +626,12 @@ module Extension = struct
   and basic_constr_of_cs, basic_constr_to_cs = project_exn basic_constraints
   and pr_key_peri_of_cs, pr_key_peri_to_cs   = project_exn priv_key_usage_period
   and name_con_of_cs, name_con_to_cs         = project_exn name_constraints
+  and crl_distrib_of_cs, crl_distrib_to_cs   = project_exn crl_distribution_points
   and cert_pol_of_cs, cert_pol_to_cs         = project_exn cert_policies
+  and int_of_cs, int_to_cs                   = project_exn int
+  and issuing_dp_of_cs, issuing_dp_to_cs     = project_exn issuing_distribution_point
+  and crl_reason_of_cs, crl_reason_to_cs     = project_exn crl_reason
+  and time_of_cs, time_to_cs                 = project_exn generalized_time
 
   (* XXX 4.2.1.4. - cert policies! ( and other x509 extensions ) *)
 
@@ -596,6 +655,12 @@ module Extension = struct
     (ID.basic_constraints, fun cs ->
       `Basic_constraints (basic_constr_of_cs cs));
 
+    (ID.crl_number, fun cs ->
+      `CRL_number (int_of_cs cs));
+
+    (ID.delta_crl_indicator, fun cs ->
+      `Delta_CRL_indicator (int_of_cs cs));
+
     (ID.extended_key_usage, fun cs ->
       `Ext_key_usage (e_key_usage_of_cs cs)) ;
 
@@ -604,6 +669,24 @@ module Extension = struct
 
     (ID.name_constraints, fun cs ->
       `Name_constraints (name_con_of_cs cs)) ;
+
+    (ID.crl_distribution_points, fun cs ->
+      `CRL_distribution_points (crl_distrib_of_cs cs)) ;
+
+    (ID.issuing_distribution_point, fun cs ->
+      `Issuing_distribution_point (issuing_dp_of_cs cs)) ;
+
+    (ID.freshest_crl, fun cs ->
+      `Freshest_CRL (crl_distrib_of_cs cs)) ;
+
+    (ID.reason_code, fun cs ->
+      `Reason (crl_reason_of_cs cs)) ;
+
+    (ID.invalidity_date, fun cs ->
+      `Invalidity_date (time_of_cs cs)) ;
+
+    (ID.certificate_issuer, fun cs ->
+      `Certificate_issuer (gen_names_of_cs cs)) ;
 
     (ID.certificate_policies_2, fun cs ->
       `Policies (cert_pol_of_cs cs))
@@ -617,9 +700,17 @@ module Extension = struct
     | `Subject_key_id    x -> (ID.subject_key_identifier  , subj_key_id_to_cs  x)
     | `Key_usage         x -> (ID.key_usage               , key_usage_to_cs    x)
     | `Basic_constraints x -> (ID.basic_constraints       , basic_constr_to_cs x)
+    | `CRL_number        x -> (ID.crl_number              , int_to_cs          x)
+    | `Delta_CRL_indicator x -> (ID.delta_crl_indicator   , int_to_cs          x)
     | `Ext_key_usage     x -> (ID.extended_key_usage      , e_key_usage_to_cs  x)
     | `Priv_key_period   x -> (ID.private_key_usage_period, pr_key_peri_to_cs  x)
     | `Name_constraints  x -> (ID.name_constraints        , name_con_to_cs     x)
+    | `CRL_distribution_points x -> (ID.crl_distribution_points, crl_distrib_to_cs x)
+    | `Issuing_distribution_point x -> (ID.issuing_distribution_point, issuing_dp_to_cs x)
+    | `Freshest_CRL      x -> (ID.freshest_crl            , crl_distrib_to_cs  x)
+    | `Reason            x -> (ID.reason_code             , crl_reason_to_cs   x)
+    | `Invalidity_date   x -> (ID.invalidity_date         , time_to_cs         x)
+    | `Certificate_issuer x -> (ID.certificate_issuer     , gen_names_to_cs    x)
     | `Policies          x -> (ID.certificate_policies_2  , cert_pol_to_cs     x)
     | `Unsupported (oid, cs) -> (oid, cs)
 
@@ -945,6 +1036,7 @@ let  extn_subject_alt_name
    , extn_basic_constr
    , extn_priv_key_period
    , extn_name_constraints
+   , extn_crl_distribution_points
    , extn_policies
 =
   let f pred cert =
@@ -961,6 +1053,7 @@ let  extn_subject_alt_name
   (f @@ function `Basic_constraints _ as x -> Some x | _ -> None),
   (f @@ function `Priv_key_period   _ as x -> Some x | _ -> None),
   (f @@ function `Name_constraints  _ as x -> Some x | _ -> None),
+  (f @@ function `CRL_distribution_points  _ as x -> Some x | _ -> None),
   (f @@ function `Policies          _ as x -> Some x | _ -> None)
 
 let extn_unknown cert oid =
@@ -969,3 +1062,86 @@ let extn_unknown cert oid =
         match ext with
         | `Unsupported (o, v) when o = oid -> Some (crit, v)
         | _ -> None)
+
+module CRL = struct
+
+  type tBS_CRL = {
+    version : [ `V1 | `V2 ] ;
+    signature : Algorithm.t ;
+    issuer : distinguished_name ;
+    this_update : Time.t ;
+    next_update : Time.t option ;
+    revoked_certs : X509_crl_types.revoked_cert list ;
+    extensions : (bool * X509_extension_types.t) list
+  }
+
+  type t = {
+    tbs_crl : tBS_CRL ;
+    signature_algo : Algorithm.t ;
+    signature_val : Cstruct.t
+  }
+
+  let revokedCertificate =
+    let f (serial, date, e) =
+      let extensions = match e with None -> [] | Some xs -> xs in
+      { X509_crl_types.serial ; date ; extensions }
+    and g { X509_crl_types.serial ; date ; extensions } =
+        let e = match extensions with [] -> None | xs -> Some xs in
+        (serial, date, e)
+    in
+    map f g @@
+    sequence3
+      (required ~label:"userCertificate" @@ certificate_sn)
+      (required ~label:"revocationDate" @@ time)
+      (optional ~label:"crlEntryExtensions" @@ Extension.extensions_der)
+
+  let version =
+    map (function 0 -> `V1 | 1 -> `V2 | _ -> parse_error "unknown version")
+        (function `V2 -> 1 | `V1 -> 0)
+    int
+
+  let tBSCertList =
+    let f (a, (b, (c, (d, (e, (f, g)))))) =
+        { version = def `V1 a ; signature = b ; issuer = c ;
+          this_update = d ; next_update = e ;
+          revoked_certs = (match f with None -> [] | Some xs -> xs) ;
+          extensions = (match g with None -> [] | Some xs -> xs) }
+    and g { version = a ; signature = b ; issuer = c ;
+            this_update = d ; next_update = e ; revoked_certs = f ;
+            extensions = g } =
+              let f = match f with [] -> None | xs -> Some xs
+              and g = match g with [] -> None | xs -> Some xs
+              in
+              (def' `V1 a, (b, (c, (d, (e, (f, g))))))
+    in
+    map f g @@
+    sequence @@
+        (optional ~label:"version" @@ version)
+      @ (required ~label:"signature" @@ Algorithm.identifier)
+      @ (required ~label:"issuer" @@ Name.name)
+      @ (required ~label:"thisUpdate" @@ time)
+      @ (optional ~label:"nextUpdate" @@ time)
+      @ (optional ~label:"revokedCertificates" @@ sequence_of revokedCertificate)
+     -@ (optional ~label:"crlExtensions" @@ explicit 0 Extension.extensions_der)
+
+  let certificateList =
+    let f (cl, sa, sv) =
+      if cl.signature <> sa then
+        parse_error "signatureAlgorithm != tbsCertList.signature"
+      else
+        { tbs_crl = cl ; signature_algo = sa ; signature_val = sv }
+    and g { tbs_crl ; signature_algo ; signature_val } =
+      (tbs_crl, signature_algo, signature_val)
+    in
+    map f g @@
+    sequence3
+      (required ~label:"tbsCertList" @@ tBSCertList)
+      (required ~label:"signatureAlgorithm" @@ Algorithm.identifier)
+      (required ~label:"signatureValue" @@ bit_string_cs)
+
+  let (crl_of_cstruct, crl_to_cstruct) =
+    projections_of der certificateList
+
+  let (tbs_CRL_of_cstruct, tbs_CRL_to_cstruct) =
+    projections_of der tBSCertList
+end

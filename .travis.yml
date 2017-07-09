@@ -3,7 +3,7 @@ install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.t
 script: bash -ex .travis-opam.sh
 env:
   global:
-    - PACKAGE="x509"
+    - PACKAGE="x509" PINS="asn1-combinators:https://github.com/hannesm/ocaml-asn1-combinators.git#enum"
 matrix:
   include:
   - os: linux

@@ -48,6 +48,40 @@ type name_constraint = (general_name * int * int option) list
 
 type policy = [ `Any | `Something of Asn.OID.t ]
 
+type reason = [
+  | `Unused
+  | `Key_compromise
+  | `CA_compromise
+  | `Affiliation_changed
+  | `Superseded
+  | `Cessation_of_operation
+  | `Certificate_hold
+  | `Privilege_withdrawn
+  | `AA_compromise
+]
+
+type distribution_point_name =
+  [ `Full of general_name list
+  | `Relative of X509_types.distinguished_name ]
+
+type distribution_point =
+  distribution_point_name option *
+  reason list option *
+  X509_types.distinguished_name option
+
+type reason_code = [
+  | `Unspecified
+  | `Key_compromise
+  | `CA_compromise
+  | `Affiliation_changed
+  | `Superseded
+  | `Cessation_of_operation
+  | `Certificate_hold
+  | `Remove_from_CRL
+  | `Privilege_withdrawn
+  | `AA_compromise
+]
+
 type t = [
   | `Unsupported       of Asn.OID.t * Cstruct.t
   | `Subject_alt_name  of general_name list
@@ -57,7 +91,15 @@ type t = [
   | `Key_usage         of key_usage list
   | `Ext_key_usage     of extended_key_usage list
   | `Basic_constraints of (bool * int option)
+  | `CRL_number        of int
+  | `Delta_CRL_indicator of int
   | `Priv_key_period   of priv_key_usage_period
   | `Name_constraints  of name_constraint * name_constraint
+  | `CRL_distribution_points of distribution_point list
+  | `Issuing_distribution_point of distribution_point_name option * bool * bool * reason list option * bool * bool
+  | `Freshest_CRL      of distribution_point list
+  | `Reason            of reason_code
+  | `Invalidity_date   of Asn.Time.t
+  | `Certificate_issuer of general_name list
   | `Policies          of policy list
 ]
