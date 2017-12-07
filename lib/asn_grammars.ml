@@ -601,7 +601,7 @@ module Extension = struct
       (optional ~label:"onlyContainsAttributeCerts" @@ implicit 5 bool)
 
   let crl_reason =
-    enumerated [
+    let alist = [
         0, `Unspecified
       ; 1, `Key_compromise
       ; 2, `CA_compromise
@@ -613,6 +613,9 @@ module Extension = struct
       ; 9, `Privilege_withdrawn
       ; 10, `AA_compromise
       ]
+    in
+    let rev = List.map (fun (k, v) -> (v, k)) alist in
+    enumerated (fun i -> List.assoc i alist) (fun k -> List.assoc k rev)
 
   let gen_names_of_cs, gen_names_to_cs       = project_exn gen_names
   and auth_key_id_of_cs, auth_key_id_to_cs   = project_exn authority_key_id
@@ -1061,8 +1064,8 @@ module CRL = struct
     version : [ `V1 | `V2 ] ;
     signature : Algorithm.t ;
     issuer : distinguished_name ;
-    this_update : Time.t ;
-    next_update : Time.t option ;
+    this_update : Ptime.t ;
+    next_update : Ptime.t option ;
     revoked_certs : X509_crl_types.revoked_cert list ;
     extensions : (bool * X509_extension_types.t) list
   }
@@ -1132,8 +1135,8 @@ module CRL = struct
       (required ~label:"signatureValue" @@ bit_string_cs)
 
   let (crl_of_cstruct, crl_to_cstruct) =
-    projections_of der certificateList
+    projections_of Asn.der certificateList
 
   let (tbs_CRL_of_cstruct, tbs_CRL_to_cstruct) =
-    projections_of der tBSCertList
+    projections_of Asn.der tBSCertList
 end

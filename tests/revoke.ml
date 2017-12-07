@@ -29,19 +29,10 @@ let leaf_exts =
   in
   [ bc ; ku ; ext_ku ]
 
-let date ts =
-  let tm = Unix.gmtime ts in
-  {
-    Asn.Time.date = Unix.(tm.tm_year + 1900, succ tm.tm_mon, tm.tm_mday) ;
-    time = Unix.(tm.tm_hour, tm.tm_min, tm.tm_sec, 0.) ;
-    tz = None
-  }
-
 let validity now =
-  let start = date now
-  and stop = date (now +. 3600.)
-  in
-  (start, stop)
+  match Ptime.add_span now (Ptime.Span.of_int_s 3600) with
+  | Some fut -> (now, fut)
+  | None -> invalid_arg "couldn't add 3600 seconds to now"
 
 let key () =
   let key = Nocrypto.Rsa.generate 1024 in
@@ -65,7 +56,7 @@ let cert ?serial ?(name = "sub") now ca pubca privca issuer =
   (cert, pub, priv)
 
 let verify _ =
-  let now = Unix.time () in
+  let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let cert, _, _ = cert now false capub capriv (X509.subject ca) in
   match X509.Validation.verify_chain ~anchors:[ca] [cert] with
@@ -73,14 +64,13 @@ let verify _ =
   | `Fail _ -> assert_failure ("expected verification to succeed")
 
 let crl _ =
-  let now = Unix.time () in
+  let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let cert, _, _ = cert ~serial now false capub capriv issuer in
-  let date = date now in
-  let revoked = { X509.CRL.serial ; date ; extensions = [] } in
-  let crl = X509.CRL.revoke ~issuer ~this_update:date ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
+  let revoked = { X509.CRL.serial ; date = now ; extensions = [] } in
+  let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert] with
   | `Ok _ -> assert_failure ("expected revocation")
@@ -88,7 +78,7 @@ let crl _ =
   | `Fail _ -> assert_failure ("expected revoked failure!")
 
 let verify' _ =
-  let now = Unix.time () in
+  let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
@@ -99,15 +89,14 @@ let verify' _ =
   | `Fail _ -> assert_failure ("expected verification!")
 
 let crl' _ =
-  let now = Unix.time () in
+  let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let ica, ipub, ipriv = cert ~name:"subCA" ~serial now true capub capriv issuer in
   let cert, pub, priv = cert now false ipub ipriv (X509.subject ica) in
-  let date = date now in
-  let revoked = { X509.CRL.serial ; date ; extensions = [] } in
-  let crl = X509.CRL.revoke ~issuer ~this_update:date ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
+  let revoked = { X509.CRL.serial ; date = now ; extensions = [] } in
+  let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
   | `Ok _ -> assert_failure ("expected revocation")
@@ -115,15 +104,14 @@ let crl' _ =
   | `Fail _ -> assert_failure ("expected revoked failure!")
 
 let crl'leaf _ =
-  let now = Unix.time () in
+  let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
   let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv (X509.subject ca) in
   let issuer = X509.subject ica in
   let cert, pub, priv = cert ~serial now false ipub ipriv issuer in
-  let date = date now in
-  let revoked = { X509.CRL.serial ; date ; extensions = [] } in
-  let crl = X509.CRL.revoke ~issuer ~this_update:date ~extensions:[(false, `CRL_number 1)] [revoked] ipriv in
+  let revoked = { X509.CRL.serial ; date = now ; extensions = [] } in
+  let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] ipriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
   | `Ok _ -> assert_failure ("expected revocation")
@@ -131,45 +119,42 @@ let crl'leaf _ =
   | `Fail _ -> assert_failure ("expected revoked failure!")
 
 let crl'leaf'wrong _ =
-  let now = Unix.time () in
+  let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv issuer in
   let cert, pub, priv = cert ~serial now false ipub ipriv (X509.subject ica) in
-  let date = date now in
-  let revoked = { X509.CRL.serial ; date ; extensions = [] } in
-  let crl = X509.CRL.revoke ~issuer ~this_update:date ~extensions:[(false, `CRL_number 1)] [revoked] ipriv in
+  let revoked = { X509.CRL.serial ; date = now ; extensions = [] } in
+  let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] ipriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
   | `Ok _ -> ()
   | `Fail _ -> assert_failure ("expected success!")
 
 let verify'' _ =
-  let now = Unix.time () in
+  let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv issuer in
   let cert, pub, priv = cert now false ipub ipriv (X509.subject ica) in
-  let date = date now in
-  let revoked = { X509.CRL.serial ; date ; extensions = [] } in
-  let crl = X509.CRL.revoke ~issuer ~this_update:date ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
+  let revoked = { X509.CRL.serial ; date = now ; extensions = [] } in
+  let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
   | `Ok _ -> ()
   | `Fail _ -> assert_failure ("expected verify to succeed!")
 
 let crl'' _ =
-  let now = Unix.time () in
+  let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let ica, ipub, ipriv = cert ~name:"subCA" ~serial now true capub capriv issuer in
   let cert, pub, priv = cert now false ipub ipriv (X509.subject ica) in
-  let date = date now in
-  let revoked = { X509.CRL.serial ; date ; extensions = [(false, `Reason `Remove_from_CRL)] } in
-  let crl = X509.CRL.revoke ~issuer ~this_update:date ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
+  let revoked = { X509.CRL.serial ; date = now ; extensions = [(false, `Reason `Remove_from_CRL)] } in
+  let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
   | `Ok _ -> ()

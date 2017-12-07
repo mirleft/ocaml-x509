@@ -99,7 +99,7 @@ type t = [
   | `Issuing_distribution_point of distribution_point_name option * bool * bool * reason list option * bool * bool
   | `Freshest_CRL      of distribution_point list
   | `Reason            of reason_code
-  | `Invalidity_date   of Asn.Time.t
+  | `Invalidity_date   of Ptime.t
   | `Certificate_issuer of general_name list
   | `Policies          of policy list
 ]

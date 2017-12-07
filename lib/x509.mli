@@ -321,7 +321,7 @@ module Extension : sig
     | `Issuing_distribution_point of distribution_point_name option * bool * bool * reason list option * bool * bool
     | `Freshest_CRL      of distribution_point list
     | `Reason            of reason_code
-    | `Invalidity_date   of Asn.Time.t
+    | `Invalidity_date   of Ptime.t
     | `Certificate_issuer of general_name list
     | `Policies          of policy list
   ]
@@ -404,18 +404,18 @@ module CRL : sig
   val issuer : c -> distinguished_name
 
   (** [this_update t] is the timestamp of the revocation list. *)
-  val this_update : c -> Asn.Time.t
+  val this_update : c -> Ptime.t
 
   (** [next_update t] is either [None] or [Some ts], the timestamp of the next
       update. *)
-  val next_update : c -> Asn.Time.t option
+  val next_update : c -> Ptime.t option
 
   (** The type of a revoked certificate, which consists of a serial number, the
       revocation date, and possibly extensions.  See RFC 5280 setion 5.3 for
       allowed extensions (not enforced). *)
   type revoked_cert = {
     serial : Z.t ;
-    date : Asn.Time.t ;
+    date : Ptime.t ;
     extensions : (bool * Extension.t) list
   }
 
@@ -441,7 +441,7 @@ module CRL : sig
       of [cert], and validates the digital signature of the revocation list.  If
       [time] is provided, it must be after [this_update] and before
       [next_update] of [t]. *)
-  val verify : c -> ?time:float -> t -> bool
+  val verify : c -> ?time:Ptime.t -> t -> bool
 
   (** [is_revoked crls ~issuer ~cert] is [true] if there exists a revocation of
       [cert] in [crls] which is signed by the [issuer].  The subject of [issuer]
@@ -452,7 +452,7 @@ module CRL : sig
       constructs a revocation list with the given parameters. *)
   val revoke : ?digest:Nocrypto.Hash.hash ->
     issuer:distinguished_name ->
-    this_update:Asn.Time.t -> ?next_update:Asn.Time.t ->
+    this_update:Ptime.t -> ?next_update:Ptime.t ->
     ?extensions:(bool * Extension.t) list ->
     revoked_cert list -> private_key -> c
 
@@ -460,13 +460,13 @@ module CRL : sig
       the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificate : revoked_cert ->
-    this_update:Asn.Time.t -> ?next_update:Asn.Time.t -> c -> private_key -> c
+    this_update:Ptime.t -> ?next_update:Ptime.t -> c -> private_key -> c
 
   (** [revoke_certificates certs ~this_update ~next_update t priv] adds [certs]
       to the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificates : revoked_cert list ->
-    this_update:Asn.Time.t -> ?next_update:Asn.Time.t -> c -> private_key -> c
+    this_update:Ptime.t -> ?next_update:Ptime.t -> c -> private_key -> c
 end
 
 (** X.509 Certificate Chain Validation. *)
@@ -673,11 +673,7 @@ module Authenticator : sig
       anchors are not checked to be valid trust anchors any further
       (you have to do this manually with {!Validation.valid_ca} or
       {!Validation.valid_cas})!  *)
-<<<<<<< HEAD
-  val chain_of_trust : ?time:Ptime.t -> t list -> a
-=======
-  val chain_of_trust : ?time:float -> ?crls:CRL.c list -> t list -> a
->>>>>>> d653fbf... Revocation logic for authentication
+  val chain_of_trust : ?time:Ptime.t -> ?crls:CRL.c list -> t list -> a
 
   (** [server_key_fingerprint ~time hash fingerprints] is an
       [authenticator] which uses the given [time] and list of

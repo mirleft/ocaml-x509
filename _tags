@@ -5,6 +5,6 @@ true : package(result asn1-combinators ptime cstruct nocrypto sexplib astring)
 <lib> : include
 <lib/x509_certificate.ml> : package(ppx_sexp_conv)
 
-<tests/*> : package(oUnit cstruct-unix nocrypto.unix)
+<tests/*> : package(oUnit cstruct-unix nocrypto.unix ptime.clock.os)
 
 <random>: -traverse
