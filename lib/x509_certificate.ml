@@ -188,9 +188,7 @@ let validate_time time { asn = cert ; _ } =
   | None     -> true
   | Some now ->
     let (not_before, not_after) = cert.tbs_cert.validity in
-    let (t1, t2) =
-      Asn.Time.(to_posix_time not_before, to_posix_time not_after) in
-    t1 <= now && now <= t2
+    Ptime.(is_later ~than:not_before now && is_earlier ~than:not_after now)
 
 let version_matches_extensions { asn = cert ; _ } =
   let tbs = cert.tbs_cert in
@@ -332,18 +330,18 @@ module Validation = struct
 
   let expired c now =
     let now = match now with
-      | None -> "none"
-      | Some t -> string_of_float t
+      | None   -> "none"
+      | Some t -> Ptime.to_rfc3339 ~tz_offset_s:0 t
     and fr, un = c.asn.tbs_cert.validity
-    and f t = string_of_float (Asn.Time.to_posix_time t)
-    in
-    ("(valid from " ^ f fr ^ " until " ^ f un ^ ")", now)
+    and pp = Ptime.pp_human ~tz_offset_s:0 () in
+    let msg = Format.asprintf "(valid from %a until %a)" pp fr pp un in
+    (msg, now)
 
   type ca_error = [
     | `CAIssuerSubjectMismatch of t
     | `CAInvalidVersion of t
     | `CAInvalidSelfSignature of t
-    | `CACertificateExpired of t * float option
+    | `CACertificateExpired of t * Ptime.t option
     | `CAInvalidExtensions of t
   ] [@@deriving sexp]
 
@@ -366,7 +364,7 @@ module Validation = struct
        "CA certificate " ^ n ^ " is expired " ^ valid ^ ", now: " ^ now
 
   type leaf_validation_error = [
-    | `LeafCertificateExpired of t * float option
+    | `LeafCertificateExpired of t * Ptime.t option
     | `LeafInvalidName of t * host option
     | `LeafInvalidVersion of t
     | `LeafInvalidExtensions of t
@@ -374,7 +372,7 @@ module Validation = struct
 
   type chain_validation_error = [
     | `IntermediateInvalidExtensions of t
-    | `IntermediateCertificateExpired of t * float option
+    | `IntermediateCertificateExpired of t * Ptime.t option
     | `IntermediateInvalidVersion of t
 
     | `ChainIssuerSubjectMismatch of t * t

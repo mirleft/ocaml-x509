@@ -59,7 +59,7 @@ val sexp_of_t : t -> Sexplib.Sexp.t
 (** {1 Basic operations on a certificate} *)
 
 (** The polymorphic variant of public key types. *)
-type key_type = [ `RSA | `EC of Asn.OID.t ]
+type key_type = [ `RSA | `EC of Asn.oid ]
 
 (** [supports_keytype certificate key_type] is [result], whether public key of the [certificate] matches the given [key_type]. *)
 val supports_keytype : t -> key_type -> bool
@@ -67,7 +67,7 @@ val supports_keytype : t -> key_type -> bool
 (** The polymorphic variant of public keys, with
     {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
     {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
-type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.OID.t ]
+type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.oid ]
 
 (** [key_id public_key] is [result], the 160-bit [`SHA1] hash of the BIT
     STRING subjectPublicKey (excluding tag, length, and number of
@@ -131,7 +131,7 @@ type component = [
   | `Pseudonym    of string
   | `Generation   of string
 
-  | `Other        of Asn.OID.t * string
+  | `Other        of Asn.oid * string
 ]
 
 (** A distinguished name is a list of {!component}. *)
@@ -158,7 +158,7 @@ val issuer : t -> distinguished_name
 val serial : t -> Z.t
 
 (** [validity certificate] is [from, until], the validity of the certificate. *)
-val validity : t -> Asn.Time.t * Asn.Time.t
+val validity : t -> Ptime.t * Ptime.t
 
 (** X.509v3 extensions *)
 module Extension : sig
@@ -200,7 +200,7 @@ module Extension : sig
     | `Ipsec_user
     | `Time_stamping
     | `Ocsp_signing
-    | `Other of Asn.OID.t
+    | `Other of Asn.oid
   ]
 
   (** [supports_extended_usage ~not_present certificate
@@ -216,7 +216,7 @@ module Extension : sig
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.7}IssuerAltName}
       extension. *)
   type general_name = [
-    | `Other         of (Asn.OID.t * string)
+    | `Other         of (Asn.oid * string)
     | `Rfc_822       of string
     | `DNS           of string
     | `X400_address  of unit
@@ -224,7 +224,7 @@ module Extension : sig
     | `EDI_party     of (string option * string)
     | `URI           of string
     | `IP            of Cstruct.t
-    | `Registered_id of Asn.OID.t
+    | `Registered_id of Asn.oid
   ]
 
   (** The authority key identifier, as present in the
@@ -235,9 +235,9 @@ module Extension : sig
   (** The private key usage period, as defined in
   {{:https://tools.ietf.org/html/rfc3280#section-4.2.1.4}RFC 3280}. *)
   type priv_key_usage_period = [
-    | `Interval   of Asn.Time.t * Asn.Time.t
-    | `Not_after  of Asn.Time.t
-    | `Not_before of Asn.Time.t
+    | `Interval   of Ptime.t * Ptime.t
+    | `Not_after  of Ptime.t
+    | `Not_before of Ptime.t
   ]
 
   (** Name constraints, as defined in
@@ -248,7 +248,7 @@ module Extension : sig
   (** Certificate policies, the
   {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.4}policy
   extension}. *)
-  type policy = [ `Any | `Something of Asn.OID.t ]
+  type policy = [ `Any | `Something of Asn.oid ]
 
   (** [unsupported cert oid] is [None] if [oid] is not present as extension, or
       [Some (crit, data)] if an extension with [oid] is present. *)
@@ -261,7 +261,7 @@ module Extension : sig
   {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3
   extensions}. *)
   type t = [
-    | `Unsupported       of Asn.OID.t * Cstruct.t
+    | `Unsupported       of Asn.oid * Cstruct.t
     | `Subject_alt_name  of general_name list
     | `Authority_key_id  of authority_key_id
     | `Subject_key_id    of Cstruct.t
@@ -332,7 +332,7 @@ with
  | Some (`Extensions x) -> x
  | None -> []
 ]}. *)
-  val sign : signing_request -> valid_from:Asn.Time.t -> valid_until:Asn.Time.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
+  val sign : signing_request -> valid_from:Ptime.t -> valid_until:Ptime.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
 end
 
 (** X.509 Certificate Chain Validation. *)
@@ -362,7 +362,7 @@ module Validation : sig
     | `CAIssuerSubjectMismatch of t
     | `CAInvalidVersion of t
     | `CAInvalidSelfSignature of t
-    | `CACertificateExpired of t * float option
+    | `CACertificateExpired of t * Ptime.t option
     | `CAInvalidExtensions of t
   ]
 
@@ -380,17 +380,17 @@ module Validation : sig
       present (if X.509 version 1 certificate), or are appropriate for a CA
       (BasicConstraints is present and true, KeyUsage extension contains
       keyCertSign). *)
-  val valid_ca : ?time:float -> t -> [ `Ok | `Error of ca_error ]
+  val valid_ca : ?time:Ptime.t -> t -> [ `Ok | `Error of ca_error ]
 
   (** [valid_cas ~time certificates] is [valid_certificates], only
       those certificates which pass the {!valid_ca} check. *)
-  val valid_cas : ?time:float -> t list -> t list
+  val valid_cas : ?time:Ptime.t -> t list -> t list
 
   (** {2 Chain of trust verification} *)
 
   (** The polymorphic variant of a leaf certificate validation error. *)
   type leaf_validation_error = [
-    | `LeafCertificateExpired of t * float option
+    | `LeafCertificateExpired of t * Ptime.t option
     | `LeafInvalidName of t * host option
     | `LeafInvalidVersion of t
     | `LeafInvalidExtensions of t
@@ -399,7 +399,7 @@ module Validation : sig
   (** The polymorphic variant of a chain validation error. *)
   type chain_validation_error = [
     | `IntermediateInvalidExtensions of t
-    | `IntermediateCertificateExpired of t * float option
+    | `IntermediateCertificateExpired of t * Ptime.t option
     | `IntermediateInvalidVersion of t
 
     | `ChainIssuerSubjectMismatch of t * t
@@ -445,7 +445,7 @@ module Validation : sig
       certificate is checked to contain the given [host], using {!hostnames}.
       The returned certificate is the root of the chain, a member of the given
       list of [anchors]. *)
-  val verify_chain : ?host:host -> ?time:float -> anchors:(t list) -> t list -> [ `Ok of t | `Fail of chain_error ]
+  val verify_chain : ?host:host -> ?time:Ptime.t -> anchors:(t list) -> t list -> [ `Ok of t | `Fail of chain_error ]
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
@@ -485,7 +485,7 @@ module Validation : sig
       the result will be [Ok] and contain the actual certificate chain and the
       trust anchor. *)
   val verify_chain_of_trust :
-    ?host:host -> ?time:float -> anchors:(t list) -> t list -> result
+    ?host:host -> ?time:Ptime.t -> anchors:(t list) -> t list -> result
 
   (** {2 Fingerprint verification} *)
 
@@ -498,7 +498,7 @@ module Validation : sig
       of the fingerprint list must match the name in the certificate,
       using {!hostnames}. *)
   val trust_key_fingerprint :
-    ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
+    ?host:host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
 
   (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates]
@@ -512,7 +512,7 @@ module Validation : sig
 
       @deprecated "Pin public keys, not certificates (use {!trust_key_fingerprint} instead)." *)
   val trust_cert_fingerprint :
-    ?host:host -> ?time:float -> hash:Nocrypto.Hash.hash ->
+    ?host:host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> t list -> result
 end
 
@@ -535,14 +535,14 @@ module Authenticator : sig
       anchors are not checked to be valid trust anchors any further
       (you have to do this manually with {!Validation.valid_ca} or
       {!Validation.valid_cas})!  *)
-  val chain_of_trust : ?time:float -> t list -> a
+  val chain_of_trust : ?time:Ptime.t -> t list -> a
 
   (** [server_key_fingerprint ~time hash fingerprints] is an
       [authenticator] which uses the given [time] and list of
       [fingerprints] to verify that the fingerprint of the first
       element of the certificate chain matches the given fingerprint,
       using {!Validation.trust_key_fingerprint}. *)
-  val server_key_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
+  val server_key_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
 
   (** [server_cert_fingerprint ~time hash fingerprints] is an
@@ -551,7 +551,7 @@ module Authenticator : sig
       chain, using {!Validation.trust_cert_fingerprint}.
 
       @deprecated "Pin public keys, not certificates (use {!server_key_fingerprint} instead)." *)
-  val server_cert_fingerprint : ?time:float -> hash:Nocrypto.Hash.hash ->
+  val server_cert_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
     fingerprints:(string * Cstruct.t) list -> a
 
   (** [null] is [authenticator], which always returns [`Ok]. (Useful

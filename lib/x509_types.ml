@@ -17,7 +17,7 @@ type component = [
   | `Pseudonym    of string
   | `Generation   of string
 
-  | `Other        of Asn.OID.t * string
+  | `Other        of Asn.oid * string
 ]
 
 type distinguished_name = component list
@@ -39,17 +39,17 @@ let component_to_string = function
   | `Initials s -> "Initials=" ^ s
   | `Pseudonym s -> "Pseudonym=" ^ s
   | `Generation s -> "Generation=" ^ s
-  | `Other (oid, s) -> Asn.OID.to_string oid ^ "=" ^ s
+  | `Other (oid, s) -> Format.asprintf "%a=%s" Asn.OID.pp oid s
 
 let distinguished_name_to_string dn =
   Astring.String.concat ~sep:"/" (List.map component_to_string dn)
 
 type public_key = [
   | `RSA    of Nocrypto.Rsa.pub
-  | `EC_pub of Asn.OID.t
+  | `EC_pub of Asn.oid
 ]
 
 type private_key = [ `RSA of Nocrypto.Rsa.priv ]
 
-type key_type = [ `RSA | `EC of Asn.OID.t ]
+type key_type = [ `RSA | `EC of Asn.oid ]
 
