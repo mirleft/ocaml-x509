@@ -622,12 +622,8 @@ module Validation : sig
       {!verify_chain}, the result will be [Ok] and contain the actual
       certificate chain and the trust anchor. *)
   val verify_chain_of_trust :
-<<<<<<< HEAD
-    ?host:host -> ?time:Ptime.t -> anchors:(t list) -> t list -> result
-=======
-    ?host:host -> ?time:float -> ?revoked:(issuer:t -> cert:t -> bool) ->
+    ?host:host -> ?time:Ptime.t -> ?revoked:(issuer:t -> cert:t -> bool) ->
     anchors:(t list) -> t list -> result
->>>>>>> d653fbf... Revocation logic for authentication
 
   (** {2 Fingerprint verification} *)
 
