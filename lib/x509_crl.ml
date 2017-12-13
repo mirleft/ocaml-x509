@@ -33,7 +33,7 @@ let validate { raw ; asn } pub =
   let tbs_raw = X509_certificate.raw_cert_hack raw asn.signature_val in
   X509_certificate.validate_raw_signature tbs_raw asn.signature_algo asn.signature_val pub
 
-let verify ({ raw ; asn } as crl) ?time cert =
+let verify ({ asn ; _ } as crl) ?time cert =
   Asn_grammars.Name.equal asn.tbs_crl.issuer (X509_certificate.subject cert) &&
   (match time with
    | None -> true

@@ -545,7 +545,7 @@ module Validation = struct
     | Ok () -> Ok ()
     | Error e -> Error (`Leaf e)
 
-  let verify_single_chain ?time ?(revoked = fun ~issuer ~cert -> false) anchors chain =
+  let verify_single_chain ?time ?(revoked = fun ~issuer:_ ~cert:_ -> false) anchors chain =
     let rec climb pathlen = function
       | cert :: issuer :: certs ->
          is_cert_valid time issuer >>= fun () ->

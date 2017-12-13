@@ -83,7 +83,7 @@ let verify' _ =
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let ica, ipub, ipriv = cert ~name:"subCA" ~serial now true capub capriv issuer in
-  let cert, pub, priv = cert now false ipub ipriv (X509.subject ica) in
+  let cert, _pub, _priv = cert now false ipub ipriv (X509.subject ica) in
   match X509.Validation.verify_chain ~anchors:[ca] [cert ; ica] with
   | `Ok _ -> ()
   | `Fail _ -> assert_failure ("expected verification!")
@@ -94,7 +94,7 @@ let crl' _ =
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let ica, ipub, ipriv = cert ~name:"subCA" ~serial now true capub capriv issuer in
-  let cert, pub, priv = cert now false ipub ipriv (X509.subject ica) in
+  let cert, _pub, _priv = cert now false ipub ipriv (X509.subject ica) in
   let revoked = { X509.CRL.serial ; date = now ; extensions = [] } in
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
@@ -109,7 +109,7 @@ let crl'leaf _ =
   let serial = Z.of_int 42 in
   let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv (X509.subject ca) in
   let issuer = X509.subject ica in
-  let cert, pub, priv = cert ~serial now false ipub ipriv issuer in
+  let cert, _pub, _priv = cert ~serial now false ipub ipriv issuer in
   let revoked = { X509.CRL.serial ; date = now ; extensions = [] } in
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] ipriv in
   let revoked = X509.CRL.is_revoked [crl] in
@@ -124,7 +124,7 @@ let crl'leaf'wrong _ =
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv issuer in
-  let cert, pub, priv = cert ~serial now false ipub ipriv (X509.subject ica) in
+  let cert, _pub, _priv = cert ~serial now false ipub ipriv (X509.subject ica) in
   let revoked = { X509.CRL.serial ; date = now ; extensions = [] } in
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] ipriv in
   let revoked = X509.CRL.is_revoked [crl] in
@@ -138,7 +138,7 @@ let verify'' _ =
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let ica, ipub, ipriv = cert ~name:"subCA" now true capub capriv issuer in
-  let cert, pub, priv = cert now false ipub ipriv (X509.subject ica) in
+  let cert, _pub, _priv = cert now false ipub ipriv (X509.subject ica) in
   let revoked = { X509.CRL.serial ; date = now ; extensions = [] } in
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
@@ -152,7 +152,7 @@ let crl'' _ =
   let serial = Z.of_int 42 in
   let issuer = X509.subject ca in
   let ica, ipub, ipriv = cert ~name:"subCA" ~serial now true capub capriv issuer in
-  let cert, pub, priv = cert now false ipub ipriv (X509.subject ica) in
+  let cert, _pub, _priv = cert now false ipub ipriv (X509.subject ica) in
   let revoked = { X509.CRL.serial ; date = now ; extensions = [(false, `Reason `Remove_from_CRL)] } in
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
