@@ -10,9 +10,13 @@ type a = ?host:host -> t list -> Validation.result
    * Authenticator authenticates against time it was *created* at, not at the moment of
    * authentication. This has repercussions to long-lived authenticators; reconsider.
    * *)
-let chain_of_trust ?time cas =
+let chain_of_trust ?time ?(crls = []) cas =
+  let revoked = match crls with
+    | [] -> None
+    | crls -> Some (X509_crl.is_revoked crls)
+  in
   fun ?host certificates ->
-    Validation.verify_chain_of_trust ?host ?time ~anchors:cas certificates
+    Validation.verify_chain_of_trust ?host ?time ?revoked ~anchors:cas certificates
 
 let server_key_fingerprint ?time ~hash ~fingerprints =
   fun ?host certificates ->
