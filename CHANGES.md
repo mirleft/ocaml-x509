@@ -1,4 +1,4 @@
-## 0.6.0 (2017-12-??)
+## 0.6.0 (2017-12-13)
 
 * Certificate Revocation List (CRL) support (#99)
 * track asn1-combinators 0.2.0 changes (#97)
