@@ -29,7 +29,7 @@ depends: [
   "nocrypto" {>= "0.5.3"}
   "astring"
   "ounit" {test}
-  "cstruct-unix" {test}
+  "cstruct-unix" {test & >= "3.0.0"}
 ]
 
 tags: [ "org:mirage" ]
