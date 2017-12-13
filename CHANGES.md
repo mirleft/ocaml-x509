@@ -1,3 +1,14 @@
+## 0.6.0 (2017-12-??)
+
+* Certificate Revocation List (CRL) support (#99)
+* track asn1-combinators 0.2.0 changes (#97)
+* provide Extension.subject_alt_names (#95)
+* compute length of certificate length, instead of hardcoding 4 (#95)
+* enable safe-string (#89)
+* use astring instead of custom String_ext.split (#89)
+* use topkg instead of oasis (#88, #89)
+* provide Encoding.cs_of_distinguished_name (#87 by @reynir)
+
 ## 0.5.3 (2016-09-13)
 
 * provide Encoding.parse_signing_request and Encoding.cs_of_signing_request (#81)
