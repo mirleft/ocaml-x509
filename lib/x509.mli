@@ -275,14 +275,14 @@ module Extension : sig
       relative one using a distinguished name. *)
   type distribution_point_name =
     [ `Full of general_name list
-    | `Relative of X509_types.distinguished_name ]
+    | `Relative of distinguished_name ]
 
   (** Distribution point, consisting of an optional name, an optional list of
       allowed reasons, and an optional issuer. *)
   type distribution_point =
     distribution_point_name option *
     reason list option *
-    X509_types.distinguished_name option
+    distinguished_name option
 
   (** Returns [crl_distribution_points] if extension if present, else [ [] ]. *)
   val crl_distribution_points : t -> distribution_point list
