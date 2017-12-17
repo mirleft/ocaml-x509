@@ -666,13 +666,6 @@ end
 2.5.4.38 - id-at-authorityRevocationList
 2.5.4.39 - id-at-certificateRevocationList
 
-2.5.29.20 - CRL Number
-2.5.29.21 - reason code
-2.5.29.27 - Delta CRL indicator
-2.5.29.28 - Issuing Distribution Point
-2.5.29.31 - CRL Distribution Points
-2.5.29.46 - FreshestCRL
-
 do not forget about 'authority information access' (private internet extension -- 4.2.2 of 5280) *)
 
 (* Future TODO: Policies

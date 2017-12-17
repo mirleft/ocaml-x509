@@ -135,6 +135,12 @@ type component = [
 (** A distinguished name is a list of {!component}. *)
 type distinguished_name = component list
 
+(** [distinguished_name_of_sexp sexp] is a [distinguished_name], the unmarshalled [sexp]. *)
+val distinguished_name_of_sexp : Sexplib.Sexp.t -> distinguished_name
+
+(** [sexp_of_distinguished_name dn] is [sexp], the marshalled [dn]. *)
+val sexp_of_distinguished_name : distinguished_name -> Sexplib.Sexp.t
+
 (** [distinguished_name_to_string dn] is [string], the string
     representation of the {{!distinguished_name}dn}. *)
 val distinguished_name_to_string : distinguished_name -> string
