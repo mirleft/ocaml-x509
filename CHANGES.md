@@ -1,3 +1,8 @@
+## 0.6.1 (2017-12-21)
+
+* provide X509.distinguished_name sexp converter (#103)
+* drop non-exported X509_types module from distinguished_name (#102, @yomimono)
+
 ## 0.6.0 (2017-12-13)
 
 * Certificate Revocation List (CRL) support (#99)
