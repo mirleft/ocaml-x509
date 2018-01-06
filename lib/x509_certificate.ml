@@ -188,7 +188,7 @@ let validate_time time { asn = cert ; _ } =
   | None     -> true
   | Some now ->
     let (not_before, not_after) = cert.tbs_cert.validity in
-    Ptime.(is_later ~than:not_before now && is_earlier ~than:not_after now)
+    Ptime.((* is_later ~than:not_before now && *) is_earlier ~than:not_after now)
 
 let version_matches_extensions { asn = cert ; _ } =
   let tbs = cert.tbs_cert in
