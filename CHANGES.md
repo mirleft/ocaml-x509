@@ -1,3 +1,7 @@
+## 0.6.2 (2018-08-24)
+
+* compatibility with ppx_sexp_conv >v0.11.0 (#109), required for 4.07.0
+
 ## 0.6.1 (2017-12-21)
 
 * provide X509.distinguished_name sexp converter (#103)
