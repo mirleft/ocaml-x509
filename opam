@@ -19,8 +19,8 @@ build-test: [
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
-  "ppx_sexp_conv" {build & < "v0.11.0"}
   "topkg" {build}
+  "ppx_sexp_conv"
   "result"
   "cstruct" {>= "1.6.0"}
   "sexplib"
@@ -30,6 +30,10 @@ depends: [
   "astring"
   "ounit" {test}
   "cstruct-unix" {test & >= "3.0.0"}
+]
+
+conflicts: [
+  "ppx_sexp_conv" {= "v0.11.0"}
 ]
 
 tags: [ "org:mirage" ]
