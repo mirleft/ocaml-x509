@@ -1,9 +1,11 @@
 
+let parse = X509_certificate.parse_certificate
+
 let cs_of_cert = X509_certificate.cs_of_cert
 
-let cs_of_distinguished_name = Asn_grammars.Name.name_to_cstruct
+let distinguished_name_of_cs = Asn_grammars.Name.name_of_cstruct
 
-let parse = X509_certificate.parse_certificate
+let cs_of_distinguished_name = Asn_grammars.Name.name_to_cstruct
 
 let parse_signing_request = X509_ca.parse_signing_request
 
