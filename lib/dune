@@ -1,0 +1,5 @@
+(library
+  (public_name x509)
+  (libraries result asn1-combinators ptime cstruct nocrypto sexplib astring)
+  (flags (:standard -safe-string ))
+  (preprocess (pps ppx_sexp_conv)))

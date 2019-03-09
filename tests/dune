@@ -1,0 +1,12 @@
+(executable
+  (name unittestrunner)
+  (libraries oUnit cstruct-unix nocrypto.unix ptime.clock.os x509))
+
+(alias
+  (name runtest)
+  (deps
+    (source_tree "regression")
+    (source_tree "testcertificates")
+    (source_tree "crl")
+    (:test_exe unittestrunner.exe))
+  (action (run %{test_exe})))

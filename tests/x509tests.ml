@@ -3,7 +3,7 @@ open OUnit2
 open X509
 
 let with_loaded_file file ~f =
-  let fullpath = "./tests/testcertificates/" ^ file ^ ".pem" in
+  let fullpath = "./testcertificates/" ^ file ^ ".pem" in
   let fd = Unix.(openfile fullpath [O_RDONLY] 0) in
   let buf = Unix_cstruct.of_fd fd in
   try let r = f buf in Unix.close fd; r
@@ -212,7 +212,7 @@ let second_certs = [
 
 let second_cert name =
   with_loaded_file ("intermediate/second/" ^ name)
-    ~f:Encoding.Pem.Certificate.of_pem_cstruct1 
+    ~f:Encoding.Pem.Certificate.of_pem_cstruct1
 
 let second_cert_tests =
   List.mapi
