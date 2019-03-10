@@ -14,7 +14,7 @@ doc: "https://mirleft.github.io/ocaml-x509/doc"
 bug-reports: "https://github.com/mirleft/ocaml-x509/issues"
 depends: [
   "ocaml" {>= "4.02.2"}
-  "dune" {build}
+  "dune" {build & >= "1.2.0"}
   "ppx_sexp_conv"
   "result"
   "cstruct" {>= "1.6.0"}
