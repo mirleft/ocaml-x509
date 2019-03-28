@@ -757,6 +757,14 @@ module Encoding : sig
       the ASN.1 encoded buffer. *)
   val rsa_public_of_cstruct : Cstruct.t -> Nocrypto.Rsa.pub option
 
+  (** [public_key_to_cstruct pk] is [buffer], the ASN.1 encoding of
+      the given public key. *)
+  val public_key_to_cstruct : public_key -> Cstruct.t
+
+  (** [public_key_of_cstruct buffer] is [pubkey], the public key of
+      the ASN.1 encoded buffer. *)
+  val public_key_of_cstruct : Cstruct.t -> public_key option
+
   (** [crl_to_cstruct crl] is [buffer], the ASN.1 DER encoding of the
       given certificate revocation list. *)
   val crl_to_cstruct : CRL.c -> Cstruct.t

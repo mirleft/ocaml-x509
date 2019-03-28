@@ -23,6 +23,9 @@ let rsa_public_to_cstruct : Nocrypto.Rsa.pub -> Cstruct.t =
 let rsa_public_of_cstruct : Cstruct.t -> Nocrypto.Rsa.pub option =
   Asn_grammars.PK.rsa_public_of_cstruct
 
+let public_key_to_cstruct = Asn_grammars.PK.pub_info_to_cstruct
+let public_key_of_cstruct = Asn_grammars.PK.pub_info_of_cstruct
+
 let crl_to_cstruct : X509_crl.c -> Cstruct.t =
   X509_crl.crl_to_cstruct
 
