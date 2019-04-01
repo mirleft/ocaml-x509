@@ -30,6 +30,7 @@ depends: [
   "astring"
   "ounit" {test}
   "cstruct-unix" {test & >= "3.0.0"}
+  "cstruct-sexp"
 ]
 
 conflicts: [
