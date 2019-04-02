@@ -37,3 +37,13 @@ build: [
   ["ocaml" "pkg/pkg.ml" "test"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirleft/ocaml-x509.git"
+synopsis: "Public Key Infrastructure (RFC 5280, PKCS) purely in OCaml"
+description: """
+X.509 is a public key infrastructure used mostly on the Internet.  It consists
+of certificates which include public keys and identifiers, signed by an
+authority. Authorities must be exchanged over a second channel to establish the
+trust relationship. This library implements most parts of RFC5280 and RFC6125.
+The Public Key Cryptography Standards (PKCS) defines encoding and decoding,
+which is also partially implemented by this library - namely PKCS 1, PKCS 7,
+PKCS 8, PKCS 9 and PKCS 10.
+"""

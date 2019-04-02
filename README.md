@@ -6,7 +6,10 @@ of certificates which include public keys and identifiers, signed by an
 authority.  Authorities must be exchanged over a second channel to establish the
 trust relationship.  This library implements most parts of
 [RFC5280](https://tools.ietf.org/html/rfc5280) and
-[RFC6125](https://tools.ietf.org/html/rfc6125).
+[RFC6125](https://tools.ietf.org/html/rfc6125). The
+[Public Key Cryptography Standards (PKCS)](https://en.wikipedia.org/wiki/PKCS)
+defines encoding and decoding, which is also partially implemented by this
+library - namely PKCS 1, PKCS 7, PKCS 8, PKCS 9 and PKCS 10.
 
 Read [further](https://nqsb.io) and our [Usenix Security 2015 paper](https://usenix15.nqsb.io).
 
