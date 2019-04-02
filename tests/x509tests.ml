@@ -3,7 +3,7 @@ open OUnit2
 open X509
 
 let with_loaded_file file ~f =
-  let fullpath = "./tests/testcertificates/" ^ file ^ ".pem" in
+  let fullpath = "./testcertificates/" ^ file ^ ".pem" in
   let fd = Unix.(openfile fullpath [O_RDONLY] 0) in
   let buf = Unix_cstruct.of_fd fd in
   try let r = f buf in Unix.close fd; r

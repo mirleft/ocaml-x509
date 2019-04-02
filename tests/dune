@@ -1,0 +1,4 @@
+(test
+ (name unittestrunner)
+ (deps (source_tree regression) (source_tree testcertificates) (source_tree crl))
+ (libraries x509 oUnit cstruct-unix ptime.clock.os nocrypto.unix))

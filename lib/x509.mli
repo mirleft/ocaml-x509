@@ -724,6 +724,10 @@ module Encoding : sig
       representation of the [certificate]. *)
   val cs_of_cert  : t -> Cstruct.t
 
+  (** [distinguished_name_of_cs cs] is [dn], the ASN.1 decoded distinguished
+      name of [cs]. *)
+  val distinguished_name_of_cs : Cstruct.t -> distinguished_name option
+
   (** [cs_of_distinguished_name dn] is [cstruct], the ASN.1 encoded
       representation of the distinguished name [dn]. *)
   val cs_of_distinguished_name : distinguished_name -> Cstruct.t
@@ -752,6 +756,14 @@ module Encoding : sig
   (** [rsa_public_of_cstruct buffer] is [pubkey], the public key of
       the ASN.1 encoded buffer. *)
   val rsa_public_of_cstruct : Cstruct.t -> Nocrypto.Rsa.pub option
+
+  (** [public_key_to_cstruct pk] is [buffer], the ASN.1 encoding of
+      the given public key. *)
+  val public_key_to_cstruct : public_key -> Cstruct.t
+
+  (** [public_key_of_cstruct buffer] is [pubkey], the public key of
+      the ASN.1 encoded buffer. *)
+  val public_key_of_cstruct : Cstruct.t -> public_key option
 
   (** [crl_to_cstruct crl] is [buffer], the ASN.1 DER encoding of the
       given certificate revocation list. *)

@@ -3,7 +3,7 @@ open OUnit2
 open X509
 
 let with_loaded_files file ~f =
-  let pre = "./tests/crl/" in
+  let pre = "./crl/" in
   let fullpath1 = pre ^ file ^ ".pem"
   and fullpath2 = pre ^ file ^ ".crl"
   in
