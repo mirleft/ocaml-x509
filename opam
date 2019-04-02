@@ -17,7 +17,8 @@ depends: [
   "ocamlbuild" {build}
   "topkg" {build}
   "ppx_sexp_conv"
-  "cstruct" {>= "1.6.0"}
+  "cstruct" {>= "4.0.0"}
+  "cstruct-sexp"
   "sexplib"
   "asn1-combinators" {>= "0.2.0"}
   "ptime"

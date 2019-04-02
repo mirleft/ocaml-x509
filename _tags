@@ -1,6 +1,6 @@
 true : color(always), bin_annot, principal, safe_string
 true : warn(+A-4-41-42-44)
-true : package(asn1-combinators ptime cstruct nocrypto sexplib astring)
+true : package(asn1-combinators ptime cstruct cstruct-sexp nocrypto sexplib astring)
 
 <lib> : include
 <lib/x509_certificate.ml> : package(ppx_sexp_conv)

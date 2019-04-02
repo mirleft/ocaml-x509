@@ -393,7 +393,7 @@ module Validation = struct
   type fingerprint_validation_error = [
     | `ServerNameNotPresent of t * string
     | `NameNotInList of t
-    | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
+    | `InvalidFingerprint of t * Cstruct_sexp.t * Cstruct_sexp.t
   ] [@@deriving sexp]
 
   type validation_error = [
