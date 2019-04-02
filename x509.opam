@@ -13,9 +13,7 @@ doc: "https://mirleft.github.io/ocaml-x509/doc"
 bug-reports: "https://github.com/mirleft/ocaml-x509/issues"
 depends: [
   "ocaml" {>= "4.03.0"}
-  "ocamlfind" {build}
-  "ocamlbuild" {build}
-  "topkg" {build}
+  "dune" {build & >= "1.2"}
   "ppx_sexp_conv"
   "cstruct" {>= "4.0.0"}
   "cstruct-sexp"
@@ -31,10 +29,9 @@ conflicts: [
   "ppx_sexp_conv" {= "v0.11.0"}
 ]
 build: [
-  ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%"]
-  ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "true"]
-    {with-test}
-  ["ocaml" "pkg/pkg.ml" "test"] {with-test}
+  ["dune" "subst"] {pinned}
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j" jobs] {with-test}
 ]
 dev-repo: "git+https://github.com/mirleft/ocaml-x509.git"
 synopsis: "Public Key Infrastructure (RFC 5280, PKCS) purely in OCaml"

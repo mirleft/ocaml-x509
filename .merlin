@@ -1,6 +1,0 @@
-S lib
-S tests
-
-B _build/**
-
-PKG cstruct sexplib nocrypto asn1-combinators ptime astring

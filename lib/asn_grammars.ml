@@ -307,7 +307,7 @@ module Algorithm = struct
     | ECDSA_SHA512  -> Some (`ECDSA, `SHA512)
     | _             -> None
 
-  and of_signature_algorithm public_key_algorithm digest =
+  and[@ocaml.warning "-8"] of_signature_algorithm public_key_algorithm digest =
     match public_key_algorithm, digest with
     | (`RSA  , `MD5)    -> MD5_RSA
     | (`RSA  , `SHA1)   -> SHA1_RSA
@@ -836,7 +836,7 @@ module CertificateRequest = struct
   open X509_request_types
 
   let attributes =
-    let f = function
+    let f = function[@ocaml.warning "-8"]
       | (oid, [`C1 p]) when oid = PKCS9.challenge_password -> `Password p
       | (oid, [`C1 n]) when oid = PKCS9.unstructured_name -> `Name n
       | (oid, [`C2 es]) when oid = PKCS9.extension_request -> `Extensions es

@@ -6,7 +6,7 @@ let cs_mmap file =
   Unix_cstruct.of_fd Unix.(openfile file [O_RDONLY] 0)
 
 let cert file =
-  Encoding.Pem.Certificate.of_pem_cstruct1 (cs_mmap ("./tests/regression/" ^ file ^ ".pem"))
+  Encoding.Pem.Certificate.of_pem_cstruct1 (cs_mmap ("./regression/" ^ file ^ ".pem"))
 
 let jc = cert "jabber.ccc.de"
 let cacert = cert "cacert"
