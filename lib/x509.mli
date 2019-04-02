@@ -389,7 +389,7 @@ module CA : sig
 with
  | Some (`Extensions x) -> x
  | None -> []
-]}. *)
+]} *)
   val sign : signing_request -> valid_from:Ptime.t -> valid_until:Ptime.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
 end
 
