@@ -12,7 +12,7 @@ homepage: "https://github.com/mirleft/ocaml-x509"
 doc: "https://mirleft.github.io/ocaml-x509/doc"
 bug-reports: "https://github.com/mirleft/ocaml-x509/issues"
 depends: [
-  "ocaml" {>= "4.03.0"}
+  "ocaml" {>= "4.04.2"}
   "dune" {build & >= "1.2"}
   "ppx_sexp_conv"
   "cstruct" {>= "4.0.0"}
