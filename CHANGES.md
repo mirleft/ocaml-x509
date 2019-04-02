@@ -1,3 +1,12 @@
+## 0.6.3 (2019-04-02)
+
+* provide X509.Encoding.distinguished_name_of_cs -- similar to #87 which provided distinguished_name_to_cs
+* provide X509.Encoding.{public_key_of_cstruct,public_key_to_cstruct}, as requested by @dinosaure
+* support of cstruct 4.0.0, which split up the sexp de&encoders
+* removes result dependency (now requires >= 4.04.2)
+* upgrades opam file to version 2.0
+* build system is now dune
+
 ## 0.6.2 (2018-08-24)
 
 * compatibility with ppx_sexp_conv >v0.11.0 (#109), required for 4.07.0
