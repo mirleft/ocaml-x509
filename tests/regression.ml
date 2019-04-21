@@ -1,5 +1,3 @@
-open OUnit2
-
 open X509
 
 let cs_mmap file =
@@ -11,32 +9,32 @@ let cert file =
 let jc = cert "jabber.ccc.de"
 let cacert = cert "cacert"
 
-let test_jc_jc _ =
+let test_jc_jc () =
   match Validation.verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[jc] [jc] with
   | `Fail `InvalidChain -> ()
-  | _ -> assert_failure ("something went wrong with jc_jc")
+  | _ -> Alcotest.fail "something went wrong with jc_jc"
 
-let test_jc_ca _ =
+let test_jc_ca () =
   match Validation.verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[cacert] [jc ; cacert] with
   | `Ok _ -> ()
-  | _ -> assert_failure ("something went wrong with jc_ca")
+  | _ -> Alcotest.fail "something went wrong with jc_ca"
 
 let telesec = cert "telesec"
 let jfd = [ cert "jabber.fu-berlin.de" ; cert "fu-berlin" ; cert "dfn" ]
 
-let test_jfd_ca _ =
+let test_jfd_ca () =
   match Validation.verify_chain_of_trust ~host:(`Strict "jabber.fu-berlin.de") ~anchors:[telesec] (jfd@[telesec]) with
   | `Ok _ -> ()
-  | _ -> assert_failure ("something went wrong with jfd_ca")
+  | _ -> Alcotest.fail "something went wrong with jfd_ca"
 
-let test_jfd_ca' _ =
+let test_jfd_ca' () =
   match Validation.verify_chain_of_trust ~host:(`Strict "jabber.fu-berlin.de") ~anchors:[telesec] jfd with
   | `Ok _ -> ()
-  | _ -> assert_failure ("something went wrong with jfd_ca'")
+  | _ -> Alcotest.fail "something went wrong with jfd_ca'"
 
 let regression_tests = [
-  "RSA: key too small (jc_jc)" >:: test_jc_jc ;
-  "jc_ca" >:: test_jc_ca ;
-  "jfd_ca" >:: test_jfd_ca ;
-  "jfd_ca'" >:: test_jfd_ca'
+  "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
+  "jc_ca", `Quick, test_jc_ca ;
+  "jfd_ca", `Quick, test_jfd_ca ;
+  "jfd_ca'", `Quick, test_jfd_ca'
 ]
