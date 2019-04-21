@@ -48,12 +48,6 @@
     {{!Encoding.Pem.Certificate}encoding and decoding to PEM}. *)
 type t
 
-(** [t_of_sexp sexp] is [certificate], the unmarshalled [sexp]. *)
-val t_of_sexp : Sexplib.Sexp.t -> t
-
-(** [sexp_of_t certificate] is [sexp], the marshalled [certificate]. *)
-val sexp_of_t : t -> Sexplib.Sexp.t
-
 (** {1 Basic operations on a certificate} *)
 
 (** The polymorphic variant of public key types. *)
@@ -134,12 +128,6 @@ type component = [
 
 (** A distinguished name is a list of {!component}. *)
 type distinguished_name = component list
-
-(** [distinguished_name_of_sexp sexp] is a [distinguished_name], the unmarshalled [sexp]. *)
-val distinguished_name_of_sexp : Sexplib.Sexp.t -> distinguished_name
-
-(** [sexp_of_distinguished_name dn] is [sexp], the marshalled [dn]. *)
-val sexp_of_distinguished_name : distinguished_name -> Sexplib.Sexp.t
 
 (** [distinguished_name_to_string dn] is [string], the string
     representation of the {{!distinguished_name}dn}. *)
@@ -506,12 +494,6 @@ module Validation : sig
     | `CAInvalidExtensions of t
   ]
 
-  (** [ca_error_of_sexp sexp] is [ca_error], the unmarshalled [sexp]. *)
-  val ca_error_of_sexp : Sexplib.Sexp.t -> ca_error
-
-  (** [sexp_of_ca_error ca_error] is [sexp], the marshalled [ca_error]. *)
-  val sexp_of_ca_error : ca_error -> Sexplib.Sexp.t
-
   (** [ca_error_to_string validation_error] is [string], the string representation of the [ca_error]. *)
   val ca_error_to_string : ca_error -> string
 
@@ -566,12 +548,6 @@ module Validation : sig
     | `Chain of chain_validation_error
   ]
 
-  (** [chain_error_of_sexp sexp] is [chain_error], the unmarshalled [sexp]. *)
-  val chain_error_of_sexp : Sexplib.Sexp.t -> chain_error
-
-  (** [sexp_of_chain_error chain_error] is [sexp], the marshalled [chain_error]. *)
-  val sexp_of_chain_error : chain_error -> Sexplib.Sexp.t
-
   (** [chain_error_to_string validation_error] is [string], the string representation of the [chain_error]. *)
   val chain_error_to_string : chain_error -> string
 
@@ -604,12 +580,6 @@ module Validation : sig
     | `Leaf of leaf_validation_error
     | `Fingerprint of fingerprint_validation_error
   ]
-
-  (** [validation_error_of_sexp sexp] is [validation_error], the unmarshalled [sexp]. *)
-  val validation_error_of_sexp : Sexplib.Sexp.t -> validation_error
-
-  (** [sexp_of_validation_error validation_error] is [sexp], the marshalled [validation_error]. *)
-  val sexp_of_validation_error : validation_error -> Sexplib.Sexp.t
 
   (** [validation_error_to_string validation_error] is [string], the string representation of the [validation_error]. *)
   val validation_error_to_string : validation_error -> string
@@ -701,14 +671,6 @@ module Authenticator : sig
   (** [null] is [authenticator], which always returns [`Ok]. (Useful
       for testing purposes only.) *)
   val null : a
-
-  (** [a_of_sexp sexp] is [authenticator], the unmarshalled
-  [sexp].  Note: only {!null} is supported. *)
-  val a_of_sexp : Sexplib.Sexp.t -> a
-
-  (** [sexp_of_a authenticator] is [sexp], the marshalled
-  [authenticator].  Note: always emits {!null}. *)
-  val sexp_of_a : a -> Sexplib.Sexp.t
 end
 
 (** Encodings *)

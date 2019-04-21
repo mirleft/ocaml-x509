@@ -65,22 +65,6 @@ let component_of_string s =
 
 type distinguished_name = component list
 
-let distinguished_name_of_sexp = function
-  | Sexplib.Sexp.List components ->
-    List.fold_left (fun acc a -> match a with
-        | Sexplib.Sexp.Atom str ->
-          begin match component_of_string str with
-            | None -> failwith ("can't parse component " ^ str)
-            | Some c -> c :: acc
-          end
-        | _ -> failwith "invalid distinguished name: malformed component")
-      [] components
-  | _ -> failwith "invalid distinguished name: must be a list of components"
-
-let sexp_of_distinguished_name dn =
-  Sexplib.Sexp.List
-    (List.map (fun c -> Sexplib.Sexp.Atom (component_to_string c)) dn)
-
 let distinguished_name_to_string dn =
   Astring.String.concat ~sep:"/" (List.map component_to_string dn)
 

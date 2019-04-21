@@ -27,12 +27,3 @@ let server_cert_fingerprint ?time ~hash ~fingerprints =
     Validation.trust_cert_fingerprint ?host ?time ~hash ~fingerprints certificates
 
 let null ?host:_ _ = `Ok None
-
-open Sexplib
-
-let a_of_sexp = function
-  | Sexp.Atom "NULL" -> null
-  | sexp ->
-    Conv.of_sexp_error "Authenticator.t_of_sexp: atom 'NULL' needed" sexp
-
-let sexp_of_a _ = Sexp.Atom "NULL"

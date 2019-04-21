@@ -1,4 +1,3 @@
-open Sexplib.Conv
 open Nocrypto
 open Astring
 
@@ -39,9 +38,7 @@ let parse_certificate cs =
 
 let cs_of_cert { raw ; _ } = raw
 
-(* XXX Revisit this - would be lovely to dump the full ASN tree. *)
-let t_of_sexp _ = failwith "can't parse cert from sexps"
-
+(* TODO remove! *)
 let to_hex cs =
   let i_to_h i idx s =
     let v_to_h = function
@@ -59,10 +56,6 @@ let to_hex cs =
     i_to_h (Cstruct.get_uint8 cs i) (i * 3) s
   done ;
   Bytes.to_string s
-
-let sexp_of_t cert = Sexplib.Sexp.List
-    [ Sexplib.Sexp.Atom "CERTIFICATE" ;
-      Sexplib.Sexp.Atom (to_hex (fingerprint `SHA256 cert)) ]
 
 let key_id = function
   | `RSA p -> Hash.digest `SHA1 (PK.rsa_public_to_cstruct p)
@@ -123,7 +116,7 @@ let split_labels name =
 
 let o f g x = f (g x)
 
-type host = [ `Strict of string | `Wildcard of string ] [@@deriving sexp]
+type host = [ `Strict of string | `Wildcard of string ]
 
 (* we limit our validation to a single '*' character at the beginning (left-most label)! *)
 let wildcard_matches host cert =
@@ -343,7 +336,7 @@ module Validation = struct
     | `CAInvalidSelfSignature of t
     | `CACertificateExpired of t * Ptime.t option
     | `CAInvalidExtensions of t
-  ] [@@deriving sexp]
+  ]
 
   let ca_error_to_string = function
     | `CAIssuerSubjectMismatch c ->
@@ -368,7 +361,7 @@ module Validation = struct
     | `LeafInvalidName of t * host option
     | `LeafInvalidVersion of t
     | `LeafInvalidExtensions of t
-  ] [@@deriving sexp]
+  ]
 
   type chain_validation_error = [
     | `IntermediateInvalidExtensions of t
@@ -383,25 +376,25 @@ module Validation = struct
     | `EmptyCertificateChain
     | `NoTrustAnchor of t
     | `Revoked of t
-  ] [@@deriving sexp]
+  ]
 
   type chain_error = [
     | `Leaf of leaf_validation_error
     | `Chain of chain_validation_error
-  ] [@@deriving sexp]
+  ]
 
   type fingerprint_validation_error = [
     | `ServerNameNotPresent of t * string
     | `NameNotInList of t
-    | `InvalidFingerprint of t * Cstruct_sexp.t * Cstruct_sexp.t
-  ] [@@deriving sexp]
+    | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
+  ]
 
   type validation_error = [
     | `EmptyCertificateChain
     | `InvalidChain
     | `Leaf of leaf_validation_error
     | `Fingerprint of fingerprint_validation_error
-  ] [@@deriving sexp]
+  ]
 
   let leaf_validation_error_to_string = function
     | `LeafCertificateExpired (c, now) ->
