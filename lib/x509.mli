@@ -481,12 +481,12 @@ module Validation : sig
   (** [pp_ca_error ppf ca_error] pretty-prints the CA error [ca_error]. *)
   val pp_ca_error : ca_error Fmt.t
 
-  (** [valid_ca ~time certificate] is [result], which is `Ok if the given
+  (** [valid_ca ~time certificate] is [result], which is [Ok ()] if the given
       certificate is self-signed, it is valid at [time], its extensions are not
       present (if X.509 version 1 certificate), or are appropriate for a CA
       (BasicConstraints is present and true, KeyUsage extension contains
       keyCertSign). *)
-  val valid_ca : ?time:Ptime.t -> t -> [ `Ok | `Error of ca_error ]
+  val valid_ca : ?time:Ptime.t -> t -> (unit, ca_error) result
 
   (** [valid_cas ~time certificates] is [valid_certificates], only those
       certificates which pass the {!valid_ca} check. *)
@@ -536,7 +536,7 @@ module Validation : sig
   val pp_chain_error : chain_error Fmt.t
 
   (** [verify_chain ~host ~time ~revoked ~anchors chain] is [result], either
-      [Ok] and the trust anchor used to verify the chain, or [Fail] and the
+      [Ok] and the trust anchor used to verify the chain, or [Error] and the
       chain error.  RFC 5280 describes the implemented
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}path validation}
       algorithm: The validity period of the given certificates is checked
@@ -548,7 +548,7 @@ module Validation : sig
       list of [anchors]. *)
   val verify_chain : ?host:host -> ?time:Ptime.t ->
     ?revoked:(issuer:t -> cert:t -> bool) ->
-    anchors:(t list) -> t list -> [ `Ok of t | `Fail of chain_error ]
+    anchors:(t list) -> t list -> (t, chain_error) result
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
@@ -569,13 +569,6 @@ module Validation : sig
       [validation_error]. *)
   val pp_validation_error : validation_error Fmt.t
 
-  (** The result of a validation: either success (optionally returning the used
-      trust anchor), or failure *)
-  type result = [
-    | `Ok of (t list * t) option
-    | `Fail of validation_error
-  ]
-
   (** [verify_chain_of_trust ~host ~time ~revoked ~anchors certificates] is
       [result].  First, all possible paths are constructed using the
       {!build_paths} function, the first certificate of the chain is verified to
@@ -585,7 +578,7 @@ module Validation : sig
       certificate chain and the trust anchor. *)
   val verify_chain_of_trust :
     ?host:host -> ?time:Ptime.t -> ?revoked:(issuer:t -> cert:t -> bool) ->
-    anchors:(t list) -> t list -> result
+    anchors:(t list) -> t list -> ((t list * t) option, validation_error) result
 
   (** {2 Fingerprint verification} *)
 
@@ -598,7 +591,8 @@ module Validation : sig
       certificate, using {!hostnames}. *)
   val trust_key_fingerprint :
     ?host:host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> t list -> result
+    fingerprints:(string * Cstruct.t) list -> t list ->
+    ((t list * t) option, validation_error) result
 
   (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified to match the
@@ -609,7 +603,8 @@ module Validation : sig
       certificate, using {!hostnames}. *)
   val trust_cert_fingerprint :
     ?host:host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> t list -> result
+    fingerprints:(string * Cstruct.t) list -> t list ->
+    ((t list * t) option, validation_error) result
   [@@ocaml.deprecated "Pin public keys (use trust_key_fingerprint) instead of certificates."]
 end
 
@@ -620,7 +615,8 @@ module Authenticator : sig
 
   (** An authenticator [a] is a function type which takes a hostname and a
       certificate stack to an authentication decision {!Validation.result}. *)
-  type a = ?host:host -> t list -> Validation.result
+  type a = ?host:host -> t list ->
+    ((t list * t) option, Validation.validation_error) result
 
   (** [chain_of_trust ?time trust_anchors] is [authenticator], which uses the
       given [time] and list of [trust_anchors] to verify the certificate chain.
@@ -646,8 +642,8 @@ module Authenticator : sig
     fingerprints:(string * Cstruct.t) list -> a
   [@@ocaml.deprecated "Pin public keys (use server_key_fingerprint) instead of certificates."]
 
-  (** [null] is [authenticator], which always returns [`Ok]. (Useful for testing
-      purposes only.) *)
+  (** [null] is [authenticator], which always returns [Ok ()]. (Useful for
+      testing purposes only.) *)
   val null : a
 end
 

@@ -14,12 +14,12 @@ let cacert = cert "cacert"
 
 let test_jc_jc () =
   match Validation.verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[jc] [jc] with
-  | `Fail `InvalidChain -> ()
+  | Error `InvalidChain -> ()
   | _ -> Alcotest.fail "something went wrong with jc_jc"
 
 let test_jc_ca () =
   match Validation.verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[cacert] [jc ; cacert] with
-  | `Ok _ -> ()
+  | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jc_ca"
 
 let telesec = cert "telesec"
@@ -27,12 +27,12 @@ let jfd = [ cert "jabber.fu-berlin.de" ; cert "fu-berlin" ; cert "dfn" ]
 
 let test_jfd_ca () =
   match Validation.verify_chain_of_trust ~host:(`Strict "jabber.fu-berlin.de") ~anchors:[telesec] (jfd@[telesec]) with
-  | `Ok _ -> ()
+  | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jfd_ca"
 
 let test_jfd_ca' () =
   match Validation.verify_chain_of_trust ~host:(`Strict "jabber.fu-berlin.de") ~anchors:[telesec] jfd with
-  | `Ok _ -> ()
+  | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jfd_ca'"
 
 let regression_tests = [

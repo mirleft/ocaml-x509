@@ -1,7 +1,7 @@
 
 open X509_certificate
 
-type a = ?host:host -> t list -> Validation.result
+type a = ?host:host -> t list -> ((t list * t) option, Validation.validation_error) result
 
 (* XXX
    * Authenticator just hands off a list of certs. Should be indexed.
@@ -26,4 +26,4 @@ let server_cert_fingerprint ?time ~hash ~fingerprints =
   fun ?host certificates ->
     Validation.trust_cert_fingerprint ?host ?time ~hash ~fingerprints certificates
 
-let null ?host:_ _ = `Ok None
+let null ?host:_ _ = Ok None

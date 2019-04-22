@@ -58,8 +58,8 @@ let verify () =
   let ca, capub, capriv = selfsigned now in
   let cert, _, _ = cert now false capub capriv (X509.subject ca) in
   match X509.Validation.verify_chain ~anchors:[ca] [cert] with
-  | `Ok _ -> ()
-  | `Fail _ -> Alcotest.fail "expected verification to succeed"
+  | Ok _ -> ()
+  | Error _ -> Alcotest.fail "expected verification to succeed"
 
 let crl () =
   let now = Ptime_clock.now () in
@@ -71,9 +71,9 @@ let crl () =
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert] with
-  | `Ok _ -> Alcotest.fail "expected revocation"
-  | `Fail (`Chain (`Revoked _)) -> ()
-  | `Fail _ -> Alcotest.fail "expected revoked failure!"
+  | Ok _ -> Alcotest.fail "expected revocation"
+  | Error (`Chain (`Revoked _)) -> ()
+  | Error _ -> Alcotest.fail "expected revoked failure!"
 
 let verify' () =
   let now = Ptime_clock.now () in
@@ -83,8 +83,8 @@ let verify' () =
   let ica, ipub, ipriv = cert ~name:"subCA" ~serial now true capub capriv issuer in
   let cert, _pub, _priv = cert now false ipub ipriv (X509.subject ica) in
   match X509.Validation.verify_chain ~anchors:[ca] [cert ; ica] with
-  | `Ok _ -> ()
-  | `Fail _ -> Alcotest.fail "expected verification!"
+  | Ok _ -> ()
+  | Error _ -> Alcotest.fail "expected verification!"
 
 let crl' () =
   let now = Ptime_clock.now () in
@@ -97,9 +97,9 @@ let crl' () =
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
-  | `Ok _ -> Alcotest.fail "expected revocation"
-  | `Fail (`Chain (`Revoked _)) -> ()
-  | `Fail _ -> Alcotest.fail "expected revoked failure!"
+  | Ok _ -> Alcotest.fail "expected revocation"
+  | Error (`Chain (`Revoked _)) -> ()
+  | Error _ -> Alcotest.fail "expected revoked failure!"
 
 let crl'leaf () =
   let now = Ptime_clock.now () in
@@ -112,9 +112,9 @@ let crl'leaf () =
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] ipriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
-  | `Ok _ -> Alcotest.fail "expected revocation"
-  | `Fail (`Chain (`Revoked _)) -> ()
-  | `Fail _ -> Alcotest.fail "expected revoked failure!"
+  | Ok _ -> Alcotest.fail "expected revocation"
+  | Error (`Chain (`Revoked _)) -> ()
+  | Error _ -> Alcotest.fail "expected revoked failure!"
 
 let crl'leaf'wrong () =
   let now = Ptime_clock.now () in
@@ -127,8 +127,8 @@ let crl'leaf'wrong () =
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] ipriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
-  | `Ok _ -> ()
-  | `Fail _ -> Alcotest.fail "expected success!"
+  | Ok _ -> ()
+  | Error _ -> Alcotest.fail "expected success!"
 
 let verify'' () =
   let now = Ptime_clock.now () in
@@ -141,8 +141,8 @@ let verify'' () =
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
-  | `Ok _ -> ()
-  | `Fail _ -> Alcotest.fail "expected verify to succeed!"
+  | Ok _ -> ()
+  | Error _ -> Alcotest.fail "expected verify to succeed!"
 
 let crl'' () =
   let now = Ptime_clock.now () in
@@ -155,8 +155,8 @@ let crl'' () =
   let crl = X509.CRL.revoke ~issuer ~this_update:now ~extensions:[(false, `CRL_number 1)] [revoked] capriv in
   let revoked = X509.CRL.is_revoked [crl] in
   match X509.Validation.verify_chain ~revoked ~anchors:[ca] [cert ; ica] with
-  | `Ok _ -> ()
-  | `Fail _ -> Alcotest.fail "expected proper verification!"
+  | Ok _ -> ()
+  | Error _ -> Alcotest.fail "expected proper verification!"
 
 let revoke_tests = [
   "Verify with a chain works", `Quick, verify ;

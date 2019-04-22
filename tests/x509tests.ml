@@ -88,10 +88,10 @@ let first_certs = [
 
 let test_valid_ca_cert server chain valid name ca () =
   match valid, Validation.verify_chain_of_trust ~host:name ~anchors:ca (server :: chain) with
-  | false, `Ok _   -> Alcotest.fail "expected to fail, but didn't"
-  | false, `Fail _ -> ()
-  | true , `Ok _   -> ()
-  | true , `Fail c -> Alcotest.failf "valid certificate %a" Validation.pp_validation_error c
+  | false, Ok _   -> Alcotest.fail "expected to fail, but didn't"
+  | false, Error _ -> ()
+  | true , Ok _   -> ()
+  | true , Error c -> Alcotest.failf "valid certificate %a" Validation.pp_validation_error c
 
 let strict_test_valid_ca_cert server chain valid name ca =
   test_valid_ca_cert server chain valid (`Strict name) ca
