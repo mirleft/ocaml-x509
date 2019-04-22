@@ -91,7 +91,7 @@ let test_valid_ca_cert server chain valid name ca () =
   | false, `Ok _   -> Alcotest.fail "expected to fail, but didn't"
   | false, `Fail _ -> ()
   | true , `Ok _   -> ()
-  | true , `Fail c -> Alcotest.fail ("valid certificate " ^ Validation.validation_error_to_string c)
+  | true , `Fail c -> Alcotest.failf "valid certificate %a" Validation.pp_validation_error c
 
 let strict_test_valid_ca_cert server chain valid name ca =
   test_valid_ca_cert server chain valid (`Strict name) ca

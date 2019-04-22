@@ -20,53 +20,29 @@ type component = [
   | `Other        of Asn.oid * string
 ]
 
-let component_to_string = function
-  | `CN s -> "CN=" ^ s
-  | `Serialnumber s -> "Serialnumber=" ^ s
-  | `C s -> "C=" ^ s
-  | `L s -> "L=" ^ s
-  | `SP s -> "SP=" ^ s
-  | `O s -> "O=" ^ s
-  | `OU s -> "OU=" ^ s
-  | `T s -> "T=" ^ s
-  | `DNQ s -> "DNQ=" ^ s
-  | `Mail s -> "Mail=" ^ s
-  | `DC s -> "DC=" ^ s
-  | `Given_name s -> "Given_name=" ^ s
-  | `Surname s -> "Surname=" ^ s
-  | `Initials s -> "Initials=" ^ s
-  | `Pseudonym s -> "Pseudonym=" ^ s
-  | `Generation s -> "Generation=" ^ s
-  | `Other (oid, s) -> Format.asprintf "%a=%s" Asn.OID.pp oid s
-
-let component_of_string s =
-  match Astring.String.cut ~sep:"=" s with
-  | None -> None
-  | Some (kind, value) -> match kind with
-    | "CN" -> Some (`CN value)
-    | "Serialnumber" -> Some (`Serialnumber value)
-    | "C" -> Some (`C value)
-    | "L" -> Some (`L value)
-    | "SP" -> Some (`SP value)
-    | "O" -> Some (`O value)
-    | "OU" -> Some (`OU value)
-    | "T" -> Some (`T value)
-    | "DNQ" -> Some (`DNQ value)
-    | "Mail" -> Some (`Mail value)
-    | "DC" -> Some (`DC value)
-    | "Given_name" -> Some (`Given_name value)
-    | "Surname" -> Some (`Surname value)
-    | "Initials" -> Some (`Initials value)
-    | "Pseudonym" -> Some (`Pseudonym value)
-    | "Generation" -> Some (`Generation value)
-    | x -> match Asn.OID.of_string x with
-      | None -> None
-      | Some oid -> Some (`Other (oid, value))
+let pp_component ppf = function
+  | `CN s -> Fmt.pf ppf "CN=%s" s
+  | `Serialnumber s -> Fmt.pf ppf "Serialnumber=%s" s
+  | `C s -> Fmt.pf ppf "C=%s" s
+  | `L s -> Fmt.pf ppf "L=%s" s
+  | `SP s -> Fmt.pf ppf "SP=%s" s
+  | `O s -> Fmt.pf ppf "O=%s" s
+  | `OU s -> Fmt.pf ppf "OU=%s" s
+  | `T s -> Fmt.pf ppf "T=%s" s
+  | `DNQ s -> Fmt.pf ppf "DNQ=%s" s
+  | `Mail s -> Fmt.pf ppf "Mail=%s" s
+  | `DC s -> Fmt.pf ppf "DC=%s" s
+  | `Given_name s -> Fmt.pf ppf "Given_name=%s" s
+  | `Surname s -> Fmt.pf ppf "Surname=%s" s
+  | `Initials s -> Fmt.pf ppf "Initials=%s" s
+  | `Pseudonym s -> Fmt.pf ppf "Pseudonym=%s" s
+  | `Generation s -> Fmt.pf ppf "Generation=%s" s
+  | `Other (oid, s) -> Fmt.pf ppf "%a=%s" Asn.OID.pp oid s
 
 type distinguished_name = component list
 
-let distinguished_name_to_string dn =
-  Astring.String.concat ~sep:"/" (List.map component_to_string dn)
+let pp_distinguished_name ppf dn =
+  Fmt.(list ~sep:(unit "/") pp_component) ppf dn
 
 type public_key = [
   | `RSA    of Nocrypto.Rsa.pub
@@ -76,4 +52,3 @@ type public_key = [
 type private_key = [ `RSA of Nocrypto.Rsa.priv ]
 
 type key_type = [ `RSA | `EC of Asn.oid ]
-

@@ -21,6 +21,28 @@ type t = {
   raw : Cstruct.t
 }
 
+let pp_version ppf v =
+  Fmt.string ppf (match v with `V1 -> "1" | `V2 -> "2" | `V3 -> "3")
+
+let pp_sigalg ppf (asym, hash) =
+  Fmt.pf ppf "%s-%s"
+    (match asym with `RSA -> "RSA" | `ECDSA -> "ECDSA")
+    (match hash with
+     | `MD5 -> "MD5" | `SHA1 -> "SHA1" | `SHA224 -> "SHA224"
+     | `SHA256 -> "SHA256" | `SHA384 -> "SHA384" | `SHA512 -> "SHA512")
+
+let pp ppf { asn ; _ } =
+  let tbs = asn.tbs_cert in
+  let sigalg = Algorithm.to_signature_algorithm tbs.signature in
+  Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %d"
+    pp_version tbs.version Z.pp_print tbs.serial
+    Fmt.(option ~none:(unit "NONE") pp_sigalg) sigalg
+    pp_distinguished_name tbs.issuer
+    (Ptime.pp_human ~tz_offset_s:0 ()) (fst tbs.validity)
+    (Ptime.pp_human ~tz_offset_s:0 ()) (snd tbs.validity)
+    pp_distinguished_name tbs.subject
+    (List.length tbs.extensions)
+
 let fingerprint hash cert = Hash.digest hash cert.raw
 
 let issuer { asn ; _ } = asn.tbs_cert.issuer
@@ -37,25 +59,6 @@ let parse_certificate cs =
   { asn ; raw = cs }
 
 let cs_of_cert { raw ; _ } = raw
-
-(* TODO remove! *)
-let to_hex cs =
-  let i_to_h i idx s =
-    let v_to_h = function
-      | x when x < 10 -> char_of_int (x + 48)
-      | x -> char_of_int (x + 55)
-    in
-    let high = (0xf0 land i) lsr 4
-    and low = 0x0f land i
-    in
-    Bytes.set s idx (v_to_h high) ;
-    Bytes.set s (succ idx) (v_to_h low)
-  in
-  let s = Bytes.make (Cstruct.len cs * 3 - 1) ':' in
-  for i = 0 to pred (Cstruct.len cs) do
-    i_to_h (Cstruct.get_uint8 cs i) (i * 3) s
-  done ;
-  Bytes.to_string s
 
 let key_id = function
   | `RSA p -> Hash.digest `SHA1 (PK.rsa_public_to_cstruct p)
@@ -316,20 +319,6 @@ module Validation = struct
 
   include Control
 
-  let string_of_version = function
-    | `V1 -> "1"
-    | `V2 -> "2"
-    | `V3 -> "3"
-
-  let expired c now =
-    let now = match now with
-      | None   -> "none"
-      | Some t -> Ptime.to_rfc3339 ~tz_offset_s:0 t
-    and fr, un = c.asn.tbs_cert.validity
-    and pp = Ptime.pp_human ~tz_offset_s:0 () in
-    let msg = Format.asprintf "(valid from %a until %a)" pp fr pp un in
-    (msg, now)
-
   type ca_error = [
     | `CAIssuerSubjectMismatch of t
     | `CAInvalidVersion of t
@@ -338,23 +327,19 @@ module Validation = struct
     | `CAInvalidExtensions of t
   ]
 
-  let ca_error_to_string = function
+  let pp_ca_error ppf = function
     | `CAIssuerSubjectMismatch c ->
-       "invalid CA (issuer does not match subject): " ^ common_name_to_string c
+      Fmt.pf ppf "CA certificate %a: issuer does not match subject" pp c
     | `CAInvalidVersion c ->
-       let ver = string_of_version (c.asn.tbs_cert.version) in
-       "CA certificate " ^ common_name_to_string c ^ " is X.509 version " ^
-         ver  ^ ", but version 3 is needed for extensions"
+      Fmt.pf ppf "CA certificate %a: version 3 is required for extensions" pp c
     | `CAInvalidExtensions c ->
-       "invalid CA extensions: " ^ common_name_to_string c
+      Fmt.pf ppf "CA certificate %a: invalid CA extensions" pp c
     | `CAInvalidSelfSignature c ->
-       let n = common_name_to_string c in
-       "CA certificate " ^ n ^ " does not have a proper self-signature"
+      Fmt.pf ppf "CA certificate %a: invalid self-signature" pp c
     | `CACertificateExpired (c, now) ->
-       let valid, now = expired c now
-       and n = common_name_to_string c
-       in
-       "CA certificate " ^ n ^ " is expired " ^ valid ^ ", now: " ^ now
+      let pp_pt = Ptime.pp_human ~tz_offset_s:0 () in
+      Fmt.pf ppf "CA certificate %a: expired (now %a)" pp c
+        Fmt.(option ~none:(unit "no timestamp provided") pp_pt) now
 
   type leaf_validation_error = [
     | `LeafCertificateExpired of t * Ptime.t option
@@ -362,6 +347,23 @@ module Validation = struct
     | `LeafInvalidVersion of t
     | `LeafInvalidExtensions of t
   ]
+
+  let pp_leaf_validation_error ppf = function
+    | `LeafCertificateExpired (c, now) ->
+      let pp_pt = Ptime.pp_human ~tz_offset_s:0 () in
+      Fmt.pf ppf "leaf certificate %a expired (now %a)" pp c
+        Fmt.(option ~none:(unit "no timestamp provided") pp_pt) now
+    | `LeafInvalidName (c, n) ->
+      let n = match n with
+        | Some (`Wildcard s) -> "wildcard " ^ s
+        | Some (`Strict s) -> s
+        | None -> "none"
+      in
+      Fmt.pf ppf "leaf certificate %a does not contain the name %s" pp c n
+    | `LeafInvalidVersion c ->
+      Fmt.pf ppf "leaf certificate %a: version 3 is required for extensions" pp c
+    | `LeafInvalidExtensions c ->
+      Fmt.pf ppf "leaf certificate %a: invalid server extensions" pp c
 
   type chain_validation_error = [
     | `IntermediateInvalidExtensions of t
@@ -378,16 +380,59 @@ module Validation = struct
     | `Revoked of t
   ]
 
+  let pp_chain_validation_error ppf = function
+    | `IntermediateInvalidExtensions c ->
+      Fmt.pf ppf "intermediate certificate %a: invalid extensions" pp c
+    | `IntermediateCertificateExpired (c, now) ->
+      let pp_pt = Ptime.pp_human ~tz_offset_s:0 () in
+      Fmt.pf ppf "intermediate certificate %a expired (now %a)" pp c
+        Fmt.(option ~none:(unit "no timestamp provided") pp_pt) now
+    | `IntermediateInvalidVersion c ->
+      Fmt.pf ppf "intermediate certificate %a: version 3 is required for extensions"
+        pp c
+    | `ChainIssuerSubjectMismatch (c, parent) ->
+      Fmt.pf ppf "invalid chain: issuer of %a does not match subject of %a"
+        pp c pp parent
+    | `ChainAuthorityKeyIdSubjectKeyIdMismatch (c, parent) ->
+      Fmt.pf ppf "invalid chain: authority key id extension of %a does not match subject key id extension of %a"
+        pp c pp parent
+    | `ChainInvalidSignature (c, parent) ->
+      Fmt.pf ppf "invalid chain: the certificate %a is not signed by %a"
+        pp c pp parent
+    | `ChainInvalidPathlen (c, pathlen) ->
+      Fmt.pf ppf "invalid chain: the path length of %a is smaller than the required path length %d"
+        pp c pathlen
+    | `EmptyCertificateChain -> Fmt.string ppf "certificate chain is empty"
+    | `NoTrustAnchor c ->
+      Fmt.pf ppf "no trust anchor found for %a" pp c
+    | `Revoked c ->
+      Fmt.pf ppf "certificate %a is revoked" pp c
+
   type chain_error = [
     | `Leaf of leaf_validation_error
     | `Chain of chain_validation_error
   ]
+
+  let pp_chain_error ppf = function
+    | `Leaf l -> pp_leaf_validation_error ppf l
+    | `Chain c -> pp_chain_validation_error ppf c
 
   type fingerprint_validation_error = [
     | `ServerNameNotPresent of t * string
     | `NameNotInList of t
     | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
   ]
+
+  let pp_fingerprint_validation_error ppf = function
+    | `ServerNameNotPresent (c, n) ->
+      Fmt.pf ppf "server name %s was matched in the fingerprint list, but does not occur in certificate %a"
+        n pp c
+    | `NameNotInList c ->
+      Fmt.pf ppf "certificate common name %a is not present in the fingerprint list"
+        pp c
+    | `InvalidFingerprint (c, c_fp, fp) ->
+      Fmt.pf ppf "fingerprint for %a (which is %a) does not match, expected %a"
+        pp c Cstruct.hexdump_pp c_fp Cstruct.hexdump_pp fp
 
   type validation_error = [
     | `EmptyCertificateChain
@@ -396,73 +441,12 @@ module Validation = struct
     | `Fingerprint of fingerprint_validation_error
   ]
 
-  let leaf_validation_error_to_string = function
-    | `LeafCertificateExpired (c, now) ->
-       let valid, now = expired c now in
-       "certificate " ^ common_name_to_string c ^ " is expired " ^ valid ^
-         ", now: " ^ now
-    | `LeafInvalidName (c, n) ->
-       let n = match n with
-         | Some (`Wildcard s) -> "wildcard " ^ s
-         | Some (`Strict s) -> s
-         | None -> "none"
-       in
-       n ^ " is not contained in the certificate " ^ common_name_to_string c
-    | `LeafInvalidVersion c ->
-       let ver = string_of_version (c.asn.tbs_cert.version) in
-       "certificate " ^ common_name_to_string c ^ " is X.509 version " ^ ver  ^
-         ", but version 3 is needed for extensions"
-    | `LeafInvalidExtensions c ->
-       "invalid server extensions: " ^ common_name_to_string c
-
-  let fingerprint_validation_error_to_string = function
-    | `ServerNameNotPresent (c, n) ->
-       "fingerprint matches " ^ n ^ " in the fingerprint list, which is not a" ^
-         " common name of the certificate " ^ common_name_to_string c
-    | `NameNotInList c ->
-       "common name of the certificate, " ^ common_name_to_string c ^
-         ", is not present in the fingerprint list"
-    | `InvalidFingerprint (c, c_fp, fp) ->
-       common_name_to_string c ^ " (fp: " ^ to_hex c_fp ^ ") does not match" ^
-         " the given fingerprint " ^ to_hex fp
-
-  let validation_error_to_string = function
-    | `EmptyCertificateChain -> "provided certificate chain is empty"
-    | `InvalidChain -> "invalid certificate chain"
-    | `Leaf l -> leaf_validation_error_to_string l
-    | `Fingerprint f -> fingerprint_validation_error_to_string f
-
-  let chain_validation_error_to_string = function
-    | `IntermediateInvalidExtensions c ->
-       "invalid intermediate certificate extensions: " ^ common_name_to_string c
-    | `IntermediateCertificateExpired (c, now) ->
-       let valid, now = expired c now
-       and n = common_name_to_string c
-       in
-       "Intermediate certificate " ^ n ^ " is expired " ^ valid ^ ", now: " ^ now
-    | `IntermediateInvalidVersion c ->
-       let ver = string_of_version (c.asn.tbs_cert.version) in
-       "Intermediate certificate " ^ common_name_to_string c ^ " is X.509 version " ^
-         ver  ^ ", but version 3 is needed for extensions"
-    | `ChainIssuerSubjectMismatch (c, parent) ->
-       "invalid chain: issuer of " ^ common_name_to_string c ^
-         " does not match subject of " ^ common_name_to_string parent
-    | `ChainAuthorityKeyIdSubjectKeyIdMismatch (c, parent) ->
-       "invalid chain: authority key id extension of " ^ common_name_to_string c ^
-         " does not match subject key id extension of " ^ common_name_to_string parent
-    | `ChainInvalidSignature (c, parent) ->
-       "invalid chain: the certificate " ^ common_name_to_string c ^
-         " is not signed by " ^ common_name_to_string parent
-    | `ChainInvalidPathlen (c, pathlen) ->
-       "invalid chain: the path length of " ^ common_name_to_string c ^
-         " is smaller than the required path length " ^ string_of_int pathlen
-    | `EmptyCertificateChain -> "Certificate chain is empty"
-    | `NoTrustAnchor c -> "No trust anchor found for " ^ common_name_to_string c
-    | `Revoked c -> "Certificate " ^ common_name_to_string c ^ " is revoked"
-
-  let chain_error_to_string = function
-    | `Leaf l -> leaf_validation_error_to_string l
-    | `Chain c -> chain_validation_error_to_string c
+  let pp_validation_error ppf = function
+    | `EmptyCertificateChain ->
+      Fmt.string ppf "provided certificate chain is empty"
+    | `InvalidChain -> Fmt.string ppf "invalid certificate chain"
+    | `Leaf l -> pp_leaf_validation_error ppf l
+    | `Fingerprint f -> pp_fingerprint_validation_error ppf f
 
   (* TODO RFC 5280: A certificate MUST NOT include more than one
      instance of a particular extension. *)

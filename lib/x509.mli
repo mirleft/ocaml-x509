@@ -44,6 +44,9 @@
     {{!Encoding.Pem.Certificate}encoding and decoding to PEM}. *)
 type t
 
+(** [pp ppf cert] pretty-prints the certificate. *)
+val pp : t Fmt.t
+
 (** {1 Basic operations on a certificate} *)
 
 (** The polymorphic variant of public key types. *)
@@ -123,9 +126,8 @@ type component = [
 (** A distinguished name is a list of {!component}. *)
 type distinguished_name = component list
 
-(** [distinguished_name_to_string dn] is [string], the string
-    representation of the {{!distinguished_name}dn}. *)
-val distinguished_name_to_string : distinguished_name -> string
+(** [pp_distinguished_name ppf dn] pretty-prints the distinguished name. *)
+val pp_distinguished_name : distinguished_name Fmt.t
 
 (** [fingerprint hash cert] is [digest], the digest of [cert] using the
     specified [hash] algorithm *)
@@ -476,9 +478,8 @@ module Validation : sig
     | `CAInvalidExtensions of t
   ]
 
-  (** [ca_error_to_string validation_error] is [string], the string
-      representation of the [ca_error]. *)
-  val ca_error_to_string : ca_error -> string
+  (** [pp_ca_error ppf ca_error] pretty-prints the CA error [ca_error]. *)
+  val pp_ca_error : ca_error Fmt.t
 
   (** [valid_ca ~time certificate] is [result], which is `Ok if the given
       certificate is self-signed, it is valid at [time], its extensions are not
@@ -531,9 +532,8 @@ module Validation : sig
     | `Chain of chain_validation_error
   ]
 
-  (** [chain_error_to_string validation_error] is [string], the string
-      representation of the [chain_error]. *)
-  val chain_error_to_string : chain_error -> string
+  (** [pp_chain_error ppf chain_error] pretty-prints the [chain_error]. *)
+  val pp_chain_error : chain_error Fmt.t
 
   (** [verify_chain ~host ~time ~revoked ~anchors chain] is [result], either
       [Ok] and the trust anchor used to verify the chain, or [Fail] and the
@@ -565,9 +565,9 @@ module Validation : sig
     | `Fingerprint of fingerprint_validation_error
   ]
 
-  (** [validation_error_to_string validation_error] is [string], the string
-      representation of the [validation_error]. *)
-  val validation_error_to_string : validation_error -> string
+  (** [pp_validation_error ppf validation_error] pretty-prints the
+      [validation_error]. *)
+  val pp_validation_error : validation_error Fmt.t
 
   (** The result of a validation: either success (optionally returning the used
       trust anchor), or failure *)
@@ -654,8 +654,10 @@ end
 (** Encodings *)
 module Encoding : sig
 
+  (** The typ for decoding errors. *)
   type err = Asn.error
 
+  (** [pp_err ppf err] pretty-prints the error. *)
   val pp_err : err Fmt.t
 
   (** {1 ASN.1 Encoding} *)
