@@ -81,11 +81,6 @@ let subject_common_name cert =
   List_ext.map_find cert.tbs_cert.subject
            ~f:(function `CN n -> Some n | _ -> None)
 
-let common_name_to_string { asn = cert ; _ } =
-  match subject_common_name cert with
-  | None   -> "NO commonName"
-  | Some x -> x
-
 (* RFC 6125, 6.4.4:
    Therefore, if and only if the presented identifiers do not include a
    DNS-ID, SRV-ID, URI-ID, or any application-specific identifier types

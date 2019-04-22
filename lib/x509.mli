@@ -95,10 +95,6 @@ type host = [ `Strict of string | `Wildcard of string ]
     contains the given [host], using {!hostnames}. *)
 val supports_hostname : t -> host -> bool
 
-(** [common_name_to_string certificate] is [common_name], the common name of the
-    subject of the [certificate]. *)
-val common_name_to_string : t -> string
-
 (** The polymorphic variant of a distinguished name component, as defined in
     X.500. *)
 type component = [
