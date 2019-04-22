@@ -676,11 +676,15 @@ end
 (** Encodings *)
 module Encoding : sig
 
+  type err = Asn.error
+
+  val pp_err : err Fmt.t
+
   (** {1 ASN.1 Encoding} *)
 
   (** [parse cstruct] is [certificate option], the ASN.1 decoded
       [certificate] or [None]. *)
-  val parse : Cstruct.t -> t option
+  val parse : Cstruct.t -> (t, err) result
 
   (** [cs_of_cert certificate] is [cstruct], the ASN.1 encoded
       representation of the [certificate]. *)
@@ -688,7 +692,7 @@ module Encoding : sig
 
   (** [distinguished_name_of_cs cs] is [dn], the ASN.1 decoded distinguished
       name of [cs]. *)
-  val distinguished_name_of_cs : Cstruct.t -> distinguished_name option
+  val distinguished_name_of_cs : Cstruct.t -> (distinguished_name, err) result
 
   (** [cs_of_distinguished_name dn] is [cstruct], the ASN.1 encoded
       representation of the distinguished name [dn]. *)
@@ -696,16 +700,16 @@ module Encoding : sig
 
   (** [parse_signing_request cstruct] is [signing_request option],
       the ASN.1 decoded [cstruct] or [None]. *)
-  val parse_signing_request : Cstruct.t -> CA.signing_request option
+  val parse_signing_request : Cstruct.t -> (CA.signing_request, err) result
 
   (** [cs_of_signing_request sr] is [cstruct], the ASN.1 encoded
       representation of the [sr]. *)
-  val cs_of_signing_request  : CA.signing_request -> Cstruct.t
+  val cs_of_signing_request : CA.signing_request -> Cstruct.t
 
   (** [pkcs1_digest_info_of_cstruct data] is [hash, signature option],
       the hash and raw signature. *)
   val pkcs1_digest_info_of_cstruct : Cstruct.t ->
-    (Nocrypto.Hash.hash * Cstruct.t) option
+    (Nocrypto.Hash.hash * Cstruct.t, err) result
 
   (** [pkcs1_digest_info_to_cstruct (hash, signature)] is [data], the
       encoded hash and signature. *)
@@ -717,7 +721,7 @@ module Encoding : sig
 
   (** [rsa_public_of_cstruct buffer] is [pubkey], the public key of
       the ASN.1 encoded buffer. *)
-  val rsa_public_of_cstruct : Cstruct.t -> Nocrypto.Rsa.pub option
+  val rsa_public_of_cstruct : Cstruct.t -> (Nocrypto.Rsa.pub, err) result
 
   (** [public_key_to_cstruct pk] is [buffer], the ASN.1 encoding of
       the given public key. *)
@@ -725,7 +729,7 @@ module Encoding : sig
 
   (** [public_key_of_cstruct buffer] is [pubkey], the public key of
       the ASN.1 encoded buffer. *)
-  val public_key_of_cstruct : Cstruct.t -> public_key option
+  val public_key_of_cstruct : Cstruct.t -> (public_key, err) result
 
   (** [crl_to_cstruct crl] is [buffer], the ASN.1 DER encoding of the
       given certificate revocation list. *)
@@ -733,7 +737,7 @@ module Encoding : sig
 
   (** [crl_of_cstruct buffer] is [crl], the certificate revocation list of
       the ASN.1 encoded buffer. *)
-  val crl_of_cstruct : Cstruct.t -> CRL.c option
+  val crl_of_cstruct : Cstruct.t -> (CRL.c, err) result
 
   (** Parser and unparser of PEM files *)
   module Pem : sig
@@ -743,7 +747,7 @@ module Encoding : sig
     (** [parse pem] is [(name * data) list], in which the [pem] is
         parsed into its components, each surrounded by [BEGIN name] and
         [END name]. The actual [data] is base64 decoded. *)
-    val parse : Cstruct.t -> (string * Cstruct.t) list
+    val parse : Cstruct.t -> ((string * Cstruct.t) list, err) result
 
     (** Decoding and encoding of
        {{:https://tools.ietf.org/html/rfc5280#section-3.1}X509
@@ -754,11 +758,11 @@ module Encoding : sig
 
       (** [of_pem_cstruct pem] is [t list], where all certificates of
           the [pem] are extracted *)
-      val of_pem_cstruct  : Cstruct.t -> t list
+      val of_pem_cstruct  : Cstruct.t -> (t list, err) result
 
       (** [of_pem_cstruct1 pem] is [t], where the single certificate
           of the [pem] is extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> t
+      val of_pem_cstruct1 : Cstruct.t -> (t, err) result
 
       (** [to_pem_cstruct certificates] is [pem], the pem encoded
           certificates. *)
@@ -776,23 +780,22 @@ module Encoding : sig
 
       (** {3 PEM encoded certificate signing requests} *)
 
-      type t = CA.signing_request
-
       (** [of_pem_cstruct pem] is [t list], where all signing requests
           of the [pem] are extracted *)
-      val of_pem_cstruct  : Cstruct.t -> t list
+      val of_pem_cstruct  : Cstruct.t ->
+        (CA.signing_request list, err) result
 
       (** [of_pem_cstruct1 pem] is [t], where the single signing
           request of the [pem] is extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> t
+      val of_pem_cstruct1 : Cstruct.t -> (CA.signing_request, err) result
 
       (** [to_pem_cstruct signing_requests] is [pem], the pem encoded
           signing requests. *)
-      val to_pem_cstruct : t list -> Cstruct.t
+      val to_pem_cstruct : CA.signing_request list -> Cstruct.t
 
       (** [to_pem_cstruct1 signing_request] is [pem], the pem encoded
           signing_request. *)
-      val to_pem_cstruct1 : t -> Cstruct.t
+      val to_pem_cstruct1 : CA.signing_request -> Cstruct.t
     end
 
     (** Decoding and encoding of public keys in PEM format as defined
@@ -803,11 +806,11 @@ module Encoding : sig
 
       (** [of_pem_cstruct pem] is [t list], where all public keys of
           [pem] are extracted *)
-      val of_pem_cstruct  : Cstruct.t -> public_key list
+      val of_pem_cstruct  : Cstruct.t -> (public_key list, err) result
 
       (** [of_pem_cstruct1 pem] is [t], where the public key of [pem]
           is extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> public_key
+      val of_pem_cstruct1 : Cstruct.t -> (public_key, err) result
 
       (** [to_pem_cstruct public_keys] is [pem], the pem encoded
           public keys. *)
@@ -827,11 +830,11 @@ module Encoding : sig
 
       (** [of_pem_cstruct pem] is [t list], where all private keys of
           [pem] are extracted *)
-      val of_pem_cstruct  : Cstruct.t -> private_key list
+      val of_pem_cstruct  : Cstruct.t -> (private_key list, err) result
 
       (** [of_pem_cstruct1 pem] is [t], where the private key of [pem]
           is extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> private_key
+      val of_pem_cstruct1 : Cstruct.t -> (private_key, err) result
 
       (** [to_pem_cstruct private_keys] is [pem], the pem encoded
           private keys. *)

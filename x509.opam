@@ -19,6 +19,8 @@ depends: [
   "ptime"
   "nocrypto" {>= "0.5.3"}
   "astring"
+  "rresult"
+  "fmt"
   "alcotest" {with-test}
   "cstruct-unix" {with-test & >= "3.0.0"}
 ]

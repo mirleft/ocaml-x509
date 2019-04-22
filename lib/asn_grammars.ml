@@ -5,13 +5,12 @@ open Asn.S
 let def  x = function None -> x | Some y -> y
 let def' x = fun y -> if y = x then None else Some y
 
-let decode codec cs = match Asn.decode codec cs with
-  | Error e    -> Error e
-  | Ok (a, cs) ->
-      if Cstruct.len cs = 0 then Ok a else Error (`Parse "Leftovers")
+let decode codec cs =
+  let open Rresult.R.Infix in
+  Asn.decode codec cs >>= fun (a, cs) ->
+  if Cstruct.len cs = 0 then Ok a else Error (`Parse "Leftovers")
 
 let projections_of encoding asn =
-  let decode c cs = match decode c cs with Ok a -> Some a | _ -> None in
   let c = Asn.codec encoding asn in (decode c, Asn.encode c)
 
 let compare_unordered_lists cmp l1 l2 =

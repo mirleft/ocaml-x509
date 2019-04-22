@@ -4,7 +4,10 @@ let cs_mmap file =
   Unix_cstruct.of_fd Unix.(openfile file [O_RDONLY] 0)
 
 let cert file =
-  Encoding.Pem.Certificate.of_pem_cstruct1 (cs_mmap ("./regression/" ^ file ^ ".pem"))
+  let data = cs_mmap ("./regression/" ^ file ^ ".pem") in
+  match Encoding.Pem.Certificate.of_pem_cstruct1 data with
+  | Ok cert -> cert
+  | Error m -> Alcotest.failf "certificate decoding error %a" Encoding.pp_err m
 
 let jc = cert "jabber.ccc.de"
 let cacert = cert "cacert"

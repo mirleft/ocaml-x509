@@ -1,6 +1,8 @@
 open Asn_grammars.CRL
 include X509_crl_types
 
+open Rresult
+
 type c = {
   raw : Cstruct.t ;
   asn : Asn_grammars.CRL.t ;
@@ -9,9 +11,8 @@ type c = {
 let crl_to_cstruct { raw ; _ } = raw
 
 let crl_of_cstruct raw =
-  match crl_of_cstruct raw with
-  | None -> None
-  | Some asn -> Some { raw ; asn }
+  crl_of_cstruct raw >>| fun asn ->
+  { raw ; asn }
 
 let issuer { asn ; _ } = asn.tbs_crl.issuer
 

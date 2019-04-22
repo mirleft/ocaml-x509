@@ -11,17 +11,23 @@ let with_loaded_files file ~f =
   let buf1 = Unix_cstruct.of_fd fd1
   and buf2 = Unix_cstruct.of_fd fd2
   in
-  try let r = f buf1 buf2 in Unix.close fd1 ; Unix.close fd2 ; r
-  with e -> Unix.close fd1 ; Unix.close fd2 ; raise e
+  try let r = f buf1 buf2 in Unix.close fd1 ; Unix.close fd2 ;
+    match r with
+    | Ok x -> x
+    | Error e -> Alcotest.failf "decoding error %a" Encoding.pp_err e
+  with e -> Unix.close fd1 ; Unix.close fd2 ;
+    Alcotest.failf "exception %s" (Printexc.to_string e)
 
 let one f () =
   with_loaded_files f ~f:(fun cert crl ->
-      let cert = Encoding.Pem.Certificate.of_pem_cstruct1 cert in
+      let open Rresult.R.Infix in
+      Encoding.Pem.Certificate.of_pem_cstruct1 cert >>= fun cert ->
       let pubkey = X509.public_key cert in
-      match Encoding.crl_of_cstruct crl with
-      | None -> Alcotest.fail "failed to parse crl"
-      | Some crl when CRL.validate crl pubkey -> ()
-      | Some _ -> Alcotest.fail "couldn't verify cert")
+      Encoding.crl_of_cstruct crl >>= fun crl ->
+      if not (CRL.validate crl pubkey) then
+        Error (`Parse "couldn't verify cert")
+      else
+        Ok ())
 
 let crl_tests = [
   "CRL 1 is good", `Quick, one "1" ;

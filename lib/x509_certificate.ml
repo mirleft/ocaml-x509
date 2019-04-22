@@ -32,9 +32,9 @@ let serial { asn ; _ } = asn.tbs_cert.serial
 let validity { asn ; _ } = asn.tbs_cert.validity
 
 let parse_certificate cs =
-  match certificate_of_cstruct cs with
-  | None     -> None
-  | Some asn -> Some { asn ; raw = cs }
+  let open Rresult.R.Infix in
+  certificate_of_cstruct cs >>| fun asn ->
+  { asn ; raw = cs }
 
 let cs_of_cert { raw ; _ } = raw
 
@@ -159,8 +159,8 @@ let validate_raw_signature raw signature_algo signature_val pk_info =
           pkcs1_digest_info_of_cstruct signature,
           Algorithm.to_signature_algorithm signature_algo
         with
-        | Some (algo, hash), Some (`RSA, h) when h = algo ->
-          Cstruct.equal hash (Hash.digest algo raw)
+        | Ok (algo, hash), Some (`RSA, h) ->
+          h = algo && Cstruct.equal hash (Hash.digest algo raw)
         | _ -> false )
   | _ -> false
 

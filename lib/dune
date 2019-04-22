@@ -7,4 +7,4 @@
                   x509_encoding x509_extension_types x509_extension x509_pem
                   x509_request_types x509_types)
  (flags (:standard -safe-string))
- (libraries asn1-combinators ptime cstruct nocrypto astring))
+ (libraries asn1-combinators rresult fmt ptime cstruct nocrypto astring))

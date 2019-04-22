@@ -4,8 +4,13 @@ let with_loaded_file file ~f =
   let fullpath = "./testcertificates/" ^ file ^ ".pem" in
   let fd = Unix.(openfile fullpath [O_RDONLY] 0) in
   let buf = Unix_cstruct.of_fd fd in
-  try let r = f buf in Unix.close fd; r
-  with e -> Unix.close fd; raise e
+  try
+    let r = f buf in
+    Unix.close fd;
+    match r with
+    | Ok data -> data
+    | Error m -> Alcotest.failf "decoding error %a" Encoding.pp_err m
+  with e -> Unix.close fd; Alcotest.failf "exception %s" (Printexc.to_string e)
 
 let priv =
   match with_loaded_file "private/cakey"
