@@ -14,16 +14,16 @@ let with_loaded_files file ~f =
   try let r = f buf1 buf2 in Unix.close fd1 ; Unix.close fd2 ;
     match r with
     | Ok x -> x
-    | Error e -> Alcotest.failf "decoding error %a" Encoding.pp_err e
+    | Error e -> Alcotest.failf "decoding error %a" pp_decode_error e
   with e -> Unix.close fd1 ; Unix.close fd2 ;
     Alcotest.failf "exception %s" (Printexc.to_string e)
 
 let one f () =
   with_loaded_files f ~f:(fun cert crl ->
       let open Rresult.R.Infix in
-      Encoding.Pem.Certificate.of_pem_cstruct1 cert >>= fun cert ->
-      let pubkey = X509.public_key cert in
-      Encoding.crl_of_cstruct crl >>= fun crl ->
+      Certificate.decode_pem cert >>= fun cert ->
+      let pubkey = Certificate.public_key cert in
+      CRL.decode_der crl >>= fun crl ->
       if not (CRL.validate crl pubkey) then
         Error (`Parse "couldn't verify cert")
       else

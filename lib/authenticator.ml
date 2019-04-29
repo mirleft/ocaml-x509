@@ -1,7 +1,4 @@
-
-open X509_certificate
-
-type a = ?host:host -> t list -> ((t list * t) option, Validation.validation_error) result
+type t = ?host:Certificate.host -> Certificate.t list -> Validation.r
 
 (* XXX
    * Authenticator just hands off a list of certs. Should be indexed.
@@ -13,7 +10,7 @@ type a = ?host:host -> t list -> ((t list * t) option, Validation.validation_err
 let chain_of_trust ?time ?(crls = []) cas =
   let revoked = match crls with
     | [] -> None
-    | crls -> Some (X509_crl.is_revoked crls)
+    | crls -> Some (Crl.is_revoked crls)
   in
   fun ?host certificates ->
     Validation.verify_chain_of_trust ?host ?time ?revoked ~anchors:cas certificates

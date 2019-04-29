@@ -1,6 +1,7 @@
 (** X509 encoding, generation, and validation.
 
-    [X509] is a module for handling X.509 certificates, as described in
+    [X509] is a module for handling X.509 certificates and supplementary
+   material (such as public and private RSA keys), as described in
    {{:https://tools.ietf.org/html/rfc5280}RFC 5280}.  X.509 describes a
    hierarchical public key infrastructure, where all trust is delegated to
    certificate authorities (CA).  The task of a CA is to sign certificate
@@ -12,7 +13,7 @@
    various other optional {{!Extension}Extensions}.
 
     The public keys of trusted CAs are distributed with the software, or
-   configured manually.  When an endpoint connects, it has to present its
+   configured manually.  When an endpoint connects, it presents its
    certificate chain, which are pairwise signed certificates.  This chain is
    verified: the signatures have to be valid, the last certificate must be
    signed by a trusted CA, the name has to match the expected name, all
@@ -20,12 +21,16 @@
    certificate must match its usage.  An alternative validator checks that the
    hash of the server certificate matches the given hash.
 
-    This module provides {{!Encoding}parsers and unparsers} (PEM encoding) of
-   ASN.1 encoded X.509 certificates, public and private RSA keys
+    This module uses the [result] type for errors. No provided binging raises
+   an exception. Provided submodules include decoders and encoders (ASN.1 DER
+   and PEM encoding) of X.509v3 {{!Certificate}certificates},
+   {{!Distingushed_name}distinguished names}, {{!Public_key}public} and
+   {{!Private_key}private} RSA keys
    ({{:http://tools.ietf.org/html/rfc5208}PKCS 8, RFC 5208}), and certificate
-   signing requests ({{:http://tools.ietf.org/html/rfc2986}PKCS 10, RFC 2986})
-   (both require parts of {{:https://tools.ietf.org/html/rfc2985}PKCS9, RFC
-   2985}), {{!Validation} validation} of certificates, and construction of
+   {{!CA}signing requests} ({{:http://tools.ietf.org/html/rfc2986}PKCS 10, RFC 2986})
+   (both use parts of
+   {{:https://tools.ietf.org/html/rfc2985}PKCS9, RFC 2985}),
+   {{!Validation} validation} of certificates, and construction of
    {{!Authenticator} authenticators}.  Name validation, as defined in
    {{:https://tools.ietf.org/html/rfc6125}RFC 6125}, is also implemented.  The
    {{!CA}CA} module provides functionality to create and sign CSR.
@@ -37,116 +42,107 @@
 
     {e %%VERSION%% - {{:%%PKG_HOMEPAGE%% }homepage}} *)
 
+(** The type of decoding errors. *)
+type decode_error = Asn.error
 
-(** {1 Abstract certificate type} *)
+(** [pp_decode_error ppf e] pretty-prints the error [e] on [ppf]. *)
+val pp_decode_error : decode_error Fmt.t
 
-(** The abstract type of a certificate, with
-    {{!Encoding.Pem.Certificate}encoding and decoding to PEM}. *)
-type t
+(** RSA public key DER and PEM encoding and decoding *)
+module Public_key : sig
+  (** Public keys as specified in {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
+      are supported in this module, mainly RSA. *)
 
-(** [pp ppf cert] pretty-prints the certificate. *)
-val pp : t Fmt.t
+  (** The polymorphic variant of public keys, with
+      {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
+      {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
+  type t = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.oid ]
 
-(** {1 Basic operations on a certificate} *)
+  (** [id public_key] is [digest], the 160-bit [`SHA1] hash of the BIT
+      STRING subjectPublicKey (excluding tag, length, and number of
+      unused bits) for publicKeyInfo of [public_key].
 
-(** The polymorphic variant of public key types. *)
-type key_type = [ `RSA | `EC of Asn.oid ]
+      {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.2}RFC 5280, 4.2.1.2, variant (1)} *)
+  val id: t -> Cstruct.t
 
-(** [supports_keytype certificate key_type] is [result], whether public key of
-    the [certificate] matches the given [key_type]. *)
-val supports_keytype : t -> key_type -> bool
+  (** [fingerprint ?hash public_key] is [digest], the hash (by
+      default SHA256) of the DER encoded public key (equivalent to
+      [openssl x509 -noout -pubkey | openssl pkey -pubin -outform DER | openssl dgst -HASH]).  *)
+  val fingerprint : ?hash:Nocrypto.Hash.hash -> t -> Cstruct.t
 
-(** The polymorphic variant of public keys, with
-    {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
-    {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
-type public_key = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.oid ]
+  (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
-(** [key_id public_key] is [result], the 160-bit [`SHA1] hash of the BIT
-    STRING subjectPublicKey (excluding tag, length, and number of
-    unused bits) for publicKeyInfo of [public_key].
+  (** [encode_der pk] is [buffer], the ASN.1 encoding of the given public key. *)
+  val encode_der : t -> Cstruct.t
 
-    {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.2}RFC 5280, 4.2.1.2, variant (1)} *)
-val key_id: public_key -> Cstruct.t
+  (** [decode_der buffer] is [pubkey], the public key of the ASN.1 encoded buffer. *)
+  val decode_der : Cstruct.t -> (t, decode_error) result
 
-(** [key_fingerprint ?hash public_key] is [result], the hash (by
-    default SHA256) of the DER encoded public key (equivalent to
-    [openssl x509 -noout -pubkey | openssl pkey -pubin -outform DER | openssl dgst -HASH]).  *)
-val key_fingerprint : ?hash:Nocrypto.Hash.hash -> public_key -> Cstruct.t
+  (** [decode_pem pem] is [t], where the public key of [pem] is extracted *)
+  val decode_pem : Cstruct.t -> (t, decode_error) result
 
-(** The polymorphic variant of private keys, with
-    {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
-    {{!Encoding.Pem.Private_key}encoding and decoding to PEM}. *)
-type private_key = [ `RSA of Nocrypto.Rsa.priv ]
+  (** [encode_pem public_key] is [pem], the pem encoded public key. *)
+  val encode_pem : t -> Cstruct.t
+end
 
-(** [public_key certificate] is [pk], the public key of the [certificate]. *)
-val public_key : t -> public_key
+(** RSA private key pem encoding and decoding *)
+module Private_key : sig
+  (** RSA private keys as defined in
+      {{:http://tools.ietf.org/html/rfc5208}PKCS 8}: decoding and encoding
+      in PEM format  *)
 
-(** [hostnames certficate] are [hostnames], the list of hostnames this
-    [certificate] is valid for.  Currently, these are the DNS names of the
-    {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}Subject Alternative Name}
-    extension, if present, or otherwise the singleton list containing the common
-    name. *)
-val hostnames : t -> string list
+  (** The polymorphic variant of private keys. *)
+  type t = [ `RSA of Nocrypto.Rsa.priv ]
 
-(** The polymorphic variant for hostname validation. *)
-type host = [ `Strict of string | `Wildcard of string ]
+  (** [decode_pem pem] is [t], where the private key of [pem] is extracted.
+      Both RSA PRIVATE KEY and PRIVATE KEY stanzas are supported. *)
+  val decode_pem : Cstruct.t -> (t, decode_error) result
 
-(** [supports_hostname certificate host] is [result], whether the [certificate]
-    contains the given [host], using {!hostnames}. *)
-val supports_hostname : t -> host -> bool
+  (** [encode_pem key] is [pem], the encoded private key (using [PRIVATE KEY]). *)
+  val encode_pem : t -> Cstruct.t
+end
 
-(** The polymorphic variant of a distinguished name component, as defined in
+(** X.500 distinguished name *)
+module Distinguished_name : sig
+
+  (** The polymorphic variant of a distinguished name component, as defined in
     X.500. *)
-type component = [
-  | `CN           of string
-  | `Serialnumber of string
-  | `C            of string
-  | `L            of string
-  | `SP           of string
-  | `O            of string
-  | `OU           of string
-  | `T            of string
-  | `DNQ          of string
-  | `Mail         of string
-  | `DC           of string
+  type component = [
+    | `CN           of string
+    | `Serialnumber of string
+    | `C            of string
+    | `L            of string
+    | `SP           of string
+    | `O            of string
+    | `OU           of string
+    | `T            of string
+    | `DNQ          of string
+    | `Mail         of string
+    | `DC           of string
+    | `Given_name   of string
+    | `Surname      of string
+    | `Initials     of string
+    | `Pseudonym    of string
+    | `Generation   of string
+    | `Other        of Asn.oid * string
+  ]
 
-  | `Given_name   of string
-  | `Surname      of string
-  | `Initials     of string
-  | `Pseudonym    of string
-  | `Generation   of string
+  (** A distinguished name is a list of {!component}. *)
+  type t = component list
 
-  | `Other        of Asn.oid * string
-]
+  (** [pp_distinguished_name ppf dn] pretty-prints the distinguished name. *)
+  val pp : t Fmt.t
 
-(** A distinguished name is a list of {!component}. *)
-type distinguished_name = component list
+  (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs]. *)
+  val decode_der : Cstruct.t -> (t, decode_error) result
 
-(** [pp_distinguished_name ppf dn] pretty-prints the distinguished name. *)
-val pp_distinguished_name : distinguished_name Fmt.t
-
-(** [fingerprint hash cert] is [digest], the digest of [cert] using the
-    specified [hash] algorithm *)
-val fingerprint : Nocrypto.Hash.hash -> t -> Cstruct.t
-
-(** [subject certificate] is [dn], the subject as {{!distinguished_name}dn} of
-    the [certificate]. *)
-val subject : t -> distinguished_name
-
-(** [issuer certificate] is [dn], the issuer as {{!distinguished_name}dn} of
-    the [certificate]. *)
-val issuer : t -> distinguished_name
-
-(** [serial certificate] is [sn], the serial number of the [certificate]. *)
-val serial : t -> Z.t
-
-(** [validity certificate] is [from, until], the validity of the certificate. *)
-val validity : t -> Ptime.t * Ptime.t
+  (** [encode_der dn] is [cstruct], the ASN.1 encoded representation of the
+      distinguished name [dn]. *)
+  val encode_der : t -> Cstruct.t
+end
 
 (** X.509v3 extensions *)
 module Extension : sig
-
-  (** {1 X.509v3 extension} *)
 
   (** The polymorphic variant of
   {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.3}key usages}. *)
@@ -161,12 +157,6 @@ module Extension : sig
     | `Encipher_only
     | `Decipher_only
   ]
-
-  (** [supports_usage ~not_present certificate key_usage] is [result],
-      whether the [certificate] supports the given [key_usage]
-      (defaults to [~not_present] if the certificate does not contain
-      a keyUsage extension). *)
-  val supports_usage : ?not_present:bool -> t -> key_usage -> bool
 
   (** The polymorphic variant of
   {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.12}extended key usages}. *)
@@ -184,16 +174,6 @@ module Extension : sig
     | `Other of Asn.oid
   ]
 
-  (** [supports_extended_usage ~not_present certificate extended_key_usage] is
-      [result], whether the [certificate] supports the requested
-      [extended_key_usage] (defaults to [~not_present] if the certificate does
-      not contain an extendedKeyUsage extension. *)
-  val supports_extended_usage : ?not_present:bool -> t -> extended_key_usage -> bool
-
-  (** [basic_constraints cert] extracts the BasicConstraints extension, if
-      present. *)
-  val basic_constraints : t -> (bool * int option) option
-
   (** A list of [general_name]s is the value of both
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}subjectAltName}
       and
@@ -204,7 +184,7 @@ module Extension : sig
     | `Rfc_822       of string
     | `DNS           of string
     | `X400_address  of unit
-    | `Directory     of distinguished_name
+    | `Directory     of Distinguished_name.t
     | `EDI_party     of (string option * string)
     | `URI           of string
     | `IP            of Cstruct.t
@@ -232,44 +212,10 @@ module Extension : sig
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.4}policy extension}. *)
   type policy = [ `Any | `Something of Asn.oid ]
 
-  (** [unsupported cert oid] is [None] if [oid] is not present as extension, or
-      [Some (crit, data)] if an extension with [oid] is present. *)
-  val unsupported : t -> Asn.OID.t -> (bool * Cstruct.t) option
-
-  (** Returns [subject_alt_names] if extension if present, else [ [] ]. *)
-  val subject_alt_names : t -> general_name list
-
-  (** Type of allowed revocation reasons for a given distribution point. *)
+  (** Type of
+      {{:https://tools.ietf.org/html/rfc5280#section-5.3.1}revocation reasons}
+      for a given distribution point. *)
   type reason = [
-    | `Unused
-    | `Key_compromise
-    | `CA_compromise
-    | `Affiliation_changed
-    | `Superseded
-    | `Cessation_of_operation
-    | `Certificate_hold
-    | `Privilege_withdrawn
-    | `AA_compromise
-  ]
-
-  (** Distribution point name, either a full one using general names, or a
-      relative one using a distinguished name. *)
-  type distribution_point_name =
-    [ `Full of general_name list
-    | `Relative of distinguished_name ]
-
-  (** Distribution point, consisting of an optional name, an optional list of
-      allowed reasons, and an optional issuer. *)
-  type distribution_point =
-    distribution_point_name option *
-    reason list option *
-    distinguished_name option
-
-  (** Returns [crl_distribution_points] if extension if present, else [ [] ]. *)
-  val crl_distribution_points : t -> distribution_point list
-
-  (** The reason of a revoked certificate. *)
-  type reason_code = [
     | `Unspecified
     | `Key_compromise
     | `CA_compromise
@@ -282,8 +228,23 @@ module Extension : sig
     | `AA_compromise
   ]
 
-  (** The polymorphic variant of
-  {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3 extensions}. *)
+  (** Distribution point name, either a full one using general names, or a
+      relative one using a distinguished name. *)
+  type distribution_point_name =
+    [ `Full of general_name list
+    | `Relative of Distinguished_name.t ]
+
+  (** {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.13}Distribution point},
+      consisting of an optional name, an optional list of allowed reasons, and
+      an optional issuer. *)
+  type distribution_point =
+    distribution_point_name option *
+    reason list option *
+    Distinguished_name.t option
+
+  (** The polymorphic variant of supported
+      {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3} and
+      {{:https://tools.ietf.org/html/rfc5280#section-5.2}CRL} extensions. *)
   type t = [
     | `Unsupported       of Asn.oid * Cstruct.t
     | `Subject_alt_name  of general_name list
@@ -300,22 +261,154 @@ module Extension : sig
     | `CRL_distribution_points of distribution_point list
     | `Issuing_distribution_point of distribution_point_name option * bool * bool * reason list option * bool * bool
     | `Freshest_CRL      of distribution_point list
-    | `Reason            of reason_code
+    | `Reason            of reason
     | `Invalidity_date   of Ptime.t
     | `Certificate_issuer of general_name list
     | `Policies          of policy list
   ]
 end
 
+(** X509v3 certificate *)
+module Certificate : sig
+
+  (** [decode_pkcs1_digest_info buffer] is [hash, signature], the hash and raw
+      signature of the given [buffer] in ASN.1 DER encoding, or an error. *)
+  val decode_pkcs1_digest_info : Cstruct.t ->
+    (Nocrypto.Hash.hash * Cstruct.t, decode_error) result
+
+  (** [encode_pkcs1_digest_info (hash, signature)] is [data], the ASN.1 DER
+      encoded hash and signature. *)
+  val encode_pkcs1_digest_info : Nocrypto.Hash.hash * Cstruct.t -> Cstruct.t
+
+  (** {1 Abstract certificate type} *)
+
+  (** The abstract type of a certificate. *)
+  type t
+
+  (** [pp ppf cert] pretty-prints the certificate. *)
+  val pp : t Fmt.t
+
+  (** {1 Encoding and decoding in ASN.1 DER and PEM format} *)
+
+  (** [decode_der cstruct] is [certificate], the ASN.1 decoded [certificate]
+      or an error. *)
+  val decode_der : Cstruct.t -> (t, decode_error) result
+
+  (** [encode_der certificate] is [cstruct], the ASN.1 encoded representation of
+      the [certificate]. *)
+  val encode_der  : t -> Cstruct.t
+
+  (** [decode_pem_multiple pem] is [t list], where all certificates of the [pem]
+       are extracted *)
+  val decode_pem_multiple : Cstruct.t -> (t list, decode_error) result
+
+  (** [decode_pem pem] is [t], where the single certificate of the
+      [pem] is extracted *)
+  val decode_pem : Cstruct.t -> (t, decode_error) result
+
+  (** [encode_pem_multiple certificates] is [pem], the pem encoded certificates. *)
+  val encode_pem_multiple : t list -> Cstruct.t
+
+  (** [encode_pem certificate] is [pem], the pem encoded certificate. *)
+  val encode_pem : t -> Cstruct.t
+
+  (** {1 Operations on certificates} *)
+
+  (** The polymorphic variant of public key types. *)
+  type key_type = [ `RSA | `EC of Asn.oid ]
+
+  (** [supports_keytype certificate key_type] is [result], whether public key of
+      the [certificate] matches the given [key_type]. *)
+  val supports_keytype : t -> key_type -> bool
+
+  (** [public_key certificate] is [pk], the public key of the [certificate]. *)
+  val public_key : t -> Public_key.t
+
+  (** [hostnames certficate] are [hostnames], the list of hostnames this
+      [certificate] is valid for.  Currently, these are the DNS names of the
+      {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}Subject Alternative Name}
+      extension, if present, or otherwise the singleton list containing the common
+      name. *)
+  val hostnames : t -> string list
+
+  (** The polymorphic variant for hostname validation. *)
+  type host = [ `Strict of string | `Wildcard of string ]
+
+  (** [supports_hostname certificate host] is [result], whether the [certificate]
+      contains the given [host], using {!hostnames}. *)
+  val supports_hostname : t -> host -> bool
+
+  (** [fingerprint hash cert] is [digest], the digest of [cert] using the
+      specified [hash] algorithm *)
+  val fingerprint : Nocrypto.Hash.hash -> t -> Cstruct.t
+
+  (** [subject certificate] is [dn], the subject as {{!distinguished_name}dn} of
+      the [certificate]. *)
+  val subject : t -> Distinguished_name.t
+
+  (** [issuer certificate] is [dn], the issuer as {{!distinguished_name}dn} of
+      the [certificate]. *)
+  val issuer : t -> Distinguished_name.t
+
+  (** [serial certificate] is [sn], the serial number of the [certificate]. *)
+  val serial : t -> Z.t
+
+  (** [validity certificate] is [from, until], the validity of the certificate. *)
+  val validity : t -> Ptime.t * Ptime.t
+
+  (** [supports_usage ~not_present certificate key_usage] is [result],
+      whether the [certificate] supports the given [key_usage]
+      (defaults to [~not_present] if the certificate does not contain
+      a keyUsage extension). *)
+  val supports_usage : ?not_present:bool -> t -> Extension.key_usage -> bool
+
+  (** [supports_extended_usage ~not_present certificate extended_key_usage] is
+      [result], whether the [certificate] supports the requested
+      [extended_key_usage] (defaults to [~not_present] if the certificate does
+      not contain an extendedKeyUsage extension. *)
+  val supports_extended_usage : ?not_present:bool -> t -> Extension.extended_key_usage -> bool
+
+  (** [basic_constraints cert] extracts the BasicConstraints extension, if
+      present. *)
+  val basic_constraints : t -> (bool * int option) option
+
+  (** [unsupported cert oid] is [None] if [oid] is not present as extension, or
+      [Some (crit, data)] if an extension with [oid] is present. *)
+  val unsupported : t -> Asn.OID.t -> (bool * Cstruct.t) option
+
+  (** Returns [subject_alt_names] if extension if present, else [ [] ]. *)
+  val subject_alt_names : t -> Extension.general_name list
+
+  (** Returns [crl_distribution_points] if extension if present, else [ [] ]. *)
+  val crl_distribution_points : t -> Extension.distribution_point list
+end
+
 (** Certificate Authority operations *)
 module CA : sig
+  (** A certificate authority (CA) deals with
+      {{:https://tools.ietf.org/html/rfc2986}PKCS 10 certificate signing requests}
+      , their construction and encoding, and provisioning with a
+      private key to a certificate. *)
 
-  (** {1 Signing} *)
-
-  (** The abstract type of a (self-signed)
-      {{:https://tools.ietf.org/html/rfc2986#page-7}PKCS 10 certification request},
-      with {{!Encoding.Pem.Certificate_signing_request}encoding and decoding to PEM}. *)
+  (** The abstract type of a (self-signed) certification request. *)
   type signing_request
+
+  (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
+
+  (** [decode_der cstruct] is [signing_request], the ASN.1 decoded
+      [cstruct] or an error. *)
+  val decode_der : Cstruct.t -> (signing_request, decode_error) result
+
+  (** [encode_der sr] is [cstruct], the ASN.1 encoded representation of the [sr]. *)
+  val encode_der : signing_request -> Cstruct.t
+
+  (** [decode_pem pem] is [t], where the single signing request of the [pem] is extracted *)
+  val decode_pem : Cstruct.t -> (signing_request, decode_error) result
+
+  (** [encode_pem signing_request] is [pem], the pem encoded signing request. *)
+  val encode_pem : signing_request -> Cstruct.t
+
+  (** {1 Construction of a signing request} *)
 
   (** The polymorphic variant of certificate request extensions, as defined in
       {{:http://tools.ietf.org/html/rfc2985}PKCS 9 (RFC 2985)}. *)
@@ -328,8 +421,8 @@ module CA : sig
   (** The raw request info of a
       {{:https://tools.ietf.org/html/rfc2986#section-4}PKCS 10 certification request info}. *)
   type request_info = {
-    subject    : distinguished_name ;
-    public_key : public_key ;
+    subject    : Distinguished_name.t ;
+    public_key : Public_key.t ;
     extensions : request_extensions list ;
   }
 
@@ -340,7 +433,10 @@ module CA : sig
   (** [request subject ~digest ~extensions private] creates [signing_request],
       a certification request using the given [subject], [digest] (defaults to
       [`SHA256]) and list of [extensions]. *)
-  val request : distinguished_name -> ?digest:Nocrypto.Hash.hash -> ?extensions:request_extensions list -> private_key -> signing_request
+  val request : Distinguished_name.t -> ?digest:Nocrypto.Hash.hash ->
+    ?extensions:request_extensions list -> Private_key.t -> signing_request
+
+  (** {1 Provision a signing request to a certificate} *)
 
   (** [sign signing_request ~digest ~valid_from ~valid_until ~serial ~extensions private issuer]
       creates [certificate], a signed certificate.  Public key and subject are
@@ -358,35 +454,51 @@ with
  | Some (`Extensions x) -> x
  | None -> []
 ]} *)
-  val sign : signing_request -> valid_from:Ptime.t -> valid_until:Ptime.t -> ?digest:Nocrypto.Hash.hash -> ?serial:Z.t -> ?extensions:(bool * Extension.t) list -> private_key -> distinguished_name -> t
+  val sign : signing_request -> valid_from:Ptime.t -> valid_until:Ptime.t ->
+    ?digest:Nocrypto.Hash.hash -> ?serial:Z.t ->
+    ?extensions:(bool * Extension.t) list -> Private_key.t ->
+    Distinguished_name.t -> Certificate.t
 end
 
 (** X.509 Certificate Revocation Lists. *)
 module CRL : sig
-
   (** A certificate revocation list is a signed structure consisting of an
       issuer, a timestamp, possibly a timestamp when to expect the next update,
       and a list of revoked certificates (represented by a serial, a revocation
-      date, and extensions (e.g. reason) - see RFC 5280 section 5.2 for a list
-      of available extensions (not enforced)).  It also may contain any
-      extensions, e.g. a CRL number and whether it is partial or complete. *)
+      date, and extensions (e.g. reason) - see
+      {{:https://tools.ietf.org/html/rfc5280#section-5.2}RFC 5280 section 5.2}
+      for a list of available extensions (not enforced)).  It also may contain
+      any extensions, e.g. a CRL number and whether it is partial or complete. *)
 
   (** The type of a revocation list, kept abstract. *)
-  type c
+  type t
+
+  (** {1 Encoding and decoding in ASN.1 DER format} *)
+
+  (** [encode_der crl] is [buffer], the ASN.1 DER encoding of the given
+      certificate revocation list. *)
+  val encode_der : t -> Cstruct.t
+
+  (** [decode_der buffer] is [crl], the certificate revocation list of the
+      ASN.1 encoded buffer. *)
+  val decode_der : Cstruct.t -> (t, decode_error) result
+
+  (** {1 Operations on CRLs} *)
 
   (** [issuer c] is the issuer of the revocation list. *)
-  val issuer : c -> distinguished_name
+  val issuer : t -> Distinguished_name.t
 
   (** [this_update t] is the timestamp of the revocation list. *)
-  val this_update : c -> Ptime.t
+  val this_update : t -> Ptime.t
 
   (** [next_update t] is either [None] or [Some ts], the timestamp of the next
       update. *)
-  val next_update : c -> Ptime.t option
+  val next_update : t -> Ptime.t option
 
   (** The type of a revoked certificate, which consists of a serial number, the
-      revocation date, and possibly extensions.  See RFC 5280 setion 5.3 for
-      allowed extensions (not enforced). *)
+      revocation date, and possibly extensions.  See
+      {{:https://tools.ietf.org/html/rfc5280#section-5.3}RFC 5280 section 5.3}
+      for allowed extensions (not enforced). *)
   type revoked_cert = {
     serial : Z.t ;
     date : Ptime.t ;
@@ -395,55 +507,59 @@ module CRL : sig
 
   (** [reason revoked] extracts the [Reason] extension from [revoked] if
       present. *)
-  val reason : revoked_cert -> Extension.reason_code option
+  val reason : revoked_cert -> Extension.reason option
 
   (** [revoked_certificates t] is the list of revoked certificates of the
       revocation list. *)
-  val revoked_certificates : c -> revoked_cert list
+  val revoked_certificates : t -> revoked_cert list
 
   (** [extensions t] is the list of extensions, see RFC 5280 section 5.2 for
       possible values. *)
-  val extensions : c -> (bool * Extension.t) list
+  val extensions : t -> (bool * Extension.t) list
 
   (** [crl_number t] is the number of the CRL. *)
-  val crl_number : c -> int option
+  val crl_number : t -> int option
+
+  (** {1 Validation and verification of CRLs} *)
 
   (** [validate t pk] validates the digital signature of the revocation list. *)
-  val validate : c -> public_key -> bool
+  val validate : t -> Public_key.t -> bool
 
   (** [verify t ~time cert] verifies that the issuer of [t] matches the subject
       of [cert], and validates the digital signature of the revocation list.  If
       [time] is provided, it must be after [this_update] and before
       [next_update] of [t]. *)
-  val verify : c -> ?time:Ptime.t -> t -> bool
+  val verify : t -> ?time:Ptime.t -> Certificate.t -> bool
 
   (** [is_revoked crls ~issuer ~cert] is [true] if there exists a revocation of
       [cert] in [crls] which is signed by the [issuer].  The subject of [issuer]
       must match the issuer of the crl. *)
-  val is_revoked : c list -> issuer:t -> cert:t -> bool
+  val is_revoked : t list -> issuer:Certificate.t -> cert:Certificate.t -> bool
+
+  (** {1 Construction and signing of CRLs} *)
 
   (** [revoked ~digest ~issuer ~this_update ~next_update ~extensions certs priv]
       constructs a revocation list with the given parameters. *)
   val revoke : ?digest:Nocrypto.Hash.hash ->
-    issuer:distinguished_name ->
+    issuer:Distinguished_name.t ->
     this_update:Ptime.t -> ?next_update:Ptime.t ->
     ?extensions:(bool * Extension.t) list ->
-    revoked_cert list -> private_key -> c
+    revoked_cert list -> Private_key.t -> t
 
   (** [revoke_certificate cert ~this_update ~next_update t priv] adds [cert] to
       the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificate : revoked_cert ->
-    this_update:Ptime.t -> ?next_update:Ptime.t -> c -> private_key -> c
+    this_update:Ptime.t -> ?next_update:Ptime.t -> t -> Private_key.t -> t
 
   (** [revoke_certificates certs ~this_update ~next_update t priv] adds [certs]
       to the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificates : revoked_cert list ->
-    this_update:Ptime.t -> ?next_update:Ptime.t -> c -> private_key -> c
+    this_update:Ptime.t -> ?next_update:Ptime.t -> t -> Private_key.t -> t
 end
 
-(** X.509 Certificate Chain Validation. *)
+(** Chain Validation. *)
 module Validation : sig
   (** A chain of pairwise signed X.509 certificates is sent to the endpoint,
       which use these to authenticate the other endpoint.  Usually a set of
@@ -463,15 +579,15 @@ module Validation : sig
   *)
 
 
-  (** {2 Certificate Authorities} *)
+  (** {1 Certificate Authorities} *)
 
   (** The polymorphic variant of possible certificate authorities failures. *)
   type ca_error = [
-    | `CAIssuerSubjectMismatch of t
-    | `CAInvalidVersion of t
-    | `CAInvalidSelfSignature of t
-    | `CACertificateExpired of t * Ptime.t option
-    | `CAInvalidExtensions of t
+    | `CAIssuerSubjectMismatch of Certificate.t
+    | `CAInvalidVersion of Certificate.t
+    | `CAInvalidSelfSignature of Certificate.t
+    | `CACertificateExpired of Certificate.t * Ptime.t option
+    | `CAInvalidExtensions of Certificate.t
   ]
 
   (** [pp_ca_error ppf ca_error] pretty-prints the CA error [ca_error]. *)
@@ -482,36 +598,34 @@ module Validation : sig
       present (if X.509 version 1 certificate), or are appropriate for a CA
       (BasicConstraints is present and true, KeyUsage extension contains
       keyCertSign). *)
-  val valid_ca : ?time:Ptime.t -> t -> (unit, ca_error) result
+  val valid_ca : ?time:Ptime.t -> Certificate.t -> (unit, ca_error) result
 
   (** [valid_cas ~time certificates] is [valid_certificates], only those
       certificates which pass the {!valid_ca} check. *)
-  val valid_cas : ?time:Ptime.t -> t list -> t list
+  val valid_cas : ?time:Ptime.t -> Certificate.t list -> Certificate.t list
 
-  (** {2 Chain of trust verification} *)
+  (** {1 Chain of trust verification} *)
 
   (** The polymorphic variant of a leaf certificate validation error. *)
   type leaf_validation_error = [
-    | `LeafCertificateExpired of t * Ptime.t option
-    | `LeafInvalidName of t * host option
-    | `LeafInvalidVersion of t
-    | `LeafInvalidExtensions of t
+    | `LeafCertificateExpired of Certificate.t * Ptime.t option
+    | `LeafInvalidName of Certificate.t * Certificate.host option
+    | `LeafInvalidVersion of Certificate.t
+    | `LeafInvalidExtensions of Certificate.t
   ]
 
   (** The polymorphic variant of a chain validation error. *)
   type chain_validation_error = [
-    | `IntermediateInvalidExtensions of t
-    | `IntermediateCertificateExpired of t * Ptime.t option
-    | `IntermediateInvalidVersion of t
-
-    | `ChainIssuerSubjectMismatch of t * t
-    | `ChainAuthorityKeyIdSubjectKeyIdMismatch of t * t
-    | `ChainInvalidSignature of t * t
-    | `ChainInvalidPathlen of t * int
-
+    | `IntermediateInvalidExtensions of Certificate.t
+    | `IntermediateCertificateExpired of Certificate.t * Ptime.t option
+    | `IntermediateInvalidVersion of Certificate.t
+    | `ChainIssuerSubjectMismatch of Certificate.t * Certificate.t
+    | `ChainAuthorityKeyIdSubjectKeyIdMismatch of Certificate.t * Certificate.t
+    | `ChainInvalidSignature of Certificate.t * Certificate.t
+    | `ChainInvalidPathlen of Certificate.t * int
     | `EmptyCertificateChain
-    | `NoTrustAnchor of t
-    | `Revoked of t
+    | `NoTrustAnchor of Certificate.t
+    | `Revoked of Certificate.t
   ]
 
   (** [build_paths server rest] is [paths], which are all possible certificate
@@ -519,7 +633,7 @@ module Validation : sig
       that each certificate Cn is issued by the next one in the chain (C(n+1)):
       the issuer of Cn matches the subject of C(n+1).  This is as described in
       {{:https://tools.ietf.org/html/rfc4158}RFC 4158}. *)
-  val build_paths : t -> t list -> t list list
+  val build_paths : Certificate.t -> Certificate.t list -> Certificate.t list list
 
   (** The polymorphic variant of a chain validation error: either the leaf
       certificate is problematic, or the chain itself. *)
@@ -542,15 +656,16 @@ module Validation : sig
       certificate is checked to contain the given [host], using {!hostnames}.
       The returned certificate is the root of the chain, a member of the given
       list of [anchors]. *)
-  val verify_chain : ?host:host -> ?time:Ptime.t ->
-    ?revoked:(issuer:t -> cert:t -> bool) ->
-    anchors:(t list) -> t list -> (t, chain_error) result
+  val verify_chain : ?host:Certificate.host -> ?time:Ptime.t ->
+    ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
+    anchors:(Certificate.t list) -> Certificate.t list ->
+    (Certificate.t, chain_error) result
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
-    | `ServerNameNotPresent of t * string
-    | `NameNotInList of t
-    | `InvalidFingerprint of t * Cstruct.t * Cstruct.t
+    | `ServerNameNotPresent of Certificate.t * string
+    | `NameNotInList of Certificate.t
+    | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
   ]
 
   (** The polymorphic variant of validation errors. *)
@@ -565,6 +680,8 @@ module Validation : sig
       [validation_error]. *)
   val pp_validation_error : validation_error Fmt.t
 
+  type r = ((Certificate.t list * Certificate.t) option, validation_error) result
+
   (** [verify_chain_of_trust ~host ~time ~revoked ~anchors certificates] is
       [result].  First, all possible paths are constructed using the
       {!build_paths} function, the first certificate of the chain is verified to
@@ -573,10 +690,11 @@ module Validation : sig
       {!verify_chain}, the result will be [Ok] and contain the actual
       certificate chain and the trust anchor. *)
   val verify_chain_of_trust :
-    ?host:host -> ?time:Ptime.t -> ?revoked:(issuer:t -> cert:t -> bool) ->
-    anchors:(t list) -> t list -> ((t list * t) option, validation_error) result
+    ?host:Certificate.host -> ?time:Ptime.t ->
+    ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
+    anchors:(Certificate.t list) -> Certificate.t list -> r
 
-  (** {2 Fingerprint verification} *)
+  (** {1 Fingerprint verification} *)
 
   (** [trust_key_fingerprint ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified against the
@@ -586,9 +704,8 @@ module Validation : sig
       [`Wildcard hostname] of the fingerprint list must match the name in the
       certificate, using {!hostnames}. *)
   val trust_key_fingerprint :
-    ?host:host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> t list ->
-    ((t list * t) option, validation_error) result
+    ?host:Certificate.host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
+    fingerprints:(string * Cstruct.t) list -> Certificate.t list -> r
 
   (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified to match the
@@ -598,21 +715,17 @@ module Validation : sig
       [`Wildcard hostname] of the fingerprint list must match the name in the
       certificate, using {!hostnames}. *)
   val trust_cert_fingerprint :
-    ?host:host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> t list ->
-    ((t list * t) option, validation_error) result
+    ?host:Certificate.host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
+    fingerprints:(string * Cstruct.t) list -> Certificate.t list -> r
   [@@ocaml.deprecated "Pin public keys (use trust_key_fingerprint) instead of certificates."]
 end
 
-(** Authenticators of certificate chains *)
+(** Certificate chain authenticators *)
 module Authenticator : sig
 
-  (** {1 Authenticators} *)
-
   (** An authenticator [a] is a function type which takes a hostname and a
-      certificate stack to an authentication decision {!Validation.result}. *)
-  type a = ?host:host -> t list ->
-    ((t list * t) option, Validation.validation_error) result
+      certificate stack to an authentication decision {!Validation.r}. *)
+  type t = ?host:Certificate.host -> Certificate.t list -> Validation.r
 
   (** [chain_of_trust ?time trust_anchors] is [authenticator], which uses the
       given [time] and list of [trust_anchors] to verify the certificate chain.
@@ -621,196 +734,25 @@ module Authenticator : sig
       {!Validation.verify_chain_of_trust}.  The given trust anchors are not
       checked to be valid trust anchors any further (you have to do this
       manually with {!Validation.valid_ca} or {!Validation.valid_cas})!  *)
-  val chain_of_trust : ?time:Ptime.t -> ?crls:CRL.c list -> t list -> a
+  val chain_of_trust : ?time:Ptime.t -> ?crls:CRL.t list ->
+    Certificate.t list -> t
 
   (** [server_key_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify that the
       fingerprint of the first element of the certificate chain matches the
       given fingerprint, using {!Validation.trust_key_fingerprint}. *)
   val server_key_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> a
+    fingerprints:(string * Cstruct.t) list -> t
 
   (** [server_cert_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify the first
       element of the certificate chain, using
       {!Validation.trust_cert_fingerprint}. *)
   val server_cert_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> a
+    fingerprints:(string * Cstruct.t) list -> t
   [@@ocaml.deprecated "Pin public keys (use server_key_fingerprint) instead of certificates."]
 
   (** [null] is [authenticator], which always returns [Ok ()]. (Useful for
       testing purposes only.) *)
-  val null : a
+  val null : t
 end
-
-(** Encodings *)
-module Encoding : sig
-
-  (** The typ for decoding errors. *)
-  type err = Asn.error
-
-  (** [pp_err ppf err] pretty-prints the error. *)
-  val pp_err : err Fmt.t
-
-  (** {1 ASN.1 Encoding} *)
-
-  (** [parse cstruct] is [certificate option], the ASN.1 decoded [certificate]
-      or an error. *)
-  val parse : Cstruct.t -> (t, err) result
-
-  (** [cs_of_cert certificate] is [cstruct], the ASN.1 encoded representation of
-      the [certificate]. *)
-  val cs_of_cert  : t -> Cstruct.t
-
-  (** [distinguished_name_of_cs cs] is [dn], the ASN.1 decoded distinguished
-      name of [cs]. *)
-  val distinguished_name_of_cs : Cstruct.t -> (distinguished_name, err) result
-
-  (** [cs_of_distinguished_name dn] is [cstruct], the ASN.1 encoded
-      representation of the distinguished name [dn]. *)
-  val cs_of_distinguished_name : distinguished_name -> Cstruct.t
-
-  (** [parse_signing_request cstruct] is [signing_request], the ASN.1 decoded
-      [cstruct] or an error. *)
-  val parse_signing_request : Cstruct.t -> (CA.signing_request, err) result
-
-  (** [cs_of_signing_request sr] is [cstruct], the ASN.1 encoded representation
-      of the [sr]. *)
-  val cs_of_signing_request : CA.signing_request -> Cstruct.t
-
-  (** [pkcs1_digest_info_of_cstruct data] is [hash, signature], the hash and raw
-      signature or an error. *)
-  val pkcs1_digest_info_of_cstruct : Cstruct.t ->
-    (Nocrypto.Hash.hash * Cstruct.t, err) result
-
-  (** [pkcs1_digest_info_to_cstruct (hash, signature)] is [data], the encoded
-      hash and signature. *)
-  val pkcs1_digest_info_to_cstruct : Nocrypto.Hash.hash * Cstruct.t -> Cstruct.t
-
-  (** [rsa_public_to_cstruct pk] is [buffer], the ASN.1 encoding of the given
-      public key. *)
-  val rsa_public_to_cstruct : Nocrypto.Rsa.pub -> Cstruct.t
-
-  (** [rsa_public_of_cstruct buffer] is [pubkey], the public key of the ASN.1
-      encoded buffer. *)
-  val rsa_public_of_cstruct : Cstruct.t -> (Nocrypto.Rsa.pub, err) result
-
-  (** [public_key_to_cstruct pk] is [buffer], the ASN.1 encoding of the given
-      public key. *)
-  val public_key_to_cstruct : public_key -> Cstruct.t
-
-  (** [public_key_of_cstruct buffer] is [pubkey], the public key of the ASN.1
-      encoded buffer. *)
-  val public_key_of_cstruct : Cstruct.t -> (public_key, err) result
-
-  (** [crl_to_cstruct crl] is [buffer], the ASN.1 DER encoding of the given
-      certificate revocation list. *)
-  val crl_to_cstruct : CRL.c -> Cstruct.t
-
-  (** [crl_of_cstruct buffer] is [crl], the certificate revocation list of the
-      ASN.1 encoded buffer. *)
-  val crl_of_cstruct : Cstruct.t -> (CRL.c, err) result
-
-  (** Parser and unparser of PEM files *)
-  module Pem : sig
-
-    (** {2 PEM encoding} *)
-
-    (** [parse pem] is [(name * data) list], in which the [pem] is parsed into
-        its components, each surrounded by [BEGIN name] and [END name]. The
-        actual [data] is base64 decoded. *)
-    val parse : Cstruct.t -> ((string * Cstruct.t) list, err) result
-
-    (** Decoding and encoding of
-        {{:https://tools.ietf.org/html/rfc5280#section-3.1}X509 certificates}
-        in PEM format *)
-    module Certificate : sig
-
-      (** {3 PEM encoded certificates} *)
-
-      (** [of_pem_cstruct pem] is [t list], where all certificates of the [pem]
-          are extracted *)
-      val of_pem_cstruct  : Cstruct.t -> (t list, err) result
-
-      (** [of_pem_cstruct1 pem] is [t], where the single certificate of the
-          [pem] is extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> (t, err) result
-
-      (** [to_pem_cstruct certificates] is [pem], the pem encoded
-          certificates. *)
-      val to_pem_cstruct : t list -> Cstruct.t
-
-      (** [to_pem_cstruct1 certificate] is [pem], the pem encoded
-          certificate. *)
-      val to_pem_cstruct1 : t -> Cstruct.t
-    end
-
-    (** Decoding and encoding of
-        {{:https://tools.ietf.org/html/rfc2986}PKCS 10 certification requests}
-        in PEM format *)
-    module Certificate_signing_request : sig
-
-      (** {3 PEM encoded certificate signing requests} *)
-
-      (** [of_pem_cstruct pem] is [t list], where all signing requests of the
-          [pem] are extracted *)
-      val of_pem_cstruct  : Cstruct.t ->
-        (CA.signing_request list, err) result
-
-      (** [of_pem_cstruct1 pem] is [t], where the single signing request of the
-          [pem] is extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> (CA.signing_request, err) result
-
-      (** [to_pem_cstruct signing_requests] is [pem], the pem encoded
-          signing requests. *)
-      val to_pem_cstruct : CA.signing_request list -> Cstruct.t
-
-      (** [to_pem_cstruct1 signing_request] is [pem], the pem encoded
-          signing request. *)
-      val to_pem_cstruct1 : CA.signing_request -> Cstruct.t
-    end
-
-    (** Decoding and encoding of public keys in PEM format as defined in
-        {{:http://tools.ietf.org/html/rfc5208}PKCS 8} *)
-    module Public_key : sig
-
-      (** {3 PEM encoded RSA keys} *)
-
-      (** [of_pem_cstruct pem] is [t list], where all public keys of [pem] are
-          extracted *)
-      val of_pem_cstruct  : Cstruct.t -> (public_key list, err) result
-
-      (** [of_pem_cstruct1 pem] is [t], where the public key of [pem] is
-          extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> (public_key, err) result
-
-      (** [to_pem_cstruct public_keys] is [pem], the pem encoded public keys. *)
-      val to_pem_cstruct : public_key list -> Cstruct.t
-
-      (** [to_pem_cstruct1 public_key] is [pem], the pem encoded public key. *)
-      val to_pem_cstruct1 : public_key -> Cstruct.t
-    end
-
-    (** Decoding and encoding of unencrypted private RSA keys in PEM format as
-        defined in {{:http://tools.ietf.org/html/rfc5208}PKCS 8} *)
-    module Private_key : sig
-
-      (** {3 PEM encoded RSA keys} *)
-
-      (** [of_pem_cstruct pem] is [t list], where all private keys of [pem] are
-          extracted *)
-      val of_pem_cstruct  : Cstruct.t -> (private_key list, err) result
-
-      (** [of_pem_cstruct1 pem] is [t], where the private key of [pem] is
-          extracted *)
-      val of_pem_cstruct1 : Cstruct.t -> (private_key, err) result
-
-      (** [to_pem_cstruct keys] is [pem], the pem encoded private keys. *)
-      val to_pem_cstruct : private_key list -> Cstruct.t
-
-      (** [to_pem_cstruct1 key] is [pem], the pem encoded private key. *)
-      val to_pem_cstruct1 : private_key -> Cstruct.t
-    end
-  end
-end
-

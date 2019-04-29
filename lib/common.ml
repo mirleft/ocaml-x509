@@ -1,6 +1,5 @@
 
 module List_ext = struct
-
   let rec filter_map ~f = function
     | []    -> []
     | x::xs ->
@@ -14,11 +13,4 @@ module List_ext = struct
         match f x with
         | None         -> map_find ~f xs
         | Some _ as x' -> x'
-
-end
-
-module Hashtbl(T : Hashtbl.HashedType) = struct
-  include Hashtbl.Make (T)
-  let of_assoc xs =
-    let ht = create 16 in List.iter (fun (a, b) -> add ht a b) xs; ht
 end

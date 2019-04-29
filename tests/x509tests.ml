@@ -9,16 +9,14 @@ let with_loaded_file file ~f =
     Unix.close fd;
     match r with
     | Ok data -> data
-    | Error m -> Alcotest.failf "decoding error %a" Encoding.pp_err m
-  with e -> Unix.close fd; Alcotest.failf "exception %s" (Printexc.to_string e)
+    | Error m -> Alcotest.failf "decoding error in %s: %a" fullpath pp_decode_error m
+  with e -> Unix.close fd; Alcotest.failf "exception in %s: %s" fullpath (Printexc.to_string e)
 
 let priv =
-  match with_loaded_file "private/cakey"
-          ~f:Encoding.Pem.Private_key.of_pem_cstruct1  with
+  match with_loaded_file "private/cakey" ~f:Private_key.decode_pem with
   | `RSA x -> x
 
-let cert name =
-  with_loaded_file name ~f:Encoding.Pem.Certificate.of_pem_cstruct1
+let cert name = with_loaded_file name ~f:Certificate.decode_pem
 
 let invalid_cas = [
   "cacert-basicconstraint-ca-false";
@@ -29,7 +27,7 @@ let invalid_cas = [
 
 let cert_public_is_pub cert =
   let pub = Nocrypto.Rsa.pub_of_priv priv in
-  ( match public_key cert with
+  ( match Certificate.public_key cert with
     | `RSA pub' when pub = pub' -> ()
     | _ -> Alcotest.fail "public / private key doesn't match" )
 
@@ -63,8 +61,7 @@ let valid_ca_tests = [
 ]
 
 let first_cert name =
-  with_loaded_file ("first/" ^ name)
-    ~f:Encoding.Pem.Certificate.of_pem_cstruct1
+  with_loaded_file ("first/" ^ name) ~f:Certificate.decode_pem
 
 (* ok, now some real certificates *)
 let first_certs = [
@@ -100,13 +97,13 @@ let wildcard_test_valid_ca_cert server chain valid name ca =
   test_valid_ca_cert server chain valid (`Wildcard name) ca
 
 let test_cert c usages extusage () =
-  ( if List.for_all (fun u -> Extension.supports_usage c u) usages then
+  ( if List.for_all (fun u -> Certificate.supports_usage c u) usages then
       ()
     else
       Alcotest.fail "key usage is different" ) ;
   ( match extusage with
     | None -> ()
-    | Some x when List.for_all (fun u -> Extension.supports_extended_usage c u) x -> ()
+    | Some x when List.for_all (fun u -> Certificate.supports_extended_usage c u) x -> ()
     | _ -> Alcotest.fail "extended key usage is broken" )
 
 let first_cert_tests =
@@ -188,8 +185,7 @@ let intermediate_cas = [
 ]
 
 let im_cert name =
-  with_loaded_file ("intermediate/" ^ name)
-    ~f:Encoding.Pem.Certificate.of_pem_cstruct1
+  with_loaded_file ("intermediate/" ^ name) ~f:Certificate.decode_pem
 
 let second_certs = [
   ("second", [ "second.foobar.com" ], true, (* no subjAltName *)
@@ -217,8 +213,7 @@ let second_certs = [
 ]
 
 let second_cert name =
-  with_loaded_file ("intermediate/second/" ^ name)
-    ~f:Encoding.Pem.Certificate.of_pem_cstruct1
+  with_loaded_file ("intermediate/second/" ^ name) ~f:Certificate.decode_pem
 
 let second_cert_tests =
   List.mapi
@@ -308,11 +303,16 @@ let invalid_tests =
                                               (List.length (Validation.valid_cas [c])))) ;
   ]
 
-let x509_tests =
-  invalid_ca_tests @ valid_ca_tests @
-  first_cert_tests @ (ca_tests first_cert_ca_test) @
-  first_wildcard_cert_tests @ (ca_tests first_wildcard_cert_ca_test) @
-  second_cert_tests @ (im_ca_tests second_cert_ca_test) @ (im_ca_tests second_wildcard_cert_ca_test) @
-  (im_ca_tests second_no_cn_cert_ca_test) @
-  invalid_tests @
-  Regression.regression_tests
+let x509_tests = [
+  "Invalid CA", invalid_ca_tests ;
+  "Valid CA", valid_ca_tests ;
+  "Certificate", first_cert_tests ;
+  "CA tests with certificate", ca_tests first_cert_ca_test ;
+  "Wildcard certificate", first_wildcard_cert_tests ;
+  "CA tests with wildcard certificate", ca_tests first_wildcard_cert_ca_test ;
+  "Second certificate test", second_cert_tests ;
+  "Intermediate CA with second certificate", im_ca_tests second_cert_ca_test ;
+  "Intermediate CA with CA and second", im_ca_tests second_wildcard_cert_ca_test ;
+  "Intermediate CA with second no common name", im_ca_tests second_no_cn_cert_ca_test ;
+  "Tests with invalid data", invalid_tests
+]
