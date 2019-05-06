@@ -1,11 +1,9 @@
 open Rresult
 
-open Common
-
 type revoked_cert = {
   serial : Z.t ;
   date : Ptime.t ;
-  extensions : (bool * Extension.t) list
+  extensions : Extension.t
 }
 
 type tBS_CRL = {
@@ -15,7 +13,7 @@ type tBS_CRL = {
   this_update : Ptime.t ;
   next_update : Ptime.t option ;
   revoked_certs : revoked_cert list ;
-  extensions : (bool * Extension.t) list
+  extensions : Extension.t
 }
 
 type crl = {
@@ -30,10 +28,10 @@ module Asn = struct
 
   let revokedCertificate =
     let f (serial, date, e) =
-      let extensions = match e with None -> [] | Some xs -> xs in
+      let extensions = match e with None -> Extension.empty | Some xs -> xs in
       { serial ; date ; extensions }
     and g { serial ; date ; extensions } =
-      let e = match extensions with [] -> None | xs -> Some xs in
+      let e = if Extension.is_empty extensions then None else Some extensions in
       (serial, date, e)
     in
     map f g @@
@@ -53,12 +51,12 @@ module Asn = struct
       { version = def `V1 a ; signature = b ; issuer = c ;
         this_update = d ; next_update = e ;
         revoked_certs = (match f with None -> [] | Some xs -> xs) ;
-        extensions = (match g with None -> [] | Some xs -> xs) }
+        extensions = (match g with None -> Extension.empty | Some xs -> xs) }
     and g { version = a ; signature = b ; issuer = c ;
             this_update = d ; next_update = e ; revoked_certs = f ;
             extensions = g } =
       let f = match f with [] -> None | xs -> Some xs
-      and g = match g with [] -> None | xs -> Some xs
+      and g = if Extension.is_empty g then None else Some g
       in
       (def' `V1 a, (b, (c, (d, (e, (f, g))))))
     in
@@ -116,10 +114,9 @@ let extensions { asn ; _ } = asn.tbs_crl.extensions
 let revoked_certificates { asn ; _ } = asn.tbs_crl.revoked_certs
 
 let crl_number { asn ; _ } =
-  List_ext.map_find asn.tbs_crl.extensions ~f:(fun (_, ext) ->
-      match ext with
-      | `CRL_number x -> Some x
-      | _ -> None)
+  match Extension.(find CRL_number asn.tbs_crl.extensions) with
+  | None -> None
+  | Some (_, x) -> Some x
 
 let validate { raw ; asn } pub =
   let tbs_raw = Validation.raw_cert_hack raw asn.signature_val in
@@ -136,10 +133,9 @@ let verify ({ asn ; _ } as crl) ?time cert =
   validate crl (Certificate.public_key cert)
 
 let reason (revoked : revoked_cert) =
-  List_ext.map_find revoked.extensions ~f:(fun (_, ext) ->
-      match ext with
-      | `Reason x -> Some x
-      | _ -> None)
+  match Extension.(find Reason revoked.extensions) with
+  | Some (_, x) -> Some x
+  | None -> None
 
 let is_revoked (crls : t list) ~issuer:super ~cert =
   List.exists (fun crl ->
@@ -176,7 +172,7 @@ let revoke
     ?(digest = `SHA256)
     ~issuer
     ~this_update ?next_update
-    ?(extensions = [])
+    ?(extensions = Extension.empty)
     revoked_certs
     key =
   let signature =
@@ -195,12 +191,8 @@ let revoke
 
 let revoke_certificates (revoked : revoked_cert list) ~this_update ?next_update ({ asn ; _ } as crl) key =
   let tbs = asn.tbs_crl in
-  let extensions = match crl_number crl with
-    | None -> (false, `CRL_number 0) :: tbs.extensions
-    | Some x -> (false, `CRL_number (succ x)) ::
-                List.filter (function (_, `CRL_number _) -> false | _ -> true)
-                  tbs.extensions
-  in
+  let count = match crl_number crl with None -> 0 | Some x -> succ x in
+  let extensions = Extension.(add CRL_number (false, count) tbs.extensions) in
   let tbs = {
     tbs with revoked_certs = tbs.revoked_certs @ revoked ;
              this_update ; next_update ;

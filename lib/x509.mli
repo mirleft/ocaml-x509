@@ -243,30 +243,35 @@ module Extension : sig
     reason list option *
     Distinguished_name.t option
 
-  (** The polymorphic variant of supported
+  (** The type of supported
       {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3} and
       {{:https://tools.ietf.org/html/rfc5280#section-5.2}CRL} extensions. *)
-  type t = [
-    | `Unsupported       of Asn.oid * Cstruct.t
-    | `Subject_alt_name  of general_name list
-    | `Authority_key_id  of authority_key_id
-    | `Subject_key_id    of Cstruct.t
-    | `Issuer_alt_name   of general_name list
-    | `Key_usage         of key_usage list
-    | `Ext_key_usage     of extended_key_usage list
-    | `Basic_constraints of (bool * int option)
-    | `CRL_number        of int
-    | `Delta_CRL_indicator of int
-    | `Priv_key_period   of priv_key_usage_period
-    | `Name_constraints  of name_constraint * name_constraint
-    | `CRL_distribution_points of distribution_point list
-    | `Issuing_distribution_point of distribution_point_name option * bool * bool * reason list option * bool * bool
-    | `Freshest_CRL      of distribution_point list
-    | `Reason            of reason
-    | `Invalidity_date   of Ptime.t
-    | `Certificate_issuer of general_name list
-    | `Policies          of policy list
-  ]
+  type _ k =
+    | Unsupported : Asn.oid -> (bool * Cstruct.t) k
+    | Subject_alt_name : (bool * general_name list) k
+    | Authority_key_id : (bool * authority_key_id) k
+    | Subject_key_id : (bool * Cstruct.t) k
+    | Issuer_alt_name : (bool * general_name list) k
+    | Key_usage : (bool * key_usage list) k
+    | Ext_key_usage : (bool * extended_key_usage list) k
+    | Basic_constraints : (bool * (bool * int option)) k
+    | CRL_number : (bool * int) k
+    | Delta_CRL_indicator : (bool * int) k
+    | Priv_key_period : (bool * priv_key_usage_period) k
+    | Name_constraints : (bool * (name_constraint * name_constraint)) k
+    | CRL_distribution_points : (bool * distribution_point list) k
+    | Issuing_distribution_point : (bool * (distribution_point_name option * bool * bool * reason list option * bool * bool)) k
+    | Freshest_CRL : (bool * distribution_point list) k
+    | Reason : (bool * reason) k
+    | Invalidity_date : (bool * Ptime.t) k
+    | Certificate_issuer : (bool * general_name list) k
+    | Policies : (bool * policy list) k
+
+  include Gmap.S with type 'a key = 'a k
+
+  val critical : 'a key -> 'a -> bool
+
+  val pp : 'a key -> 'a Fmt.t
 end
 
 (** X509v3 certificate *)
@@ -357,31 +362,8 @@ module Certificate : sig
   (** [validity certificate] is [from, until], the validity of the certificate. *)
   val validity : t -> Ptime.t * Ptime.t
 
-  (** [supports_usage ~not_present certificate key_usage] is [result],
-      whether the [certificate] supports the given [key_usage]
-      (defaults to [~not_present] if the certificate does not contain
-      a keyUsage extension). *)
-  val supports_usage : ?not_present:bool -> t -> Extension.key_usage -> bool
-
-  (** [supports_extended_usage ~not_present certificate extended_key_usage] is
-      [result], whether the [certificate] supports the requested
-      [extended_key_usage] (defaults to [~not_present] if the certificate does
-      not contain an extendedKeyUsage extension. *)
-  val supports_extended_usage : ?not_present:bool -> t -> Extension.extended_key_usage -> bool
-
-  (** [basic_constraints cert] extracts the BasicConstraints extension, if
-      present. *)
-  val basic_constraints : t -> (bool * int option) option
-
-  (** [unsupported cert oid] is [None] if [oid] is not present as extension, or
-      [Some (crit, data)] if an extension with [oid] is present. *)
-  val unsupported : t -> Asn.OID.t -> (bool * Cstruct.t) option
-
-  (** Returns [subject_alt_names] if extension if present, else [ [] ]. *)
-  val subject_alt_names : t -> Extension.general_name list
-
-  (** Returns [crl_distribution_points] if extension if present, else [ [] ]. *)
-  val crl_distribution_points : t -> Extension.distribution_point list
+  (** [extensions certificate] is the extension map of [certificate]. *)
+  val extensions : t -> Extension.t
 end
 
 (** Certificate Signing request *)
@@ -413,10 +395,11 @@ module Signing_request : sig
 
   (** The polymorphic variant of certificate request extensions, as defined in
       {{:http://tools.ietf.org/html/rfc2985}PKCS 9 (RFC 2985)}. *)
+  (* TODO Gmap! *)
   type request_extensions = [
     | `Password of string
     | `Name of string
-    | `Extensions of (bool * Extension.t) list
+    | `Extensions of Extension.t
   ]
 
   (** The raw request info of a
@@ -453,11 +436,11 @@ module Signing_request : sig
   with Not_found -> None
 with
  | Some (`Extensions x) -> x
- | None -> []
+ | None -> Extension.empty
 ]} *)
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
     ?digest:Nocrypto.Hash.hash -> ?serial:Z.t ->
-    ?extensions:(bool * Extension.t) list -> Private_key.t ->
+    ?extensions:Extension.t -> Private_key.t ->
     Distinguished_name.t -> Certificate.t
 end
 
@@ -503,7 +486,7 @@ module CRL : sig
   type revoked_cert = {
     serial : Z.t ;
     date : Ptime.t ;
-    extensions : (bool * Extension.t) list
+    extensions : Extension.t
   }
 
   (** [reason revoked] extracts the [Reason] extension from [revoked] if
@@ -516,7 +499,7 @@ module CRL : sig
 
   (** [extensions t] is the list of extensions, see RFC 5280 section 5.2 for
       possible values. *)
-  val extensions : t -> (bool * Extension.t) list
+  val extensions : t -> Extension.t
 
   (** [crl_number t] is the number of the CRL. *)
   val crl_number : t -> int option
@@ -544,7 +527,7 @@ module CRL : sig
   val revoke : ?digest:Nocrypto.Hash.hash ->
     issuer:Distinguished_name.t ->
     this_update:Ptime.t -> ?next_update:Ptime.t ->
-    ?extensions:(bool * Extension.t) list ->
+    ?extensions:Extension.t ->
     revoked_cert list -> Private_key.t -> t
 
   (** [revoke_certificate cert ~this_update ~next_update t priv] adds [cert] to

@@ -18,7 +18,7 @@ type tBSCertificate = {
   pk_info    : Public_key.t ;
   issuer_id  : Cstruct.t option ;
   subject_id : Cstruct.t option ;
-  extensions : (bool * Extension.t) list
+  extensions : Extension.t
 }
 
 type certificate = {
@@ -68,7 +68,7 @@ module Asn = struct
 
   let tBSCertificate =
     let f = fun (a, (b, (c, (d, (e, (f, (g, (h, (i, j))))))))) ->
-      let extn = match j with None -> [] | Some xs -> xs
+      let extn = match j with None -> Extension.empty | Some xs -> xs
       in
       { version    = def `V1 a ; serial     = b ;
         signature  = c         ; issuer     = d ;
@@ -81,7 +81,7 @@ module Asn = struct
         validity   = e ; subject    = f ;
         pk_info    = g ; issuer_id  = h ;
         subject_id = i ; extensions = j } ->
-      let extn = match j with [] -> None | xs -> Some xs
+      let extn = if Extension.is_empty j then None else Some j
       in
       (def' `V1 a, (b, (c, (d, (e, (f, (g, (h, (i, extn)))))))))
     in
@@ -135,48 +135,6 @@ module Asn = struct
 
   let (pkcs1_digest_info_of_cstruct, pkcs1_digest_info_to_cstruct) =
     projections_of Asn.der pkcs1_digest_info
-
-  (* A bit of accessors for tree-diving. *)
-  (*
-   * XXX We re-traverse the list over 9000 times. Abstract out the extensions in a
-   * cert into sth more efficient at the cost of losing the printer during
-   * debugging?
-   *)
-  let  extn_subject_alt_name
-     , extn_issuer_alt_name
-     , extn_authority_key_id
-     , extn_subject_key_id
-     , extn_key_usage
-     , extn_ext_key_usage
-     , extn_basic_constr
-     , extn_priv_key_period
-     , extn_name_constraints
-     , extn_crl_distribution_points
-     , extn_policies
-    =
-    let f pred cert =
-      List_ext.map_find cert.tbs_cert.extensions
-        ~f:(fun (crit, ext) ->
-            match pred ext with None -> None | Some x -> Some (crit, x))
-    in
-    (f @@ function `Subject_alt_name  _ as x -> Some x | _ -> None),
-    (f @@ function `Issuer_alt_name   _ as x -> Some x | _ -> None),
-    (f @@ function `Authority_key_id  _ as x -> Some x | _ -> None),
-    (f @@ function `Subject_key_id    _ as x -> Some x | _ -> None),
-    (f @@ function `Key_usage         _ as x -> Some x | _ -> None),
-    (f @@ function `Ext_key_usage     _ as x -> Some x | _ -> None),
-    (f @@ function `Basic_constraints _ as x -> Some x | _ -> None),
-    (f @@ function `Priv_key_period   _ as x -> Some x | _ -> None),
-    (f @@ function `Name_constraints  _ as x -> Some x | _ -> None),
-    (f @@ function `CRL_distribution_points  _ as x -> Some x | _ -> None),
-    (f @@ function `Policies          _ as x -> Some x | _ -> None)
-
-  let extn_unknown cert oid =
-    List_ext.map_find cert.tbs_cert.extensions
-      ~f:(fun (crit, ext) ->
-          match ext with
-          | `Unsupported (o, v) when o = oid -> Some (crit, v)
-          | _ -> None)
 end
 
 let decode_pkcs1_digest_info, encode_pkcs1_digest_info =
@@ -218,14 +176,15 @@ let pp_sigalg ppf (asym, hash) =
 let pp ppf { asn ; _ } =
   let tbs = asn.tbs_cert in
   let sigalg = Algorithm.to_signature_algorithm tbs.signature in
-  Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %d"
+  let pp_ext ppf (Extension.B (k, v)) = Extension.pp k ppf v in
+  Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %a"
     pp_version tbs.version Z.pp_print tbs.serial
     Fmt.(option ~none:(unit "NONE") pp_sigalg) sigalg
     Distinguished_name.pp tbs.issuer
     (Ptime.pp_human ~tz_offset_s:0 ()) (fst tbs.validity)
     (Ptime.pp_human ~tz_offset_s:0 ()) (snd tbs.validity)
     Distinguished_name.pp tbs.subject
-    (List.length tbs.extensions)
+    Fmt.(list ~sep:(unit ";@ ") pp_ext) (Extension.bindings tbs.extensions)
 
 let fingerprint hash cert = Hash.digest hash cert.raw
 
@@ -248,6 +207,8 @@ let subject_common_name cert =
   List_ext.map_find cert.tbs_cert.subject
     ~f:(function `CN n -> Some n | _ -> None)
 
+let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
+
 (* RFC 6125, 6.4.4:
    Therefore, if and only if the presented identifiers do not include a
    DNS-ID, SRV-ID, URI-ID, or any application-specific identifier types
@@ -260,8 +221,8 @@ let subject_common_name cert =
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
 let hostnames { asn = cert ; _ } : string list =
-  match Asn.extn_subject_alt_name cert, subject_common_name cert with
-  | Some (_, `Subject_alt_name names), _    ->
+  match Extension.(find Subject_alt_name cert.tbs_cert.extensions), subject_common_name cert with
+  | Some (_, names), _    ->
     List_ext.filter_map
       names
       ~f:(function
@@ -306,41 +267,3 @@ let supports_hostname cert = function
     let name = String.Ascii.lowercase name in
     List.mem name (hostnames cert) ||
     wildcard_matches name cert
-
-let cert_usage { asn = cert ; _ } =
-  match Asn.extn_key_usage cert with
-  | Some (_, `Key_usage usages) -> Some usages
-  | _                           -> None
-
-let supports_usage ?(not_present = false) c u =
-  match cert_usage c with
-  | Some x -> List.mem u x
-  | None   -> not_present
-
-let cert_extended_usage { asn = cert ; _ } =
-  match Asn.extn_ext_key_usage cert with
-  | Some (_, `Ext_key_usage usages) -> Some usages
-  | _                               -> None
-
-let supports_extended_usage ?(not_present = false) c u =
-  match cert_extended_usage c with
-  | Some x -> List.mem u x
-  | None   -> not_present
-
-let basic_constraints { asn ; _ } =
-  match Asn.extn_basic_constr asn with
-  | Some (_, `Basic_constraints data) -> Some data
-  | _ -> None
-
-let unsupported { asn ; _ } oid =
-  Asn.extn_unknown asn oid
-
-let subject_alt_names { asn = cert ; _ } =
-  match Asn.extn_subject_alt_name cert with
-  | Some (_, `Subject_alt_name names) -> names
-  | _ -> []
-
-let crl_distribution_points { asn = cert ; _ } =
-  match Asn.extn_crl_distribution_points cert with
-  | Some (_, `CRL_distribution_points ps) -> ps
-  | _ -> []

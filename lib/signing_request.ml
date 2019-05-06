@@ -1,7 +1,7 @@
 type request_extensions = [
   | `Password of string
   | `Name of string
-  | `Extensions of (bool * Extension.t) list
+  | `Extensions of Extension.t
 ]
 
 type request_info = {
@@ -122,7 +122,7 @@ let sign signing_request
     ~valid_from ~valid_until
     ?(digest = `SHA256)
     ?(serial = Nocrypto.(Rng.Z.gen_r Numeric.Z.one Numeric.Z.(one lsl 64)))
-    ?(extensions = [])
+    ?(extensions = Extension.empty)
     key issuer =
   assert (validate_signature signing_request);
   let signature_algo =

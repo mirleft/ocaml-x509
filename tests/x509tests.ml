@@ -97,13 +97,24 @@ let wildcard_test_valid_ca_cert server chain valid name ca =
   test_valid_ca_cert server chain valid (`Wildcard name) ca
 
 let test_cert c usages extusage () =
-  ( if List.for_all (fun u -> Certificate.supports_usage c u) usages then
+  let ku, eku =
+    let exts = Certificate.extensions c in
+    let ku = match Extension.(find Key_usage exts) with
+      | None -> []
+      | Some (_crit, ku) -> ku
+    and eku = match Extension.(find Ext_key_usage exts) with
+      | None -> []
+      | Some (_crit, eku) -> eku
+    in
+    ku, eku
+  in
+  ( if List.for_all (fun u -> List.mem u ku) usages then
       ()
     else
       Alcotest.fail "key usage is different" ) ;
   ( match extusage with
     | None -> ()
-    | Some x when List.for_all (fun u -> Certificate.supports_extended_usage c u) x -> ()
+    | Some x when List.for_all (fun u -> List.mem u eku) x -> ()
     | _ -> Alcotest.fail "extended key usage is broken" )
 
 let first_cert_tests =

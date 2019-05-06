@@ -5,4 +5,5 @@
                   public_key private_key common crl distinguished_name algorithm
                   extension pem signing_request)
  (flags (:standard -safe-string))
- (libraries asn1-combinators rresult fmt ptime cstruct nocrypto astring))
+ (libraries asn1-combinators rresult fmt ptime cstruct nocrypto astring gmap)
+ (preprocess (pps bisect_ppx)))
