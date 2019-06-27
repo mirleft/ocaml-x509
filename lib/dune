@@ -1,11 +1,8 @@
 (library
  (name x509)
  (public_name x509)
- (wrapped false)
- (private_modules asn_grammars registry x509_authenticator x509_ca
-                  x509_certificate x509_common x509_crl_types x509_crl
-                  x509_encoding x509_extension_types x509_extension x509_pem
-                  x509_request_types x509_types)
- (flags (:standard -safe-string ))
- (libraries asn1-combinators ptime cstruct cstruct-sexp nocrypto sexplib astring)
- (preprocess (pps ppx_sexp_conv)))
+ (private_modules asn_grammars registry authenticator ca certificate validation
+                  public_key private_key common crl distinguished_name algorithm
+                  extension pem)
+ (flags (:standard -safe-string))
+ (libraries asn1-combinators rresult fmt ptime cstruct nocrypto astring))

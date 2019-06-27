@@ -1,12 +1,20 @@
+type decode_error = Asn.error
+let pp_decode_error = Asn.pp_error
 
-include X509_certificate
+module Public_key = Public_key
 
-module Extension = X509_extension
+module Private_key = Private_key
 
-module CA = X509_ca
+module Distinguished_name = Distinguished_name
 
-module CRL = X509_crl
+module Certificate = Certificate
 
-module Authenticator = X509_authenticator
+module Validation = Validation
 
-module Encoding = X509_encoding
+module Extension = Extension
+
+module CA = Ca
+
+module CRL = Crl
+
+module Authenticator = Authenticator

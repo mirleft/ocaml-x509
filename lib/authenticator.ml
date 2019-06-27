@@ -1,7 +1,4 @@
-
-open X509_certificate
-
-type a = ?host:host -> t list -> Validation.result
+type t = ?host:Certificate.host -> Certificate.t list -> Validation.r
 
 (* XXX
    * Authenticator just hands off a list of certs. Should be indexed.
@@ -13,7 +10,7 @@ type a = ?host:host -> t list -> Validation.result
 let chain_of_trust ?time ?(crls = []) cas =
   let revoked = match crls with
     | [] -> None
-    | crls -> Some (X509_crl.is_revoked crls)
+    | crls -> Some (Crl.is_revoked crls)
   in
   fun ?host certificates ->
     Validation.verify_chain_of_trust ?host ?time ?revoked ~anchors:cas certificates
@@ -26,13 +23,4 @@ let server_cert_fingerprint ?time ~hash ~fingerprints =
   fun ?host certificates ->
     Validation.trust_cert_fingerprint ?host ?time ~hash ~fingerprints certificates
 
-let null ?host:_ _ = `Ok None
-
-open Sexplib
-
-let a_of_sexp = function
-  | Sexp.Atom "NULL" -> null
-  | sexp ->
-    Conv.of_sexp_error "Authenticator.t_of_sexp: atom 'NULL' needed" sexp
-
-let sexp_of_a _ = Sexp.Atom "NULL"
+let null ?host:_ _ = Ok None

@@ -1,5 +1,3 @@
-open OUnit2
-
 open X509
 
 let with_loaded_files file ~f =
@@ -13,38 +11,44 @@ let with_loaded_files file ~f =
   let buf1 = Unix_cstruct.of_fd fd1
   and buf2 = Unix_cstruct.of_fd fd2
   in
-  try let r = f buf1 buf2 in Unix.close fd1 ; Unix.close fd2 ; r
-  with e -> Unix.close fd1 ; Unix.close fd2 ; raise e
+  try let r = f buf1 buf2 in Unix.close fd1 ; Unix.close fd2 ;
+    match r with
+    | Ok x -> x
+    | Error e -> Alcotest.failf "decoding error %a" pp_decode_error e
+  with e -> Unix.close fd1 ; Unix.close fd2 ;
+    Alcotest.failf "exception %s" (Printexc.to_string e)
 
-let one f _ =
+let one f () =
   with_loaded_files f ~f:(fun cert crl ->
-      let cert = Encoding.Pem.Certificate.of_pem_cstruct1 cert in
-      let pubkey = X509.public_key cert in
-      match Encoding.crl_of_cstruct crl with
-      | None -> assert_failure "failed to parse crl"
-      | Some crl when CRL.validate crl pubkey -> ()
-      | Some _ -> assert_failure "couldn't verify cert")
+      let open Rresult.R.Infix in
+      Certificate.decode_pem cert >>= fun cert ->
+      let pubkey = Certificate.public_key cert in
+      CRL.decode_der crl >>= fun crl ->
+      if not (CRL.validate crl pubkey) then
+        Error (`Parse "couldn't verify cert")
+      else
+        Ok ())
 
 let crl_tests = [
-  "CRL 1 is good" >:: one "1" ;
-  "CRL 2 is good" >:: one "2" ;
-  "CRL 3 is good" >:: one "3" ;
-  "CRL 4 is good" >:: one "4" ;
-  "CRL 5 is good" >:: one "5" ;
-  "CRL 6 is good" >:: one "6" ;
-  "CRL 7 is good" >:: one "7" ;
-  "CRL 8 is good" >:: one "8" ;
-  "CRL 9 is good" >:: one "9" ;
-  "CRL 10 is good" >:: one "10" ;
-  "CRL 11 is good" >:: one "11" ;
-  "CRL 12 is good" >:: one "12" ;
-  "CRL 13 is good" >:: one "13" ;
-  "CRL 14 is good" >:: one "14" ;
-  "CRL 15 is good" >:: one "15" ;
-  "CRL 16 is good" >:: one "16" ;
-  "CRL 17 is good" >:: one "17" ;
-  "CRL 18 is good" >:: one "18" ;
-  "CRL 19 is good" >:: one "19" ;
-  "CRL 20 is good" >:: one "20" ;
-  "CRL 21 is good" >:: one "21" ;
+  "CRL 1 is good", `Quick, one "1" ;
+  "CRL 2 is good", `Quick, one "2" ;
+  "CRL 3 is good", `Quick, one "3" ;
+  "CRL 4 is good", `Quick, one "4" ;
+  "CRL 5 is good", `Quick, one "5" ;
+  "CRL 6 is good", `Quick, one "6" ;
+  "CRL 7 is good", `Quick, one "7" ;
+  "CRL 8 is good", `Quick, one "8" ;
+  "CRL 9 is good", `Quick, one "9" ;
+  "CRL 10 is good", `Quick, one "10" ;
+  "CRL 11 is good", `Quick, one "11" ;
+  "CRL 12 is good", `Quick, one "12" ;
+  "CRL 13 is good", `Quick, one "13" ;
+  "CRL 14 is good", `Quick, one "14" ;
+  "CRL 15 is good", `Quick, one "15" ;
+  "CRL 16 is good", `Quick, one "16" ;
+  "CRL 17 is good", `Quick, one "17" ;
+  "CRL 18 is good", `Quick, one "18" ;
+  "CRL 19 is good", `Quick, one "19" ;
+  "CRL 20 is good", `Quick, one "20" ;
+  "CRL 21 is good", `Quick, one "21" ;
 ]
