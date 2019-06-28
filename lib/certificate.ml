@@ -217,18 +217,16 @@ let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
 let hostnames { asn = cert ; _ } : string list =
-  match
-    Extension.(find Subject_alt_name cert.tbs_cert.extensions),
-    Distinguished_name.(find CN cert.tbs_cert.subject)
-  with
-  | Some (_, names), _    ->
-    List_ext.filter_map
-      names
-      ~f:(function
-          | `DNS x -> Some (String.Ascii.lowercase x)
-          | _      -> None)
-  | _                              , Some x -> [String.Ascii.lowercase x]
-  | _                              , _      -> []
+  let subj =
+    match Distinguished_name.(find CN cert.tbs_cert.subject) with
+    | None -> [] | Some x -> [String.Ascii.lowercase x]
+  in
+  match Extension.(find Subject_alt_name cert.tbs_cert.extensions) with
+  | None -> subj
+  | Some (_, names) ->
+    match Extension.General_name.find DNS names with
+    | None -> subj
+    | Some xs -> List.map String.Ascii.lowercase xs
 
 (* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
    forbidden: multiple dots "..", trailing dot "foo." *)

@@ -13,7 +13,7 @@ let key_ids exts subject_pubkey issuer_pubkey =
     false, Public_key.id subject_pubkey
   and authority_key_id =
     let cs = Public_key.id issuer_pubkey in
-    false, (Some cs, [], None)
+    false, (Some cs, Extension.General_name.empty, None)
   in
   Extension.(add Subject_key_id subject_key_id
                (add Authority_key_id authority_key_id exts))

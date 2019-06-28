@@ -25,19 +25,170 @@ type extended_key_usage = [
   | `Other of Asn.oid
 ]
 
-type general_name = [
-  | `Other         of (Asn.oid * string)
-  | `Rfc_822       of string
-  | `DNS           of string
-  | `X400_address  of unit
-  | `Directory     of Distinguished_name.t
-  | `EDI_party     of (string option * string)
-  | `URI           of string
-  | `IP            of Cstruct.t
-  | `Registered_id of Asn.oid
-]
+module General_name = struct
+  type _ k =
+    | Other : Asn.oid -> string list k
+    | Rfc_822 : string list k
+    | DNS : string list k
+    | X400_address : unit k
+    | Directory : Distinguished_name.t list k
+    | EDI_party : (string option * string) list k
+    | URI : string list k
+    | IP : Cstruct.t list k
+    | Registered_id : Asn.oid list k
 
-type authority_key_id = Cstruct.t option * general_name list * Z.t option
+  module K = struct
+    type 'a t = 'a k
+
+    let compare : type a b. a t -> b t -> (a, b) Gmap.Order.t = fun t t' ->
+      let open Gmap.Order in
+      match t, t' with
+      | Rfc_822, Rfc_822 -> Eq | Rfc_822, _ -> Lt | _, Rfc_822 -> Gt
+      | DNS, DNS -> Eq | DNS, _ -> Lt | _, DNS -> Gt
+      | X400_address, X400_address -> Eq | X400_address, _ -> Lt | _, X400_address -> Gt
+      | Directory, Directory -> Eq | Directory, _ -> Lt | _, Directory -> Gt
+      | EDI_party, EDI_party -> Eq | EDI_party, _ -> Lt | _, EDI_party -> Gt
+      | URI, URI -> Eq | URI, _ -> Lt | _, URI -> Gt
+      | IP, IP -> Eq | IP, _ -> Lt | _, IP -> Gt
+      | Registered_id, Registered_id -> Eq | Registered_id, _ -> Lt | _, Registered_id -> Gt
+      | Other a, Other b -> match Asn.OID.compare a b with
+        | 0 -> Eq
+        | x when x < 0 -> Lt
+        | _ -> Gt
+  end
+
+  include Gmap.Make(K)
+
+  let pp_k : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
+    let pp_strs = Fmt.(list ~sep:(unit "; ") string) in
+    match k, v with
+    | Rfc_822, x -> Fmt.pf ppf "rfc822 %a" pp_strs x
+    | DNS, x -> Fmt.pf ppf "dns %a" pp_strs x
+    | X400_address, () -> Fmt.string ppf "x400 address"
+    | Directory, x ->
+      Fmt.pf ppf "directory %a"
+        Fmt.(list ~sep:(unit "; ") Distinguished_name.pp) x
+    | EDI_party, xs ->
+      Fmt.pf ppf "edi party %a"
+        Fmt.(list ~sep:(unit "; ")
+               (pair ~sep:(unit ", ")
+                  (option ~none:(unit "") string) string)) xs
+    | URI, x -> Fmt.pf ppf "uri %a" pp_strs x
+    | IP, x -> Fmt.pf ppf "ip %a" Fmt.(list ~sep:(unit ";") Cstruct.hexdump_pp) x
+    | Registered_id, x ->
+      Fmt.pf ppf "registered id %a"
+        Fmt.(list ~sep:(unit ";") Asn.OID.pp) x
+    | Other oid, x -> Fmt.pf ppf "other %a: %a" Asn.OID.pp oid pp_strs x
+
+  let merge_values : type a. a k -> a -> a -> a = fun k v v' ->
+    match k, v, v' with
+    | Other _, a, b -> a @ b
+    | Registered_id, a, b -> a @ b
+    | IP, a, b -> a @ b
+    | URI, a, b -> a @ b
+    | EDI_party, a, b -> a @ b
+    | Directory, a, b -> a @ b
+    | X400_address, (), () -> ()
+    | DNS, a, b -> a @ b
+    | Rfc_822, a, b -> a @ b
+
+  module Asn = struct
+    open Asn.S
+    (* GeneralName is also pretty pervasive. *)
+
+    (* OID x ANY. Hunt down the alternatives.... *)
+    (* XXX
+     * Cross-check. NSS seems to accept *all* oids here and just assumes UTF8.
+     * *)
+    let another_name =
+      let open Registry in
+      let f = function
+        | (oid, `C1 n) -> (oid, n)
+        | (oid, `C2 n) -> (oid, n)
+        | (oid, `C3 _) -> (oid, "")
+      and g = function
+        | (oid, "") -> (oid, `C3 ())
+        | (oid, n ) when Name_extn.is_utf8_id oid -> (oid, `C1 n)
+        | (oid, n ) -> (oid, `C2 n) in
+      map f g @@
+      sequence2
+        (required ~label:"type-id" oid)
+        (required ~label:"value" @@
+         explicit 0
+           (choice3 utf8_string ia5_string null))
+
+    and or_address = null (* Horrible crap, need to fill it. *)
+
+    let edi_party_name =
+      sequence2
+        (optional ~label:"nameAssigner" @@ implicit 0 Distinguished_name.Asn.directory_name)
+        (required ~label:"partyName"    @@ implicit 1 Distinguished_name.Asn.directory_name)
+
+    let general_name =
+      let f = function
+        | `C1 (`C1 (oid, x)) -> B (Other oid, [ x ])
+        | `C1 (`C2 x) -> B (Rfc_822, [ x ])
+        | `C1 (`C3 x) -> B (DNS, [ x ])
+        | `C1 (`C4 _x) -> B (X400_address, ())
+        | `C1 (`C5 x) -> B (Directory, [ x ])
+        | `C1 (`C6 x) -> B (EDI_party, [ x ])
+        | `C2 (`C1 x) -> B (URI, [ x ])
+        | `C2 (`C2 x) -> B (IP, [ x ])
+        | `C2 (`C3 x) -> B (Registered_id, [ x ])
+      and g (B (k, v)) = match k, v with
+        | Other oid, [ x ] -> `C1 (`C1 (oid, x))
+        | Rfc_822, [ x ] -> `C1 (`C2 x)
+        | DNS, [ x ] -> `C1 (`C3 x)
+        | X400_address, () -> `C1 (`C4 ())
+        | Directory, [ x ] -> `C1 (`C5 x)
+        | EDI_party, [ x ] -> `C1 (`C6 x)
+        | URI, [ x ] -> `C2 (`C1 x)
+        | IP, [ x ] -> `C2 (`C2 x)
+        | Registered_id, [ x ] -> `C2 (`C3 x)
+        | _ -> Asn.S.error (`Parse "bad general name")
+      in
+      map f g @@
+      choice2
+        (choice6
+           (implicit 0 another_name)
+           (implicit 1 ia5_string)
+           (implicit 2 ia5_string)
+           (implicit 3 or_address)
+           (* TODO fixed with newer asn1 (0.2.0 or master (has another commit for this)?? find test case! Everybody uses this as explicit, contrary to x509 (?) *)
+           (explicit 4 Distinguished_name.Asn.name)
+           (implicit 5 edi_party_name))
+        (choice3
+           (implicit 6 ia5_string)
+           (implicit 7 octet_string)
+           (implicit 8 oid))
+
+    let gen_names =
+      let f exts =
+        List.fold_left (fun map (B (k, v)) ->
+            match find k map with
+            | None -> add k v map
+            | Some b -> add k (merge_values k b v) map)
+          empty exts
+      and g map =
+        List.flatten (List.map (fun (B (k, v)) ->
+            match k, v with
+            | Other oid, xs -> List.map (fun d -> B (Other oid, [ d ])) xs
+            | Registered_id, xs -> List.map (fun d -> B (Registered_id, [ d ])) xs
+            | IP, xs -> List.map (fun d -> B (IP, [ d ])) xs
+            | URI, xs -> List.map (fun d -> B (URI, [ d ])) xs
+            | EDI_party, xs -> List.map (fun d -> B (EDI_party, [ d ])) xs
+            | Directory, xs -> List.map (fun d -> B (Directory, [ d ])) xs
+            | X400_address, () -> [ B (X400_address, ()) ]
+            | DNS, xs -> List.map (fun d -> B (DNS, [ d ])) xs
+            | Rfc_822, xs -> List.map (fun d -> B (Rfc_822, [ d ])) xs)
+            (bindings map))
+      in
+      map f g @@ sequence_of general_name
+  end
+
+end
+
+type authority_key_id = Cstruct.t option * General_name.t * Z.t option
 
 type priv_key_usage_period = [
   | `Interval   of Ptime.t * Ptime.t
@@ -45,7 +196,7 @@ type priv_key_usage_period = [
   | `Not_before of Ptime.t
 ]
 
-type name_constraint = (general_name * int * int option) list
+type name_constraint = (General_name.b * int * int option) list
 
 type policy = [ `Any | `Something of Asn.oid ]
 
@@ -63,7 +214,7 @@ type reason = [
 ]
 
 type distribution_point_name =
-  [ `Full of general_name list
+  [ `Full of General_name.t
   | `Relative of Distinguished_name.t ]
 
 type distribution_point =
@@ -75,10 +226,10 @@ type 'a extension = bool * 'a
 
 type _ k =
   | Unsupported : Asn.oid -> Cstruct.t extension k
-  | Subject_alt_name : general_name list extension k
+  | Subject_alt_name : General_name.t extension k
   | Authority_key_id : authority_key_id extension k
   | Subject_key_id : Cstruct.t extension k
-  | Issuer_alt_name : general_name list extension k
+  | Issuer_alt_name : General_name.t extension k
   | Key_usage : key_usage list extension k
   | Ext_key_usage : extended_key_usage list extension k
   | Basic_constraints : (bool * int option) extension k
@@ -91,7 +242,7 @@ type _ k =
   | Freshest_CRL : distribution_point list extension k
   | Reason : reason extension k
   | Invalidity_date : Ptime.t extension k
-  | Certificate_issuer : general_name list extension k
+  | Certificate_issuer : General_name.t extension k
   | Policies : policy list extension k
 
 let pp : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
@@ -218,77 +369,6 @@ module Asn = struct
   open Asn.S
   open Asn_grammars
 
-  module General_name = struct
-    (* GeneralName is also pretty pervasive. *)
-
-    (* OID x ANY. Hunt down the alternatives.... *)
-    (* XXX
-     * Cross-check. NSS seems to accept *all* oids here and just assumes UTF8.
-     * *)
-    let another_name =
-      let open Registry in
-      let f = function
-        | (oid, `C1 n) -> (oid, n)
-        | (oid, `C2 n) -> (oid, n)
-        | (oid, `C3 _) -> (oid, "")
-      and g = function
-        | (oid, "") -> (oid, `C3 ())
-        | (oid, n ) when Name_extn.is_utf8_id oid -> (oid, `C1 n)
-        | (oid, n ) -> (oid, `C2 n) in
-      map f g @@
-      sequence2
-        (required ~label:"type-id" oid)
-        (required ~label:"value" @@
-         explicit 0
-           (choice3 utf8_string ia5_string null))
-
-    and or_address = null (* Horrible crap, need to fill it. *)
-
-    let edi_party_name =
-      sequence2
-        (optional ~label:"nameAssigner" @@ implicit 0 Distinguished_name.Asn.directory_name)
-        (required ~label:"partyName"    @@ implicit 1 Distinguished_name.Asn.directory_name)
-
-    let general_name =
-      let f = function
-        | `C1 (`C1 x) -> `Other         x
-        | `C1 (`C2 x) -> `Rfc_822       x
-        | `C1 (`C3 x) -> `DNS           x
-        | `C1 (`C4 x) -> `X400_address  x
-        | `C1 (`C5 x) -> `Directory     x
-        | `C1 (`C6 x) -> `EDI_party     x
-        | `C2 (`C1 x) -> `URI           x
-        | `C2 (`C2 x) -> `IP            x
-        | `C2 (`C3 x) -> `Registered_id x
-      and g = function
-        | `Other         x -> `C1 (`C1 x)
-        | `Rfc_822       x -> `C1 (`C2 x)
-        | `DNS           x -> `C1 (`C3 x)
-        | `X400_address  x -> `C1 (`C4 x)
-        | `Directory     x -> `C1 (`C5 x)
-        | `EDI_party     x -> `C1 (`C6 x)
-        | `URI           x -> `C2 (`C1 x)
-        | `IP            x -> `C2 (`C2 x)
-        | `Registered_id x -> `C2 (`C3 x)
-      in
-      map f g @@
-      choice2
-        (choice6
-           (implicit 0 another_name)
-           (implicit 1 ia5_string)
-           (implicit 2 ia5_string)
-           (implicit 3 or_address)
-           (* TODO fixed with newer asn1 (0.2.0 or master (has another commit for this)?? find test case! Everybody uses this as explicit, contrary to x509 (?) *)
-           (explicit 4 Distinguished_name.Asn.name)
-           (implicit 5 edi_party_name))
-        (choice3
-           (implicit 6 ia5_string)
-           (implicit 7 octet_string)
-           (implicit 8 oid))
-
-    let gen_names = sequence_of general_name
-  end
-
   let display_text =
     map (function `C1 s -> s | `C2 s -> s | `C3 s -> s | `C4 s -> s)
       (fun s -> `C4 s)
@@ -347,12 +427,12 @@ module Asn = struct
       (optional ~label:"pathLen" int)
 
   let authority_key_id =
-    map (fun (a, b, c) -> (a, def  [] b, c))
-        (fun (a, b, c) -> (a, def' [] b, c))
+    map (fun (a, b, c) -> (a, def  General_name.empty b, c))
+        (fun (a, b, c) -> (a, def' General_name.empty b, c))
     @@
     sequence3
       (optional ~label:"keyIdentifier"  @@ implicit 0 octet_string)
-      (optional ~label:"authCertIssuer" @@ implicit 1 General_name.gen_names)
+      (optional ~label:"authCertIssuer" @@ implicit 1 General_name.Asn.gen_names)
       (optional ~label:"authCertSN"     @@ implicit 2 integer)
 
   let priv_key_usage_period =
@@ -376,7 +456,7 @@ module Asn = struct
           (fun (base, min, max) -> (base, def' 0 min, max))
       @@
       sequence3
-        (required ~label:"base"       General_name.general_name)
+        (required ~label:"base"       General_name.Asn.general_name)
         (optional ~label:"minimum" @@ implicit 0 int)
         (optional ~label:"maximum" @@ implicit 1 int)
     in
@@ -440,7 +520,7 @@ module Asn = struct
       (function | `Full s -> `C1 s | `Relative s -> `C2 s)
     @@
     choice2
-      (implicit 0 General_name.gen_names)
+      (implicit 0 General_name.Asn.gen_names)
       (implicit 1 Distinguished_name.Asn.name)
 
   let distribution_point =
@@ -480,7 +560,7 @@ module Asn = struct
     let rev = List.map (fun (k, v) -> (v, k)) alist in
     enumerated (fun i -> List.assoc i alist) (fun k -> List.assoc k rev)
 
-  let gen_names_of_cs, gen_names_to_cs       = project_exn General_name.gen_names
+  let gen_names_of_cs, gen_names_to_cs       = project_exn General_name.Asn.gen_names
   and auth_key_id_of_cs, auth_key_id_to_cs   = project_exn authority_key_id
   and subj_key_id_of_cs, subj_key_id_to_cs   = project_exn octet_string
   and key_usage_of_cs, key_usage_to_cs       = project_exn key_usage

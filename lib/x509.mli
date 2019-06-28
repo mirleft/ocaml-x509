@@ -181,22 +181,25 @@ module Extension : sig
       and
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.7}IssuerAltName}
       extension. *)
-  type general_name = [
-    | `Other         of (Asn.oid * string)
-    | `Rfc_822       of string
-    | `DNS           of string
-    | `X400_address  of unit
-    | `Directory     of Distinguished_name.t
-    | `EDI_party     of (string option * string)
-    | `URI           of string
-    | `IP            of Cstruct.t
-    | `Registered_id of Asn.oid
-  ]
+  module General_name : sig
+    type _ k =
+      | Other : Asn.oid -> string list k
+      | Rfc_822 : string list k
+      | DNS : string list k
+      | X400_address : unit k
+      | Directory : Distinguished_name.t list k
+      | EDI_party : (string option * string) list k
+      | URI : string list k
+      | IP : Cstruct.t list k
+      | Registered_id : Asn.oid list k
+
+      include Gmap.S with type 'a key = 'a k
+    end
 
   (** The authority key identifier, as present in the
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.1}Authority Key Identifier}
       extension. *)
-  type authority_key_id = Cstruct.t option * general_name list * Z.t option
+  type authority_key_id = Cstruct.t option * General_name.t * Z.t option
 
   (** The private key usage period, as defined in
       {{:https://tools.ietf.org/html/rfc3280#section-4.2.1.4}RFC 3280}. *)
@@ -208,7 +211,7 @@ module Extension : sig
 
   (** Name constraints, as defined in
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.10}RFC 5280}. *)
-  type name_constraint = (general_name * int * int option) list
+  type name_constraint = (General_name.b * int * int option) list
 
   (** Certificate policies, the
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.4}policy extension}. *)
@@ -233,7 +236,7 @@ module Extension : sig
   (** Distribution point name, either a full one using general names, or a
       relative one using a distinguished name. *)
   type distribution_point_name =
-    [ `Full of general_name list
+    [ `Full of General_name.t
     | `Relative of Distinguished_name.t ]
 
   (** {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.13}Distribution point},
@@ -252,10 +255,10 @@ module Extension : sig
       {{:https://tools.ietf.org/html/rfc5280#section-5.2}CRL} extensions. *)
   type _ k =
     | Unsupported : Asn.oid -> Cstruct.t extension k
-    | Subject_alt_name : general_name list extension k
+    | Subject_alt_name : General_name.t extension k
     | Authority_key_id : authority_key_id extension k
     | Subject_key_id : Cstruct.t extension k
-    | Issuer_alt_name : general_name list extension k
+    | Issuer_alt_name : General_name.t extension k
     | Key_usage : key_usage list extension k
     | Ext_key_usage : extended_key_usage list extension k
     | Basic_constraints : (bool * int option) extension k
@@ -268,7 +271,7 @@ module Extension : sig
     | Freshest_CRL : distribution_point list extension k
     | Reason : reason extension k
     | Invalidity_date : Ptime.t extension k
-    | Certificate_issuer : general_name list extension k
+    | Certificate_issuer : General_name.t extension k
     | Policies : policy list extension k
 
   include Gmap.S with type 'a key = 'a k
