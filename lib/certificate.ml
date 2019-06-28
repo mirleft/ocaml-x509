@@ -176,7 +176,6 @@ let pp_sigalg ppf (asym, hash) =
 let pp ppf { asn ; _ } =
   let tbs = asn.tbs_cert in
   let sigalg = Algorithm.to_signature_algorithm tbs.signature in
-  let pp_ext ppf (Extension.B (k, v)) = Extension.pp k ppf v in
   Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %a"
     pp_version tbs.version Z.pp_print tbs.serial
     Fmt.(option ~none:(unit "NONE") pp_sigalg) sigalg
@@ -184,7 +183,7 @@ let pp ppf { asn ; _ } =
     (Ptime.pp_human ~tz_offset_s:0 ()) (fst tbs.validity)
     (Ptime.pp_human ~tz_offset_s:0 ()) (snd tbs.validity)
     Distinguished_name.pp tbs.subject
-    Fmt.(list ~sep:(unit ";@ ") pp_ext) (Extension.bindings tbs.extensions)
+    Extension.pp tbs.extensions
 
 let fingerprint hash cert = Hash.digest hash cert.raw
 
@@ -224,7 +223,7 @@ let hostnames { asn = cert ; _ } : string list =
   match Extension.(find Subject_alt_name cert.tbs_cert.extensions) with
   | None -> subj
   | Some (_, names) ->
-    match Extension.General_name.find DNS names with
+    match General_name.find DNS names with
     | None -> subj
     | Some xs -> List.map String.Ascii.lowercase xs
 

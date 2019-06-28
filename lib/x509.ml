@@ -7,6 +7,8 @@ module Private_key = Private_key
 
 module Distinguished_name = Distinguished_name
 
+module General_name = General_name
+
 module Certificate = Certificate
 
 module Validation = Validation

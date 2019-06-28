@@ -19,13 +19,13 @@ module Ext = struct
 
   include Gmap.Make(K)
 
-  let pp : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
+  let pp_one : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
     match k, v with
     | Password, pass -> Fmt.pf ppf "password %s" pass
     | Name, name -> Fmt.pf ppf "name %s" name
-    | Extensions, ext ->
-      Fmt.string ppf "extensions: ";
-      Extension.iter (fun (Extension.B (k, v)) -> Extension.pp k ppf v) ext
+    | Extensions, ext -> Fmt.pf ppf "extensions %a" Extension.pp ext
+
+  let pp ppf m = iter (fun (B (k, v)) -> pp_one k ppf v ; Fmt.sp ppf ()) m
 end
 
 type request_info = {
@@ -68,7 +68,8 @@ module Asn = struct
         let extensions =
           List.fold_left (fun map (Ext.B (k, v)) ->
               match Ext.add_unless_bound k v map with
-              | None -> parse_error "request extension %a already bound" (Ext.pp k) v
+              | None -> parse_error "request extension %a already bound"
+                          (Ext.pp_one k) v
               | Some b -> b)
         Ext.empty extensions
         in

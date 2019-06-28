@@ -143,6 +143,29 @@ module Distinguished_name : sig
   val encode_der : t -> Cstruct.t
 end
 
+(** A list of [general_name]s is the value of both
+    {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}subjectAltName}
+    and
+    {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.7}IssuerAltName}
+    extension. *)
+module General_name : sig
+  type _ k =
+    | Other : Asn.oid -> string list k
+    | Rfc_822 : string list k
+    | DNS : string list k
+    | X400_address : unit k
+    | Directory : Distinguished_name.t list k
+    | EDI_party : (string option * string) list k
+    | URI : string list k
+    | IP : Cstruct.t list k
+    | Registered_id : Asn.oid list k
+
+  include Gmap.S with type 'a key = 'a k
+
+  val pp : t Fmt.t
+end
+
+
 (** X.509v3 extensions *)
 module Extension : sig
 
@@ -175,26 +198,6 @@ module Extension : sig
     | `Ocsp_signing
     | `Other of Asn.oid
   ]
-
-  (** A list of [general_name]s is the value of both
-      {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}subjectAltName}
-      and
-      {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.7}IssuerAltName}
-      extension. *)
-  module General_name : sig
-    type _ k =
-      | Other : Asn.oid -> string list k
-      | Rfc_822 : string list k
-      | DNS : string list k
-      | X400_address : unit k
-      | Directory : Distinguished_name.t list k
-      | EDI_party : (string option * string) list k
-      | URI : string list k
-      | IP : Cstruct.t list k
-      | Registered_id : Asn.oid list k
-
-      include Gmap.S with type 'a key = 'a k
-    end
 
   (** The authority key identifier, as present in the
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.1}Authority Key Identifier}
@@ -278,7 +281,7 @@ module Extension : sig
 
   val critical : 'a key -> 'a -> bool
 
-  val pp : 'a key -> 'a Fmt.t
+  val pp : t Fmt.t
 end
 
 (** X509v3 certificate *)
@@ -409,6 +412,8 @@ module Signing_request : sig
       | Extensions : Extension.t k
 
     include Gmap.S with type 'a key = 'a k
+
+    val pp : t Fmt.t
   end
 
   (** The raw request info of a
