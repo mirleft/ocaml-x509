@@ -243,29 +243,32 @@ module Extension : sig
     reason list option *
     Distinguished_name.t option
 
+  (** The type of an extension: the critical flag and the value itself. *)
+  type 'a extension = bool * 'a
+
   (** The type of supported
       {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3} and
       {{:https://tools.ietf.org/html/rfc5280#section-5.2}CRL} extensions. *)
   type _ k =
-    | Unsupported : Asn.oid -> (bool * Cstruct.t) k
-    | Subject_alt_name : (bool * general_name list) k
-    | Authority_key_id : (bool * authority_key_id) k
-    | Subject_key_id : (bool * Cstruct.t) k
-    | Issuer_alt_name : (bool * general_name list) k
-    | Key_usage : (bool * key_usage list) k
-    | Ext_key_usage : (bool * extended_key_usage list) k
-    | Basic_constraints : (bool * (bool * int option)) k
-    | CRL_number : (bool * int) k
-    | Delta_CRL_indicator : (bool * int) k
-    | Priv_key_period : (bool * priv_key_usage_period) k
-    | Name_constraints : (bool * (name_constraint * name_constraint)) k
-    | CRL_distribution_points : (bool * distribution_point list) k
-    | Issuing_distribution_point : (bool * (distribution_point_name option * bool * bool * reason list option * bool * bool)) k
-    | Freshest_CRL : (bool * distribution_point list) k
-    | Reason : (bool * reason) k
-    | Invalidity_date : (bool * Ptime.t) k
-    | Certificate_issuer : (bool * general_name list) k
-    | Policies : (bool * policy list) k
+    | Unsupported : Asn.oid -> Cstruct.t extension k
+    | Subject_alt_name : general_name list extension k
+    | Authority_key_id : authority_key_id extension k
+    | Subject_key_id : Cstruct.t extension k
+    | Issuer_alt_name : general_name list extension k
+    | Key_usage : key_usage list extension k
+    | Ext_key_usage : extended_key_usage list extension k
+    | Basic_constraints : (bool * int option) extension k
+    | CRL_number : int extension k
+    | Delta_CRL_indicator : int extension k
+    | Priv_key_period : priv_key_usage_period extension k
+    | Name_constraints : (name_constraint * name_constraint) extension k
+    | CRL_distribution_points : distribution_point list extension k
+    | Issuing_distribution_point : (distribution_point_name option * bool * bool * reason list option * bool * bool) extension k
+    | Freshest_CRL : distribution_point list extension k
+    | Reason : reason extension k
+    | Invalidity_date : Ptime.t extension k
+    | Certificate_issuer : general_name list extension k
+    | Policies : policy list extension k
 
   include Gmap.S with type 'a key = 'a k
 
