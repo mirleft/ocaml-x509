@@ -152,7 +152,7 @@ module General_name : sig
   type _ k =
     | Other : Asn.oid -> string list k
     | Rfc_822 : string list k
-    | DNS : string list k
+    | DNS : Domain_name.Set.t k
     | X400_address : unit k
     | Directory : Distinguished_name.t list k
     | EDI_party : (string option * string) list k
@@ -345,10 +345,10 @@ module Certificate : sig
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}Subject Alternative Name}
       extension, if present, or otherwise the singleton list containing the common
       name. *)
-  val hostnames : t -> string list
+  val hostnames : t -> Domain_name.Set.t
 
   (** The polymorphic variant for hostname validation. *)
-  type host = [ `Strict of string | `Wildcard of string ]
+  type host = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
 
   (** [supports_hostname certificate host] is [result], whether the [certificate]
       contains the given [host], using {!hostnames}. *)
@@ -658,7 +658,7 @@ module Validation : sig
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
-    | `ServerNameNotPresent of Certificate.t * string
+    | `ServerNameNotPresent of Certificate.t * [ `raw ] Domain_name.t
     | `NameNotInList of Certificate.t
     | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
   ]
@@ -700,7 +700,7 @@ module Validation : sig
       certificate, using {!hostnames}. *)
   val trust_key_fingerprint :
     ?host:Certificate.host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> Certificate.t list -> r
+    fingerprints:('a Domain_name.t * Cstruct.t) list -> Certificate.t list -> r
 
   (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified to match the
@@ -711,7 +711,7 @@ module Validation : sig
       certificate, using {!hostnames}. *)
   val trust_cert_fingerprint :
     ?host:Certificate.host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> Certificate.t list -> r
+    fingerprints:('a Domain_name.t * Cstruct.t) list -> Certificate.t list -> r
   [@@ocaml.deprecated "Pin public keys (use trust_key_fingerprint) instead of certificates."]
 end
 
@@ -737,14 +737,14 @@ module Authenticator : sig
       fingerprint of the first element of the certificate chain matches the
       given fingerprint, using {!Validation.trust_key_fingerprint}. *)
   val server_key_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> t
+    fingerprints:('a Domain_name.t * Cstruct.t) list -> t
 
   (** [server_cert_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify the first
       element of the certificate chain, using
       {!Validation.trust_cert_fingerprint}. *)
   val server_cert_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:(string * Cstruct.t) list -> t
+    fingerprints:('a Domain_name.t * Cstruct.t) list -> t
   [@@ocaml.deprecated "Pin public keys (use server_key_fingerprint) instead of certificates."]
 
   (** [null] is [authenticator], which always returns [Ok ()]. (Useful for

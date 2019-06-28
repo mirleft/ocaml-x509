@@ -1,8 +1,6 @@
 open Nocrypto
 open Astring
 
-open Common
-
 type key_type = [ `RSA | `EC of Asn.oid ]
 
 (*
@@ -215,51 +213,45 @@ let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
    domain name portion of an identifier of type DNS-ID, SRV-ID, or
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
-let hostnames { asn = cert ; _ } : string list =
+let hostnames { asn = cert ; _ } =
   let subj =
     match Distinguished_name.(find CN cert.tbs_cert.subject) with
-    | None -> [] | Some x -> [String.Ascii.lowercase x]
+    | None -> Domain_name.Set.empty
+    | Some x -> match Domain_name.of_string x with
+      | Ok d -> Domain_name.Set.singleton d
+      | Error _ -> Domain_name.Set.empty
   in
   match Extension.(find Subject_alt_name cert.tbs_cert.extensions) with
   | None -> subj
   | Some (_, names) ->
     match General_name.find DNS names with
     | None -> subj
-    | Some xs -> List.map String.Ascii.lowercase xs
-
-(* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
-   forbidden: multiple dots "..", trailing dot "foo." *)
-let split_labels name =
-  let labels = String.cuts ~sep:"." name in
-  if List.exists (fun s -> s = "") labels then
-    None
-  else
-    Some labels
+    | Some xs -> xs
 
 let o f g x = f (g x)
 
-type host = [ `Strict of string | `Wildcard of string ]
+type host = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
+
+let is_wildcard name =
+  match Domain_name.get_label name 0 with
+  | Ok "*" -> Some (Domain_name.drop_label_exn name)
+  | _ -> None
 
 (* we limit our validation to a single '*' character at the beginning (left-most label)! *)
-let wildcard_matches host cert =
-  let rec wildcard_hostname_matches hostname wildcard =
-    match hostname, wildcard with
-    | [_]  , []               -> true
-    | x::xs, y::ys when x = y -> wildcard_hostname_matches xs ys
-    | _    , _                -> false
+let wildcard_matches host names =
+  let wildcards = Domain_name.Set.fold (fun n acc ->
+      match is_wildcard n with None -> acc | Some x -> Domain_name.Set.add x acc)
+      names Domain_name.Set.empty
   in
-  let names = hostnames cert in
-  match split_labels host with
-  | None      -> false
-  | Some lbls ->
-    List.map split_labels names |>
-    List_ext.filter_map ~f:(function Some ("*"::xs) -> Some xs | _ -> None) |>
-    List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
+  let wildcard_matches domain =
+    pred (Domain_name.count_labels host) = Domain_name.count_labels domain &&
+    Domain_name.is_subdomain ~subdomain:host ~domain
+  in
+  Domain_name.Set.exists wildcard_matches wildcards
 
-let supports_hostname cert = function
-  | `Strict name ->
-    List.mem (String.Ascii.lowercase name) (hostnames cert)
-  | `Wildcard name ->
-    let name = String.Ascii.lowercase name in
-    List.mem name (hostnames cert) ||
-    wildcard_matches name cert
+let supports_hostname cert (mode, name) =
+  let names = hostnames cert in
+  Domain_name.Set.mem (Domain_name.raw name) names ||
+  match mode with
+  | `Strict -> false
+  | `Wildcard -> wildcard_matches name names

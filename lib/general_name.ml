@@ -1,7 +1,7 @@
 type _ k =
   | Other : Asn.oid -> string list k
   | Rfc_822 : string list k
-  | DNS : string list k
+  | DNS : Domain_name.Set.t k
   | X400_address : unit k
   | Directory : Distinguished_name.t list k
   | EDI_party : (string option * string) list k
@@ -35,7 +35,9 @@ let pp_k : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
   let pp_strs = Fmt.(list ~sep:(unit "; ") string) in
   match k, v with
   | Rfc_822, x -> Fmt.pf ppf "rfc822 %a" pp_strs x
-  | DNS, x -> Fmt.pf ppf "dns %a" pp_strs x
+  | DNS, x ->
+    Fmt.pf ppf "dns %a" Fmt.(list ~sep:(unit "; ") Domain_name.pp)
+      (Domain_name.Set.elements x)
   | X400_address, () -> Fmt.string ppf "x400 address"
   | Directory, x ->
     Fmt.pf ppf "directory %a"
@@ -63,7 +65,7 @@ let merge_values : type a. a k -> a -> a -> a = fun k v v' ->
   | EDI_party, a, b -> a @ b
   | Directory, a, b -> a @ b
   | X400_address, (), () -> ()
-  | DNS, a, b -> a @ b
+  | DNS, a, b -> Domain_name.Set.union a b
   | Rfc_822, a, b -> a @ b
 
 module Asn = struct
@@ -102,7 +104,11 @@ module Asn = struct
     let f = function
       | `C1 (`C1 (oid, x)) -> B (Other oid, [ x ])
       | `C1 (`C2 x) -> B (Rfc_822, [ x ])
-      | `C1 (`C3 x) -> B (DNS, [ x ])
+      | `C1 (`C3 x) ->
+        begin match Domain_name.of_string x with
+          | Ok x -> B (DNS, Domain_name.Set.singleton x)
+          | Error (`Msg m) -> error (`Parse m)
+        end
       | `C1 (`C4 _x) -> B (X400_address, ())
       | `C1 (`C5 x) -> B (Directory, [ x ])
       | `C1 (`C6 x) -> B (EDI_party, [ x ])
@@ -112,7 +118,7 @@ module Asn = struct
     and g (B (k, v)) = match k, v with
       | Other oid, [ x ] -> `C1 (`C1 (oid, x))
       | Rfc_822, [ x ] -> `C1 (`C2 x)
-      | DNS, [ x ] -> `C1 (`C3 x)
+      | DNS, x -> `C1 (`C3 (Domain_name.(to_string (Set.choose x))))
       | X400_address, () -> `C1 (`C4 ())
       | Directory, [ x ] -> `C1 (`C5 x)
       | EDI_party, [ x ] -> `C1 (`C6 x)
@@ -153,7 +159,9 @@ module Asn = struct
           | EDI_party, xs -> List.map (fun d -> B (EDI_party, [ d ])) xs
           | Directory, xs -> List.map (fun d -> B (Directory, [ d ])) xs
           | X400_address, () -> [ B (X400_address, ()) ]
-          | DNS, xs -> List.map (fun d -> B (DNS, [ d ])) xs
+          | DNS, xs ->
+            let add d acc = B (DNS, Domain_name.Set.singleton d) :: acc in
+            List.rev (Domain_name.Set.fold add xs [])
           | Rfc_822, xs -> List.map (fun d -> B (Rfc_822, [ d ])) xs)
           (bindings map))
     in

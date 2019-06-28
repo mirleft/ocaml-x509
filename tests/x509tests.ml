@@ -18,6 +18,8 @@ let priv =
 
 let cert name = with_loaded_file name ~f:Certificate.decode_pem
 
+let host name = Domain_name.host_exn (Domain_name.of_string_exn name)
+
 let invalid_cas = [
   "cacert-basicconstraint-ca-false";
   "cacert-unknown-critical-extension" ;
@@ -91,10 +93,10 @@ let test_valid_ca_cert server chain valid name ca () =
   | true , Error c -> Alcotest.failf "valid certificate %a" Validation.pp_validation_error c
 
 let strict_test_valid_ca_cert server chain valid name ca =
-  test_valid_ca_cert server chain valid (`Strict name) ca
+  test_valid_ca_cert server chain valid (`Strict, host name) ca
 
 let wildcard_test_valid_ca_cert server chain valid name ca =
-  test_valid_ca_cert server chain valid (`Wildcard name) ca
+  test_valid_ca_cert server chain valid (`Wildcard, host name) ca
 
 let test_cert c usages extusage () =
   let ku, eku =
@@ -170,8 +172,6 @@ let first_wildcard_cert_ca_test (ca, x) =
         let c = first_cert name in
         ("verification CA " ^ x ^ " cn blablbalbala", `Quick, strict_test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
         ("verification CA " ^ x ^ " cn blablbalbala", `Quick, wildcard_test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
-        ("certificate verification testing using CA " ^ x ^ " and *.foobar.com",
-         `Quick, strict_test_valid_ca_cert c [] true "*.foobar.com" [ca]) ::
         List.mapi (fun i cn ->
                    "wildcard certificate CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
                    `Quick, wildcard_test_valid_ca_cert c [] true cn [ca])

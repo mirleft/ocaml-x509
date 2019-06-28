@@ -12,15 +12,17 @@ let cert file =
 let jc = cert "jabber.ccc.de"
 let cacert = cert "cacert"
 
+let host str = Domain_name.host_exn (Domain_name.of_string_exn str)
+
 let test_jc_jc () =
-  match Validation.verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[jc] [jc] with
+  match Validation.verify_chain_of_trust ~host:(`Strict, host "jabber.ccc.de") ~anchors:[jc] [jc] with
   | Error `InvalidChain -> ()
   | Error e -> Alcotest.failf "something went wrong with jc_jc (expected invalid_chain, got %a"
                  Validation.pp_validation_error e
   | Ok _ -> Alcotest.fail "chain validated when it shouldn't"
 
 let test_jc_ca () =
-  match Validation.verify_chain_of_trust ~host:(`Strict "jabber.ccc.de") ~anchors:[cacert] [jc ; cacert] with
+  match Validation.verify_chain_of_trust ~host:(`Strict, host "jabber.ccc.de") ~anchors:[cacert] [jc ; cacert] with
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jc_ca"
 
@@ -28,12 +30,12 @@ let telesec = cert "telesec"
 let jfd = [ cert "jabber.fu-berlin.de" ; cert "fu-berlin" ; cert "dfn" ]
 
 let test_jfd_ca () =
-  match Validation.verify_chain_of_trust ~host:(`Strict "jabber.fu-berlin.de") ~anchors:[telesec] (jfd@[telesec]) with
+  match Validation.verify_chain_of_trust ~host:(`Strict, host "jabber.fu-berlin.de") ~anchors:[telesec] (jfd@[telesec]) with
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jfd_ca"
 
 let test_jfd_ca' () =
-  match Validation.verify_chain_of_trust ~host:(`Strict "jabber.fu-berlin.de") ~anchors:[telesec] jfd with
+  match Validation.verify_chain_of_trust ~host:(`Strict, host "jabber.fu-berlin.de") ~anchors:[telesec] jfd with
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jfd_ca'"
 

@@ -24,6 +24,7 @@ depends: [
   "alcotest" {with-test}
   "cstruct-unix" {with-test & >= "3.0.0"}
   "gmap" {>= "0.3.0"}
+  "domain-name" {>= "0.3.0"}
 ]
 build: [
   ["dune" "subst"] {pinned}
