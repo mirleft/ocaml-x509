@@ -34,16 +34,16 @@ let key () =
 
 let selfsigned ?(name = "test") now =
   let pub, priv = key () in
-  let name = [ `CN name ] in
-  let req = X509.Signing_request.create name priv in
+  let name = Distinguished_name.singleton CN name in
+  let req = Signing_request.create name priv in
   let valid_from, valid_until = validity now in
   let cacert = X509.Signing_request.sign req ~valid_from ~valid_until ~extensions:(ca_exts ()) priv name in
   (cacert, pub, priv)
 
 let cert ?serial ?(name = "sub") now ca pubca privca issuer =
   let pub, priv = key () in
-  let name = [ `CN name ] in
-  let req = X509.Signing_request.create name priv in
+  let name = Distinguished_name.singleton CN name in
+  let req = Signing_request.create name priv in
   let valid_from, valid_until = validity now in
   let extensions = key_ids (if ca then ca_exts () else leaf_exts)  pub pubca in
   let cert = X509.Signing_request.sign req ~valid_from ~valid_until ?serial ~extensions privca issuer in

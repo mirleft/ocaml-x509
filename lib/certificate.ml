@@ -203,10 +203,6 @@ let supports_keytype c t =
   | (`RSA _), `RSA -> true
   | _              -> false
 
-let subject_common_name cert =
-  List_ext.map_find cert.tbs_cert.subject
-    ~f:(function `CN n -> Some n | _ -> None)
-
 let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
 
 (* RFC 6125, 6.4.4:
@@ -221,7 +217,10 @@ let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
 let hostnames { asn = cert ; _ } : string list =
-  match Extension.(find Subject_alt_name cert.tbs_cert.extensions), subject_common_name cert with
+  match
+    Extension.(find Subject_alt_name cert.tbs_cert.extensions),
+    Distinguished_name.(find CN cert.tbs_cert.subject)
+  with
   | Some (_, names), _    ->
     List_ext.filter_map
       names

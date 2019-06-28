@@ -107,31 +107,32 @@ module Distinguished_name : sig
 
   (** The polymorphic variant of a distinguished name component, as defined in
     X.500. *)
-  type component = [
-    | `CN           of string
-    | `Serialnumber of string
-    | `C            of string
-    | `L            of string
-    | `SP           of string
-    | `O            of string
-    | `OU           of string
-    | `T            of string
-    | `DNQ          of string
-    | `Mail         of string
-    | `DC           of string
-    | `Given_name   of string
-    | `Surname      of string
-    | `Initials     of string
-    | `Pseudonym    of string
-    | `Generation   of string
-    | `Other        of Asn.oid * string
-  ]
+  type _ k =
+    | CN : string k
+    | Serialnumber : string k
+    | C : string k
+    | L : string k
+    | SP : string k
+    | O : string k
+    | OU : string k
+    | T : string k
+    | DNQ : string k
+    | Mail : string k
+    | DC : string k
+    | Given_name : string k
+    | Surname : string k
+    | Initials : string k
+    | Pseudonym : string k
+    | Generation : string k
+    | Other : Asn.oid -> string k
 
   (** A distinguished name is a list of {!component}. *)
-  (* TODO gmap *)
-  type t = component list
+  include Gmap.S with type 'a key = 'a k
 
-  (** [pp_distinguished_name ppf dn] pretty-prints the distinguished name. *)
+  (** [equal a b] is [true] if the distinguished names [a] and [b] are equal. *)
+  val equal : t -> t -> bool
+
+  (** [pp ppf dn] pretty-prints the distinguished name. *)
   val pp : t Fmt.t
 
   (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs]. *)
