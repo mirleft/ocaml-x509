@@ -1,8 +1,8 @@
 (library
  (name x509)
  (public_name x509)
- (private_modules asn_grammars registry authenticator ca certificate validation
+ (private_modules asn_grammars registry authenticator certificate validation
                   public_key private_key common crl distinguished_name algorithm
-                  extension pem)
+                  extension pem signing_request)
  (flags (:standard -safe-string))
  (libraries asn1-combinators rresult fmt ptime cstruct nocrypto astring))

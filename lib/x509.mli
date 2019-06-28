@@ -24,16 +24,16 @@
     This module uses the [result] type for errors. No provided binging raises
    an exception. Provided submodules include decoders and encoders (ASN.1 DER
    and PEM encoding) of X.509v3 {{!Certificate}certificates},
-   {{!Distingushed_name}distinguished names}, {{!Public_key}public} and
-   {{!Private_key}private} RSA keys
-   ({{:http://tools.ietf.org/html/rfc5208}PKCS 8, RFC 5208}), and certificate
-   {{!CA}signing requests} ({{:http://tools.ietf.org/html/rfc2986}PKCS 10, RFC 2986})
-   (both use parts of
-   {{:https://tools.ietf.org/html/rfc2985}PKCS9, RFC 2985}),
-   {{!Validation} validation} of certificates, and construction of
+   {{!Distingushed_name}distinguished names}, {{!Public_key}public keys} and
+   {{!Private_key}private keys}
+   ({{:http://tools.ietf.org/html/rfc5208}PKCS 8, RFC 5208}), and
+   {{!Signing_request}certificate signing requests}
+   ({{:http://tools.ietf.org/html/rfc2986}PKCS 10, RFC 2986},
+   both use parts of
+   {{:https://tools.ietf.org/html/rfc2985}PKCS 9, RFC 2985}),
+   {{!Validation} certificate validation} by construction of
    {{!Authenticator} authenticators}.  Name validation, as defined in
-   {{:https://tools.ietf.org/html/rfc6125}RFC 6125}, is also implemented.  The
-   {{!CA}CA} module provides functionality to create and sign CSR.
+   {{:https://tools.ietf.org/html/rfc6125}RFC 6125}, is also implemented.
 
     Missing is the handling of online certificate status protocol. Some X.509v3
    extensions are not handled, but only parsed, such as name constraints. If any
@@ -128,6 +128,7 @@ module Distinguished_name : sig
   ]
 
   (** A distinguished name is a list of {!component}. *)
+  (* TODO gmap *)
   type t = component list
 
   (** [pp_distinguished_name ppf dn] pretty-prints the distinguished name. *)
@@ -383,30 +384,30 @@ module Certificate : sig
   val crl_distribution_points : t -> Extension.distribution_point list
 end
 
-(** Certificate Authority operations *)
-module CA : sig
-  (** A certificate authority (CA) deals with
-      {{:https://tools.ietf.org/html/rfc2986}PKCS 10 certificate signing requests}
-      , their construction and encoding, and provisioning with a
-      private key to a certificate. *)
+(** Certificate Signing request *)
 
+(** A certificate authority (CA) deals with
+    {{:https://tools.ietf.org/html/rfc2986}PKCS 10 certificate signing requests},
+    their construction and encoding, and provisioning using a private key to
+    generate a certificate with a signature thereof. *)
+module Signing_request : sig
   (** The abstract type of a (self-signed) certification request. *)
-  type signing_request
+  type t
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
   (** [decode_der cstruct] is [signing_request], the ASN.1 decoded
       [cstruct] or an error. *)
-  val decode_der : Cstruct.t -> (signing_request, decode_error) result
+  val decode_der : Cstruct.t -> (t, decode_error) result
 
   (** [encode_der sr] is [cstruct], the ASN.1 encoded representation of the [sr]. *)
-  val encode_der : signing_request -> Cstruct.t
+  val encode_der : t -> Cstruct.t
 
   (** [decode_pem pem] is [t], where the single signing request of the [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (signing_request, decode_error) result
+  val decode_pem : Cstruct.t -> (t, decode_error) result
 
   (** [encode_pem signing_request] is [pem], the pem encoded signing request. *)
-  val encode_pem : signing_request -> Cstruct.t
+  val encode_pem : t -> Cstruct.t
 
   (** {1 Construction of a signing request} *)
 
@@ -428,13 +429,13 @@ module CA : sig
 
   (** [info signing_request] is {!request_info}, the information inside the
       {!signing_request}. *)
-  val info : signing_request -> request_info
+  val info : t -> request_info
 
-  (** [request subject ~digest ~extensions private] creates [signing_request],
+  (** [create subject ~digest ~extensions private] creates [signing_request],
       a certification request using the given [subject], [digest] (defaults to
       [`SHA256]) and list of [extensions]. *)
-  val request : Distinguished_name.t -> ?digest:Nocrypto.Hash.hash ->
-    ?extensions:request_extensions list -> Private_key.t -> signing_request
+  val create : Distinguished_name.t -> ?digest:Nocrypto.Hash.hash ->
+    ?extensions:request_extensions list -> Private_key.t -> t
 
   (** {1 Provision a signing request to a certificate} *)
 
@@ -454,7 +455,7 @@ with
  | Some (`Extensions x) -> x
  | None -> []
 ]} *)
-  val sign : signing_request -> valid_from:Ptime.t -> valid_until:Ptime.t ->
+  val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
     ?digest:Nocrypto.Hash.hash -> ?serial:Z.t ->
     ?extensions:(bool * Extension.t) list -> Private_key.t ->
     Distinguished_name.t -> Certificate.t

@@ -10,7 +10,7 @@ type request_info = {
   extensions : request_extensions list ;
 }
 
-type signing_request = {
+type t = {
   info : request_info ;
   signature_algorithm : Algorithm.t ;
   signature : Cstruct.t
@@ -109,7 +109,7 @@ let decode_pem cs =
 let encode_pem v =
   Pem.unparse ~tag:"CERTIFICATE REQUEST" (encode_der v)
 
-let request subject ?(digest = `SHA256) ?(extensions = []) = function
+let create subject ?(digest = `SHA256) ?(extensions = []) = function
   | `RSA priv ->
     let public_key = `RSA (Nocrypto.Rsa.pub_of_priv priv) in
     let info : request_info = { subject ; public_key ; extensions } in

@@ -13,7 +13,7 @@ module Validation = Validation
 
 module Extension = Extension
 
-module CA = Ca
+module Signing_request = Signing_request
 
 module CRL = Crl
 

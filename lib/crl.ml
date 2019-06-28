@@ -167,7 +167,7 @@ let sign_tbs (tbs : tBS_CRL) key =
     | Some (_, h) -> h
     | _ -> invalid_arg "couldn't parse signature algorithm"
   in
-  let signature_val = Ca.raw_sign tbs_raw digest key in
+  let signature_val = Signing_request.raw_sign tbs_raw digest key in
   let asn = { tbs_crl = tbs ; signature_algo = tbs.signature ; signature_val } in
   let raw = Asn.crl_to_cstruct asn in
   { asn ; raw }
