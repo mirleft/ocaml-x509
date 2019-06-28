@@ -396,21 +396,23 @@ module Signing_request : sig
 
   (** {1 Construction of a signing request} *)
 
-  (** The polymorphic variant of certificate request extensions, as defined in
-      {{:http://tools.ietf.org/html/rfc2985}PKCS 9 (RFC 2985)}. *)
-  (* TODO Gmap! *)
-  type request_extensions = [
-    | `Password of string
-    | `Name of string
-    | `Extensions of Extension.t
-  ]
+  module Ext : sig
+    (** The GADT of certificate request extensions, as defined in
+        {{:http://tools.ietf.org/html/rfc2985}PKCS 9 (RFC 2985)}. *)
+    type _ k =
+      | Password : string k
+      | Name : string k
+      | Extensions : Extension.t k
+
+    include Gmap.S with type 'a key = 'a k
+  end
 
   (** The raw request info of a
       {{:https://tools.ietf.org/html/rfc2986#section-4}PKCS 10 certification request info}. *)
   type request_info = {
     subject    : Distinguished_name.t ;
     public_key : Public_key.t ;
-    extensions : request_extensions list ;
+    extensions : Ext.t ;
   }
 
   (** [info signing_request] is {!request_info}, the information inside the
@@ -421,7 +423,7 @@ module Signing_request : sig
       a certification request using the given [subject], [digest] (defaults to
       [`SHA256]) and list of [extensions]. *)
   val create : Distinguished_name.t -> ?digest:Nocrypto.Hash.hash ->
-    ?extensions:request_extensions list -> Private_key.t -> t
+    ?extensions:Ext.t -> Private_key.t -> t
 
   (** {1 Provision a signing request to a certificate} *)
 
@@ -434,12 +436,9 @@ module Signing_request : sig
       Certificate version is always 3.  Please note that the extensions in the
       [signing_request] are ignored, you can pass them using:
 
-{[match
-  try Some (List.find (function `Extensions _ -> true | _ -> false) (info csr).extensions)
-  with Not_found -> None
-with
- | Some (`Extensions x) -> x
- | None -> Extension.empty
+{[match Ext.find Extensions (info csr).extensions with
+| Ok ext -> ext
+| Error _ -> Extension.empty
 ]} *)
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
     ?digest:Nocrypto.Hash.hash -> ?serial:Z.t ->

@@ -1,13 +1,37 @@
-type request_extensions = [
-  | `Password of string
-  | `Name of string
-  | `Extensions of Extension.t
-]
+
+module Ext = struct
+
+  type _ k =
+    | Password : string k
+    | Name : string k
+    | Extensions : Extension.t k
+
+  module K = struct
+    type 'a t = 'a k
+
+    let compare : type a b . a t -> b t -> (a, b) Gmap.Order.t = fun t t' ->
+      let open Gmap.Order in
+      match t, t' with
+      | Password, Password -> Eq | Password, _ -> Lt | _, Password -> Gt
+      | Name, Name -> Eq | Name, _ -> Lt | _, Name -> Gt
+      | Extensions, Extensions -> Eq
+  end
+
+  include Gmap.Make(K)
+
+  let pp : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
+    match k, v with
+    | Password, pass -> Fmt.pf ppf "password %s" pass
+    | Name, name -> Fmt.pf ppf "name %s" name
+    | Extensions, ext ->
+      Fmt.string ppf "extensions: ";
+      Extension.iter (fun (Extension.B (k, v)) -> Extension.pp k ppf v) ext
+end
 
 type request_info = {
   subject : Distinguished_name.t ;
   public_key : Public_key.t ;
-  extensions : request_extensions list ;
+  extensions : Ext.t ;
 }
 
 type t = {
@@ -23,13 +47,13 @@ module Asn = struct
 
   let attributes =
     let f = function[@ocaml.warning "-8"]
-      | (oid, [`C1 p]) when oid = PKCS9.challenge_password -> `Password p
-      | (oid, [`C1 n]) when oid = PKCS9.unstructured_name -> `Name n
-      | (oid, [`C2 es]) when oid = PKCS9.extension_request -> `Extensions es
-    and g = function
-      | `Password p -> (PKCS9.challenge_password, [`C1 p])
-      | `Name n -> (PKCS9.unstructured_name, [`C1 n])
-      | `Extensions es -> (PKCS9.extension_request, [`C2 es])
+      | (oid, [`C1 p]) when oid = PKCS9.challenge_password -> Ext.B (Password, p)
+      | (oid, [`C1 n]) when oid = PKCS9.unstructured_name -> Ext.B (Name, n)
+      | (oid, [`C2 es]) when oid = PKCS9.extension_request -> Ext.B (Extensions, es)
+    and g (Ext.B (k, v)) : Asn.oid * [ `C1 of string | `C2 of Extension.t ] list = match k, v with
+      | Password, v -> (PKCS9.challenge_password, [`C1 v])
+      | Name, v -> (PKCS9.unstructured_name, [`C1 v])
+      | Extensions, v -> (PKCS9.extension_request, [`C2 v])
     in
     map f g @@
     sequence2
@@ -38,14 +62,21 @@ module Asn = struct
          (set_of (choice2
                     utf8_string
                     Extension.Asn.extensions_der)))
-
   let request_info =
     let f = function
       | (0, subject, public_key, extensions) ->
+        let extensions =
+          List.fold_left (fun map (Ext.B (k, v)) ->
+              match Ext.add_unless_bound k v map with
+              | None -> parse_error "request extension %a already bound" (Ext.pp k) v
+              | Some b -> b)
+        Ext.empty extensions
+        in
         { subject ; public_key ; extensions }
       | _ ->
         parse_error "unknown certificate request info"
     and g { subject ; public_key ; extensions } =
+      let extensions = Ext.bindings extensions in
       (0, subject, public_key, extensions)
     in
     map f g @@
@@ -109,7 +140,7 @@ let decode_pem cs =
 let encode_pem v =
   Pem.unparse ~tag:"CERTIFICATE REQUEST" (encode_der v)
 
-let create subject ?(digest = `SHA256) ?(extensions = []) = function
+let create subject ?(digest = `SHA256) ?(extensions = Ext.empty) = function
   | `RSA priv ->
     let public_key = `RSA (Nocrypto.Rsa.pub_of_priv priv) in
     let info : request_info = { subject ; public_key ; extensions } in
