@@ -102,22 +102,22 @@ let validate_ca_extensions { Certificate.asn = cert ; _ } =
   (* Name Constraints - name constraints should match servername *)
 
   (* check criticality *)
-  Extension.for_all (fun (B (k, v)) ->
+  Extension.for_all (fun (Extension.B (k, v)) ->
       match k with
-      | Key_usage -> true
-      | Basic_constraints -> true
+      | Extension.Key_usage -> true
+      | Extension.Basic_constraints -> true
       | _ -> not (Extension.critical k v) )
     exts
 
 let validate_server_extensions { Certificate.asn = cert ; _ } =
-  Extension.for_all (fun (B (k, v)) ->
+  Extension.for_all (fun (Extension.B (k, v)) ->
       match k, v with
-      | Basic_constraints, (_, (true, _)) -> false
-      | Basic_constraints, (_, (false, _)) -> true
-      | Key_usage, _ -> true
-      | Ext_key_usage, _ -> true
-      | Subject_alt_name, _ -> true
-      | Policies, (crit, ps) -> not crit || List.mem `Any ps
+      | Extension.Basic_constraints, (_, (true, _)) -> false
+      | Extension.Basic_constraints, (_, (false, _)) -> true
+      | Extension.Key_usage, _ -> true
+      | Extension.Ext_key_usage, _ -> true
+      | Extension.Subject_alt_name, _ -> true
+      | Extension.Policies, (crit, ps) -> not crit || List.mem `Any ps
       (* we've to deal with _all_ extensions marked critical! *)
       | _, _ -> not (Extension.critical k v))
     cert.tbs_cert.extensions

@@ -51,9 +51,9 @@ module Asn = struct
       | (oid, [`C1 n]) when oid = PKCS9.unstructured_name -> Ext.B (Name, n)
       | (oid, [`C2 es]) when oid = PKCS9.extension_request -> Ext.B (Extensions, es)
     and g (Ext.B (k, v)) : Asn.oid * [ `C1 of string | `C2 of Extension.t ] list = match k, v with
-      | Password, v -> (PKCS9.challenge_password, [`C1 v])
-      | Name, v -> (PKCS9.unstructured_name, [`C1 v])
-      | Extensions, v -> (PKCS9.extension_request, [`C2 v])
+      | Ext.Password, v -> (PKCS9.challenge_password, [`C1 v])
+      | Ext.Name, v -> (PKCS9.unstructured_name, [`C1 v])
+      | Ext.Extensions, v -> (PKCS9.extension_request, [`C2 v])
     in
     map f g @@
     sequence2
