@@ -6,7 +6,7 @@ type _ k =
   | Directory : Distinguished_name.t list k
   | EDI_party : (string option * string) list k
   | URI : string list k
-  | IP : Cstruct.t list k
+  | IP : Ipaddr.t list k
   | Registered_id : Asn.oid list k
 
 module K = struct
@@ -48,7 +48,7 @@ let pp_k : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
                (pair ~sep:(unit ", ")
                   (option ~none:(unit "") string) string)) xs
   | URI, x -> Fmt.pf ppf "uri %a" pp_strs x
-  | IP, x -> Fmt.pf ppf "ip %a" Fmt.(list ~sep:(unit ";") Cstruct.hexdump_pp) x
+  | IP, x -> Fmt.pf ppf "ip %a" Fmt.(list ~sep:(unit ";") Ipaddr.pp) x
   | Registered_id, x ->
     Fmt.pf ppf "registered id %a"
       Fmt.(list ~sep:(unit ";") Asn.OID.pp) x
@@ -100,6 +100,23 @@ module Asn = struct
       (optional ~label:"nameAssigner" @@ implicit 0 Distinguished_name.Asn.directory_name)
       (required ~label:"partyName"    @@ implicit 1 Distinguished_name.Asn.directory_name)
 
+  let to_ip data =
+    let data = Cstruct.to_string data in
+    if String.length data = 4 then
+      match Ipaddr.V4.of_octets data with
+      | Ok addr -> Ipaddr.V4 addr
+      | Error (`Msg m) -> error (`Parse m)
+    else if String.length data = 16 then
+      match Ipaddr.V6.of_octets data with
+      | Ok addr -> Ipaddr.V6 addr
+      | Error (`Msg m) -> error (`Parse m)
+    else
+      error (`Parse "expected 4 or 16 bytes content")
+
+  let of_ip = function
+    | Ipaddr.V4 addr -> Cstruct.of_string (Ipaddr.V4.to_octets addr)
+    | Ipaddr.V6 addr -> Cstruct.of_string (Ipaddr.V6.to_octets addr)
+
   let general_name =
     let f = function
       | `C1 (`C1 (oid, x)) -> B (Other oid, [ x ])
@@ -113,7 +130,7 @@ module Asn = struct
       | `C1 (`C5 x) -> B (Directory, [ x ])
       | `C1 (`C6 x) -> B (EDI_party, [ x ])
       | `C2 (`C1 x) -> B (URI, [ x ])
-      | `C2 (`C2 x) -> B (IP, [ x ])
+      | `C2 (`C2 x) -> B (IP, [ to_ip x ])
       | `C2 (`C3 x) -> B (Registered_id, [ x ])
     and g (B (k, v)) = match k, v with
       | Other oid, [ x ] -> `C1 (`C1 (oid, x))
@@ -123,7 +140,7 @@ module Asn = struct
       | Directory, [ x ] -> `C1 (`C5 x)
       | EDI_party, [ x ] -> `C1 (`C6 x)
       | URI, [ x ] -> `C2 (`C1 x)
-      | IP, [ x ] -> `C2 (`C2 x)
+      | IP, [ x ] -> `C2 (`C2 (of_ip x))
       | Registered_id, [ x ] -> `C2 (`C3 x)
       | _ -> Asn.S.error (`Parse "bad general name")
     in

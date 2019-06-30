@@ -157,7 +157,7 @@ module General_name : sig
     | Directory : Distinguished_name.t list k
     | EDI_party : (string option * string) list k
     | URI : string list k
-    | IP : Cstruct.t list k
+    | IP : Ipaddr.t list k
     | Registered_id : Asn.oid list k
 
   include Gmap.S with type 'a key = 'a k
