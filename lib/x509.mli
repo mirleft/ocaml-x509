@@ -24,7 +24,7 @@
     This module uses the [result] type for errors. No provided binging raises
    an exception. Provided submodules include decoders and encoders (ASN.1 DER
    and PEM encoding) of X.509v3 {{!Certificate}certificates},
-   {{!Distingushed_name}distinguished names}, {{!Public_key}public keys} and
+   {{!Distinguished_name}distinguished names}, {{!Public_key}public keys} and
    {{!Private_key}private keys}
    ({{:http://tools.ietf.org/html/rfc5208}PKCS 8, RFC 5208}), and
    {{!Signing_request}certificate signing requests}
