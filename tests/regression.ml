@@ -39,9 +39,22 @@ let test_jfd_ca' () =
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jfd_ca'"
 
+let test_izenpe () =
+  let crt = cert "izenpe" in
+  let _, san = Extension.(get Subject_alt_name (Certificate.extensions crt)) in
+  Alcotest.(check int "two SAN (mail + dir)" 2 (General_name.cardinal san));
+  Alcotest.(check (list string) "mail in SAN is correct" [ "info@izenpe.com" ]
+              General_name.(get Rfc_822 san));
+  let dir = General_name.(get Directory san) in
+  Alcotest.(check int "directory san len is 1" 1 (List.length dir));
+  let data = Fmt.to_to_string Distinguished_name.pp (List.hd dir) in
+  let expected = "O=IZENPE S.A. - CIF A01337260-RMerc.Vitoria-Gasteiz T1055 F62 S8/2.5.4.9=Avda del Mediterraneo Etorbidea 14 - 01010 Vitoria-Gasteiz" in
+  Alcotest.(check string "directory in SAN is correct" expected data)
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca ;
   "jfd_ca", `Quick, test_jfd_ca ;
-  "jfd_ca'", `Quick, test_jfd_ca'
+  "jfd_ca'", `Quick, test_jfd_ca' ;
+  "SAN dir explicit or implicit", `Quick, test_izenpe ;
 ]
