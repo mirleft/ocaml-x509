@@ -175,6 +175,6 @@ module Asn = struct
     projections_of Asn.der name
 end
 
-let decode_der = Asn.name_of_cstruct
+let decode_der cs = Asn_grammars.err_to_msg (Asn.name_of_cstruct cs)
 
 let encode_der = Asn.name_to_cstruct

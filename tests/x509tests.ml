@@ -9,8 +9,10 @@ let with_loaded_file file ~f =
     Unix.close fd;
     match r with
     | Ok data -> data
-    | Error m -> Alcotest.failf "decoding error in %s: %a" fullpath pp_decode_error m
-  with e -> Unix.close fd; Alcotest.failf "exception in %s: %s" fullpath (Printexc.to_string e)
+    | Error (`Msg m) -> Alcotest.failf "decoding error in %s: %s" fullpath m
+  with e ->
+    Unix.close fd;
+    Alcotest.failf "exception in %s: %s" fullpath (Printexc.to_string e)
 
 let priv =
   match with_loaded_file "private/cakey" ~f:Private_key.decode_pem with

@@ -121,11 +121,11 @@ let validate_signature { info ; signature ; signature_algorithm } =
 
 let decode_der cs =
   let open Rresult.R.Infix in
-  Asn.signing_request_of_cs cs >>= fun csr ->
+  Asn_grammars.err_to_msg (Asn.signing_request_of_cs cs) >>= fun csr ->
   if validate_signature csr then
     Ok csr
   else
-    Error (`Parse "couldn't validate signature")
+    Error (`Msg "couldn't validate signature")
 
 let encode_der = Asn.signing_request_to_cs
 

@@ -98,7 +98,7 @@ type t = {
 }
 
 let decode_der raw =
-  Asn.crl_of_cstruct raw >>| fun asn ->
+  Asn_grammars.err_to_msg (Asn.crl_of_cstruct raw) >>| fun asn ->
   { raw ; asn }
 
 let encode_der { raw ; _ } = raw

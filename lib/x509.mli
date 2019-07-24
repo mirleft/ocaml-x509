@@ -42,11 +42,7 @@
 
     {e %%VERSION%% - {{:%%PKG_HOMEPAGE%% }homepage}} *)
 
-(** The type of decoding errors. *)
-type decode_error = Asn.error
-
-(** [pp_decode_error ppf e] pretty-prints the error [e] on [ppf]. *)
-val pp_decode_error : decode_error Fmt.t
+open Rresult
 
 (** RSA public key DER and PEM encoding and decoding *)
 module Public_key : sig
@@ -76,10 +72,10 @@ module Public_key : sig
   val encode_der : t -> Cstruct.t
 
   (** [decode_der buffer] is [pubkey], the public key of the ASN.1 encoded buffer. *)
-  val decode_der : Cstruct.t -> (t, decode_error) result
+  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [decode_pem pem] is [t], where the public key of [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (t, decode_error) result
+  val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_pem public_key] is [pem], the pem encoded public key. *)
   val encode_pem : t -> Cstruct.t
@@ -96,7 +92,7 @@ module Private_key : sig
 
   (** [decode_pem pem] is [t], where the private key of [pem] is extracted.
       Both RSA PRIVATE KEY and PRIVATE KEY stanzas are supported. *)
-  val decode_pem : Cstruct.t -> (t, decode_error) result
+  val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_pem key] is [pem], the encoded private key (using [PRIVATE KEY]). *)
   val encode_pem : t -> Cstruct.t
@@ -136,7 +132,7 @@ module Distinguished_name : sig
   val pp : t Fmt.t
 
   (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs]. *)
-  val decode_der : Cstruct.t -> (t, decode_error) result
+  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_der dn] is [cstruct], the ASN.1 encoded representation of the
       distinguished name [dn]. *)
@@ -290,7 +286,7 @@ module Certificate : sig
   (** [decode_pkcs1_digest_info buffer] is [hash, signature], the hash and raw
       signature of the given [buffer] in ASN.1 DER encoding, or an error. *)
   val decode_pkcs1_digest_info : Cstruct.t ->
-    (Nocrypto.Hash.hash * Cstruct.t, decode_error) result
+    (Nocrypto.Hash.hash * Cstruct.t, [> R.msg ]) result
 
   (** [encode_pkcs1_digest_info (hash, signature)] is [data], the ASN.1 DER
       encoded hash and signature. *)
@@ -308,7 +304,7 @@ module Certificate : sig
 
   (** [decode_der cstruct] is [certificate], the ASN.1 decoded [certificate]
       or an error. *)
-  val decode_der : Cstruct.t -> (t, decode_error) result
+  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_der certificate] is [cstruct], the ASN.1 encoded representation of
       the [certificate]. *)
@@ -316,11 +312,11 @@ module Certificate : sig
 
   (** [decode_pem_multiple pem] is [t list], where all certificates of the [pem]
        are extracted *)
-  val decode_pem_multiple : Cstruct.t -> (t list, decode_error) result
+  val decode_pem_multiple : Cstruct.t -> (t list, [> R.msg ]) result
 
   (** [decode_pem pem] is [t], where the single certificate of the
       [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (t, decode_error) result
+  val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_pem_multiple certificates] is [pem], the pem encoded certificates. *)
   val encode_pem_multiple : t list -> Cstruct.t
@@ -390,13 +386,13 @@ module Signing_request : sig
 
   (** [decode_der cstruct] is [signing_request], the ASN.1 decoded
       [cstruct] or an error. *)
-  val decode_der : Cstruct.t -> (t, decode_error) result
+  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_der sr] is [cstruct], the ASN.1 encoded representation of the [sr]. *)
   val encode_der : t -> Cstruct.t
 
   (** [decode_pem pem] is [t], where the single signing request of the [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (t, decode_error) result
+  val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_pem signing_request] is [pem], the pem encoded signing request. *)
   val encode_pem : t -> Cstruct.t
@@ -476,7 +472,7 @@ module CRL : sig
 
   (** [decode_der buffer] is [crl], the certificate revocation list of the
       ASN.1 encoded buffer. *)
-  val decode_der : Cstruct.t -> (t, decode_error) result
+  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   (** {1 Operations on CRLs} *)
 

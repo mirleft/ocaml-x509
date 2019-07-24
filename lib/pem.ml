@@ -50,15 +50,15 @@ module Cs = struct
         if String.equal t t' then
           Ok (concat (List.rev acc), tail)
         else
-          Error (`Parse ("invalid end, expected " ^ t ^ ", found " ^ t'))
-      | _ :: _ -> Error (`Parse "invalid line, expected data or end")
-      | [] -> Error (`Parse "end of input")
+          Error (`Msg ("invalid end, expected " ^ t ^ ", found " ^ t'))
+      | _ :: _ -> Error (`Msg "invalid line, expected data or end")
+      | [] -> Error (`Msg "end of input")
     in
 
     let rec block acc = function
       | `Begin t :: tail ->
         accumulate t [] tail >>= fun (body, tail) ->
-        R.of_option ~none:(fun () -> Error (`Parse "base64 decoding failed"))
+        R.of_option ~none:(fun () -> Error (`Msg "base64 decoding failed"))
           (Nocrypto.Base64.decode body) >>= fun data ->
         block ((t, data) :: acc) tail
       | _::xs -> block acc xs
@@ -90,9 +90,9 @@ end
 let parse, unparse = Cs.(parse, unparse)
 
 let exactly_one ~what = function
-  | []  -> Error (`Parse ("No " ^ what))
+  | []  -> Error (`Msg ("No " ^ what))
   | [x] -> Ok x
-  | _   -> Error (`Parse ("Multiple " ^ what ^ "s"))
+  | _   -> Error (`Msg ("Multiple " ^ what ^ "s"))
 
 let foldM f data =
   let wrap acc data =

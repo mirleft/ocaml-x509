@@ -135,12 +135,14 @@ module Asn = struct
     projections_of Asn.der pkcs1_digest_info
 end
 
-let decode_pkcs1_digest_info, encode_pkcs1_digest_info =
-  Asn.(pkcs1_digest_info_of_cstruct, pkcs1_digest_info_to_cstruct)
+let decode_pkcs1_digest_info cs =
+  Asn_grammars.err_to_msg (Asn.pkcs1_digest_info_of_cstruct cs)
+
+let encode_pkcs1_digest_info = Asn.pkcs1_digest_info_to_cstruct
 
 let decode_der cs =
   let open Rresult.R.Infix in
-  Asn.certificate_of_cstruct cs >>| fun asn ->
+  Asn_grammars.err_to_msg (Asn.certificate_of_cstruct cs) >>| fun asn ->
   { asn ; raw = cs }
 
 let encode_der { raw ; _ } = raw

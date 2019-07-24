@@ -7,7 +7,7 @@ let cert file =
   let data = cs_mmap ("./regression/" ^ file ^ ".pem") in
   match Certificate.decode_pem data with
   | Ok cert -> cert
-  | Error m -> Alcotest.failf "certificate %s decoding error %a" file pp_decode_error m
+  | Error (`Msg m) -> Alcotest.failf "certificate %s decoding error %s" file m
 
 let jc = cert "jabber.ccc.de"
 let cacert = cert "cacert"

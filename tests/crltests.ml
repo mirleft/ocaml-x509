@@ -14,7 +14,7 @@ let with_loaded_files file ~f =
   try let r = f buf1 buf2 in Unix.close fd1 ; Unix.close fd2 ;
     match r with
     | Ok x -> x
-    | Error e -> Alcotest.failf "decoding error %a" pp_decode_error e
+    | Error (`Msg e) -> Alcotest.failf "decoding error %s" e
   with e -> Unix.close fd1 ; Unix.close fd2 ;
     Alcotest.failf "exception %s" (Printexc.to_string e)
 
@@ -25,7 +25,7 @@ let one f () =
       let pubkey = Certificate.public_key cert in
       CRL.decode_der crl >>= fun crl ->
       if not (CRL.validate crl pubkey) then
-        Error (`Parse "couldn't verify cert")
+        Error (`Msg "couldn't verify cert")
       else
         Ok ())
 

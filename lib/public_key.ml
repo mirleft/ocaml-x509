@@ -1,4 +1,3 @@
-
 type t = [
   | `RSA    of Nocrypto.Rsa.pub
   | `EC_pub of Asn.oid
@@ -50,7 +49,7 @@ let fingerprint ?(hash = `SHA256) pub =
 
 let encode_der = Asn.pub_info_to_cstruct
 
-let decode_der = Asn.pub_info_of_cstruct
+let decode_der cs = Asn_grammars.err_to_msg (Asn.pub_info_of_cstruct cs)
 
 let decode_pem cs =
   let open Rresult.R.Infix in
