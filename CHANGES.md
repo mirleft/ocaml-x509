@@ -1,3 +1,18 @@
+## 0.7.0 (2019-07-24)
+
+* major restructuring, it is unlikely any pre-0.7.0 users will work with 0.7.0+
+* remove sexp de&encoders
+* provide pretty-printers for validation errors (and types) instead of to_string functions
+* use result type and Rresult instead of custom result types and control monad
+* use a GADT map for certificate & csr extensions, distinguished names, general names (avoiding multiple extensions with the same OID, uses the gmap library)
+* use domain-name library for hostname validation (instead of custom string matching)
+* use ipaddr library for IPs in SubjectAlternativeName extension
+* remove Encoding module, provide {en,de}code_{der,pem} in the respective modules (which decoders return (_, [> `Msg of string ]) result, no exceptions raised)
+* fix DistributionPoint extension: the CRLissuer is a GeneralName, not a DistinguishedName
+* remove Extension.reason_code (Extension.reason was there before, and is now used)
+* remove bindings from toplevel, t is now Certificate.t, public_key is now Public_key.t
+* use alcotest instead of oUnit
+
 ## 0.6.3 (2019-04-02)
 
 * provide X509.Encoding.distinguished_name_of_cs -- similar to #87 which provided distinguished_name_to_cs
