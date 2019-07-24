@@ -275,8 +275,10 @@ module Extension : sig
 
   include Gmap.S with type 'a key = 'a k
 
+  (** [critical ext_key ext_value] is the critical bit in [ext_value]. *)
   val critical : 'a key -> 'a -> bool
 
+  (** [pp ppf ext_map] pretty-prints the extension map. *)
   val pp : t Fmt.t
 end
 
