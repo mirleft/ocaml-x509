@@ -9,14 +9,18 @@ let with_loaded_file file ~f =
     Unix.close fd;
     match r with
     | Ok data -> data
-    | Error m -> Alcotest.failf "decoding error in %s: %a" fullpath pp_decode_error m
-  with e -> Unix.close fd; Alcotest.failf "exception in %s: %s" fullpath (Printexc.to_string e)
+    | Error (`Msg m) -> Alcotest.failf "decoding error in %s: %s" fullpath m
+  with e ->
+    Unix.close fd;
+    Alcotest.failf "exception in %s: %s" fullpath (Printexc.to_string e)
 
 let priv =
   match with_loaded_file "private/cakey" ~f:Private_key.decode_pem with
   | `RSA x -> x
 
 let cert name = with_loaded_file name ~f:Certificate.decode_pem
+
+let host name = Domain_name.host_exn (Domain_name.of_string_exn name)
 
 let invalid_cas = [
   "cacert-basicconstraint-ca-false";
@@ -91,19 +95,30 @@ let test_valid_ca_cert server chain valid name ca () =
   | true , Error c -> Alcotest.failf "valid certificate %a" Validation.pp_validation_error c
 
 let strict_test_valid_ca_cert server chain valid name ca =
-  test_valid_ca_cert server chain valid (`Strict name) ca
+  test_valid_ca_cert server chain valid (`Strict, host name) ca
 
 let wildcard_test_valid_ca_cert server chain valid name ca =
-  test_valid_ca_cert server chain valid (`Wildcard name) ca
+  test_valid_ca_cert server chain valid (`Wildcard, host name) ca
 
 let test_cert c usages extusage () =
-  ( if List.for_all (fun u -> Certificate.supports_usage c u) usages then
+  let ku, eku =
+    let exts = Certificate.extensions c in
+    let ku = match Extension.(find Key_usage exts) with
+      | None -> []
+      | Some (_crit, ku) -> ku
+    and eku = match Extension.(find Ext_key_usage exts) with
+      | None -> []
+      | Some (_crit, eku) -> eku
+    in
+    ku, eku
+  in
+  ( if List.for_all (fun u -> List.mem u ku) usages then
       ()
     else
       Alcotest.fail "key usage is different" ) ;
   ( match extusage with
     | None -> ()
-    | Some x when List.for_all (fun u -> Certificate.supports_extended_usage c u) x -> ()
+    | Some x when List.for_all (fun u -> List.mem u eku) x -> ()
     | _ -> Alcotest.fail "extended key usage is broken" )
 
 let first_cert_tests =
@@ -159,8 +174,6 @@ let first_wildcard_cert_ca_test (ca, x) =
         let c = first_cert name in
         ("verification CA " ^ x ^ " cn blablbalbala", `Quick, strict_test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
         ("verification CA " ^ x ^ " cn blablbalbala", `Quick, wildcard_test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
-        ("certificate verification testing using CA " ^ x ^ " and *.foobar.com",
-         `Quick, strict_test_valid_ca_cert c [] true "*.foobar.com" [ca]) ::
         List.mapi (fun i cn ->
                    "wildcard certificate CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
                    `Quick, wildcard_test_valid_ca_cert c [] true cn [ca])

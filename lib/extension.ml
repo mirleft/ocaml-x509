@@ -25,19 +25,7 @@ type extended_key_usage = [
   | `Other of Asn.oid
 ]
 
-type general_name = [
-  | `Other         of (Asn.oid * string)
-  | `Rfc_822       of string
-  | `DNS           of string
-  | `X400_address  of unit
-  | `Directory     of Distinguished_name.t
-  | `EDI_party     of (string option * string)
-  | `URI           of string
-  | `IP            of Cstruct.t
-  | `Registered_id of Asn.oid
-]
-
-type authority_key_id = Cstruct.t option * general_name list * Z.t option
+type authority_key_id = Cstruct.t option * General_name.t * Z.t option
 
 type priv_key_usage_period = [
   | `Interval   of Ptime.t * Ptime.t
@@ -45,7 +33,7 @@ type priv_key_usage_period = [
   | `Not_before of Ptime.t
 ]
 
-type name_constraint = (general_name * int * int option) list
+type name_constraint = (General_name.b * int * int option) list
 
 type policy = [ `Any | `Something of Asn.oid ]
 
@@ -63,110 +51,162 @@ type reason = [
 ]
 
 type distribution_point_name =
-  [ `Full of general_name list
+  [ `Full of General_name.t
   | `Relative of Distinguished_name.t ]
 
 type distribution_point =
   distribution_point_name option *
   reason list option *
-  Distinguished_name.t option
+  General_name.t option
 
-type t = [
-  | `Unsupported       of Asn.oid * Cstruct.t
-  | `Subject_alt_name  of general_name list
-  | `Authority_key_id  of authority_key_id
-  | `Subject_key_id    of Cstruct.t
-  | `Issuer_alt_name   of general_name list
-  | `Key_usage         of key_usage list
-  | `Ext_key_usage     of extended_key_usage list
-  | `Basic_constraints of (bool * int option)
-  | `CRL_number        of int
-  | `Delta_CRL_indicator of int
-  | `Priv_key_period   of priv_key_usage_period
-  | `Name_constraints  of name_constraint * name_constraint
-  | `CRL_distribution_points of distribution_point list
-  | `Issuing_distribution_point of distribution_point_name option * bool * bool * reason list option * bool * bool
-  | `Freshest_CRL      of distribution_point list
-  | `Reason            of reason
-  | `Invalidity_date   of Ptime.t
-  | `Certificate_issuer of general_name list
-  | `Policies          of policy list
-]
+type 'a extension = bool * 'a
+
+type _ k =
+  | Unsupported : Asn.oid -> Cstruct.t extension k
+  | Subject_alt_name : General_name.t extension k
+  | Authority_key_id : authority_key_id extension k
+  | Subject_key_id : Cstruct.t extension k
+  | Issuer_alt_name : General_name.t extension k
+  | Key_usage : key_usage list extension k
+  | Ext_key_usage : extended_key_usage list extension k
+  | Basic_constraints : (bool * int option) extension k
+  | CRL_number : int extension k
+  | Delta_CRL_indicator : int extension k
+  | Priv_key_period : priv_key_usage_period extension k
+  | Name_constraints : (name_constraint * name_constraint) extension k
+  | CRL_distribution_points : distribution_point list extension k
+  | Issuing_distribution_point : (distribution_point_name option * bool * bool * reason list option * bool * bool) extension k
+  | Freshest_CRL : distribution_point list extension k
+  | Reason : reason extension k
+  | Invalidity_date : Ptime.t extension k
+  | Certificate_issuer : General_name.t extension k
+  | Policies : policy list extension k
+
+let pp_one : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
+  let c_to_str b = if b then "critical " else "" in
+  match k, v with
+  | Subject_alt_name, (crit, _alt) ->
+    Fmt.pf ppf "%ssubjectAlternativeName" (c_to_str crit)
+  | Authority_key_id, (crit, _kid) ->
+    Fmt.pf ppf "%sauthorityKeyIdentifier" (c_to_str crit)
+  | Subject_key_id, (crit, _kid) ->
+    Fmt.pf ppf "%ssubjectKeyIdentifier" (c_to_str crit)
+  | Issuer_alt_name, (crit, _alt) ->
+    Fmt.pf ppf "%sissuerAlternativeNames" (c_to_str crit)
+  | Key_usage, (crit, _ku) ->
+    Fmt.pf ppf "%skeyUsage" (c_to_str crit)
+  | Ext_key_usage, (crit, _eku) ->
+    Fmt.pf ppf "%sextendedKeyUsage" (c_to_str crit)
+  | Basic_constraints, (crit, _bc) ->
+    Fmt.pf ppf "%sbasicConstraints" (c_to_str crit)
+  | CRL_number, (crit, _i) ->
+    Fmt.pf ppf "%scRLNumber" (c_to_str crit)
+  | Delta_CRL_indicator, (crit, _indicator) ->
+    Fmt.pf ppf "%sdeltaCRLIndicator" (c_to_str crit)
+  | Priv_key_period, (crit, _) ->
+    Fmt.pf ppf "%sprivateKeyUsagePeriod" (c_to_str crit)
+  | Name_constraints, (crit, _) ->
+    Fmt.pf ppf "%snameConstraints" (c_to_str crit)
+  | CRL_distribution_points, (crit, _) ->
+    Fmt.pf ppf "%scRLDistributionPoints" (c_to_str crit)
+  | Issuing_distribution_point, (crit, _) ->
+    Fmt.pf ppf "%sissuingDistributionPoint" (c_to_str crit)
+  | Freshest_CRL, (crit, _) ->
+    Fmt.pf ppf "%sfreshestCRL" (c_to_str crit)
+  | Reason, (crit, _) ->
+    Fmt.pf ppf "%sreason" (c_to_str crit)
+  | Invalidity_date, (crit, _) ->
+    Fmt.pf ppf "%sinvalidityDate" (c_to_str crit)
+  | Certificate_issuer, (crit, _) ->
+    Fmt.pf ppf "%scertificateIssuers" (c_to_str crit)
+  | Policies, (crit, _) ->
+    Fmt.pf ppf "%spolicies" (c_to_str crit)
+  | Unsupported oid, (crit, cs) ->
+    Fmt.pf ppf "%sunsupported %a: %a" (c_to_str crit) Asn.OID.pp oid
+      Cstruct.hexdump_pp cs
+
+module ID = Registry.Cert_extn
+
+let to_oid : type a. a k -> Asn.oid = function
+  | Unsupported oid -> oid
+  | Subject_alt_name -> ID.subject_alternative_name
+  | Authority_key_id -> ID.authority_key_identifier
+  | Subject_key_id -> ID.subject_key_identifier
+  | Issuer_alt_name -> ID.issuer_alternative_name
+  | Key_usage -> ID.key_usage
+  | Ext_key_usage -> ID.extended_key_usage
+  | Basic_constraints -> ID.basic_constraints
+  | CRL_number -> ID.crl_number
+  | Delta_CRL_indicator -> ID.delta_crl_indicator
+  | Priv_key_period -> ID.private_key_usage_period
+  | Name_constraints -> ID.name_constraints
+  | CRL_distribution_points -> ID.crl_distribution_points
+  | Issuing_distribution_point -> ID.issuing_distribution_point
+  | Freshest_CRL -> ID.freshest_crl
+  | Reason -> ID.reason_code
+  | Invalidity_date -> ID.invalidity_date
+  | Certificate_issuer -> ID.certificate_issuer
+  | Policies -> ID.certificate_policies_2
+
+let critical : type a. a k -> a -> bool = fun k v ->
+  match k, v with
+  | Unsupported _, (b, _) -> b
+  | Subject_alt_name, (b, _) -> b
+  | Authority_key_id, (b, _) -> b
+  | Subject_key_id, (b, _) -> b
+  | Issuer_alt_name, (b, _) -> b
+  | Key_usage, (b, _) -> b
+  | Ext_key_usage, (b, _) -> b
+  | Basic_constraints, (b, _) -> b
+  | CRL_number, (b, _) -> b
+  | Delta_CRL_indicator, (b, _) -> b
+  | Priv_key_period, (b, _) -> b
+  | Name_constraints, (b, _) -> b
+  | CRL_distribution_points, (b, _) -> b
+  | Issuing_distribution_point, (b, _) -> b
+  | Freshest_CRL, (b, _) -> b
+  | Reason, (b, _) -> b
+  | Invalidity_date, (b, _) -> b
+  | Certificate_issuer, (b, _) -> b
+  | Policies, (b, _) -> b
+
+module K = struct
+  type 'a t = 'a k
+
+  let compare : type a b. a t -> b t -> (a, b) Gmap.Order.t = fun t t' ->
+    let open Gmap.Order in
+    match t, t' with
+    | Subject_alt_name, Subject_alt_name -> Eq
+    | Authority_key_id, Authority_key_id -> Eq
+    | Subject_key_id, Subject_key_id -> Eq
+    | Issuer_alt_name, Issuer_alt_name -> Eq
+    | Key_usage, Key_usage -> Eq
+    | Ext_key_usage, Ext_key_usage -> Eq
+    | Basic_constraints, Basic_constraints -> Eq
+    | CRL_number, CRL_number -> Eq
+    | Delta_CRL_indicator, Delta_CRL_indicator -> Eq
+    | Priv_key_period, Priv_key_period -> Eq
+    | Name_constraints, Name_constraints -> Eq
+    | CRL_distribution_points, CRL_distribution_points -> Eq
+    | Issuing_distribution_point, Issuing_distribution_point -> Eq
+    | Freshest_CRL, Freshest_CRL -> Eq
+    | Reason, Reason -> Eq
+    | Invalidity_date, Invalidity_date -> Eq
+    | Certificate_issuer, Certificate_issuer -> Eq
+    | Policies, Policies -> Eq
+    | Unsupported oid, Unsupported oid' when Asn.OID.equal oid oid' -> Eq
+    | a, b ->
+      let r = Asn.OID.compare (to_oid a) (to_oid b) in
+      if r = 0 then assert false else if r < 0 then Lt else Gt
+end
+
+include Gmap.Make(K)
+
+let pp ppf m = iter (fun (B (k, v)) -> pp_one k ppf v ; Fmt.sp ppf ()) m
 
 module Asn = struct
   open Asn.S
   open Asn_grammars
-
-  module General_name = struct
-    (* GeneralName is also pretty pervasive. *)
-
-    (* OID x ANY. Hunt down the alternatives.... *)
-    (* XXX
-     * Cross-check. NSS seems to accept *all* oids here and just assumes UTF8.
-     * *)
-    let another_name =
-      let open Registry in
-      let f = function
-        | (oid, `C1 n) -> (oid, n)
-        | (oid, `C2 n) -> (oid, n)
-        | (oid, `C3 _) -> (oid, "")
-      and g = function
-        | (oid, "") -> (oid, `C3 ())
-        | (oid, n ) when Name_extn.is_utf8_id oid -> (oid, `C1 n)
-        | (oid, n ) -> (oid, `C2 n) in
-      map f g @@
-      sequence2
-        (required ~label:"type-id" oid)
-        (required ~label:"value" @@
-         explicit 0
-           (choice3 utf8_string ia5_string null))
-
-    and or_address = null (* Horrible crap, need to fill it. *)
-
-    let edi_party_name =
-      sequence2
-        (optional ~label:"nameAssigner" @@ implicit 0 Distinguished_name.Asn.directory_name)
-        (required ~label:"partyName"    @@ implicit 1 Distinguished_name.Asn.directory_name)
-
-    let general_name =
-      let f = function
-        | `C1 (`C1 x) -> `Other         x
-        | `C1 (`C2 x) -> `Rfc_822       x
-        | `C1 (`C3 x) -> `DNS           x
-        | `C1 (`C4 x) -> `X400_address  x
-        | `C1 (`C5 x) -> `Directory     x
-        | `C1 (`C6 x) -> `EDI_party     x
-        | `C2 (`C1 x) -> `URI           x
-        | `C2 (`C2 x) -> `IP            x
-        | `C2 (`C3 x) -> `Registered_id x
-      and g = function
-        | `Other         x -> `C1 (`C1 x)
-        | `Rfc_822       x -> `C1 (`C2 x)
-        | `DNS           x -> `C1 (`C3 x)
-        | `X400_address  x -> `C1 (`C4 x)
-        | `Directory     x -> `C1 (`C5 x)
-        | `EDI_party     x -> `C1 (`C6 x)
-        | `URI           x -> `C2 (`C1 x)
-        | `IP            x -> `C2 (`C2 x)
-        | `Registered_id x -> `C2 (`C3 x)
-      in
-      map f g @@
-      choice2
-        (choice6
-           (implicit 0 another_name)
-           (implicit 1 ia5_string)
-           (implicit 2 ia5_string)
-           (implicit 3 or_address)
-           (* Everybody uses this as explicit, contrary to x509 (?) *)
-           (explicit 4 Distinguished_name.Asn.name)
-           (implicit 5 edi_party_name))
-        (choice3
-           (implicit 6 ia5_string)
-           (implicit 7 octet_string)
-           (implicit 8 oid))
-
-    let gen_names = sequence_of general_name
-  end
 
   let display_text =
     map (function `C1 s -> s | `C2 s -> s | `C3 s -> s | `C4 s -> s)
@@ -226,12 +266,12 @@ module Asn = struct
       (optional ~label:"pathLen" int)
 
   let authority_key_id =
-    map (fun (a, b, c) -> (a, def  [] b, c))
-        (fun (a, b, c) -> (a, def' [] b, c))
+    map (fun (a, b, c) -> (a, def  General_name.empty b, c))
+        (fun (a, b, c) -> (a, def' General_name.empty b, c))
     @@
     sequence3
       (optional ~label:"keyIdentifier"  @@ implicit 0 octet_string)
-      (optional ~label:"authCertIssuer" @@ implicit 1 General_name.gen_names)
+      (optional ~label:"authCertIssuer" @@ implicit 1 General_name.Asn.gen_names)
       (optional ~label:"authCertSN"     @@ implicit 2 integer)
 
   let priv_key_usage_period =
@@ -255,7 +295,7 @@ module Asn = struct
           (fun (base, min, max) -> (base, def' 0 min, max))
       @@
       sequence3
-        (required ~label:"base"       General_name.general_name)
+        (required ~label:"base"       General_name.Asn.general_name)
         (optional ~label:"minimum" @@ implicit 0 int)
         (optional ~label:"maximum" @@ implicit 1 int)
     in
@@ -319,14 +359,14 @@ module Asn = struct
       (function | `Full s -> `C1 s | `Relative s -> `C2 s)
     @@
     choice2
-      (implicit 0 General_name.gen_names)
+      (implicit 0 General_name.Asn.gen_names)
       (implicit 1 Distinguished_name.Asn.name)
 
   let distribution_point =
     sequence3
       (optional ~label:"distributionPoint" @@ explicit 0 distribution_point_name)
       (optional ~label:"reasons"           @@ implicit 1 reason)
-      (optional ~label:"cRLIssuer"         @@ implicit 2 Distinguished_name.Asn.name)
+      (optional ~label:"cRLIssuer"         @@ implicit 2 General_name.Asn.gen_names)
 
   let crl_distribution_points = sequence_of distribution_point
 
@@ -359,7 +399,7 @@ module Asn = struct
     let rev = List.map (fun (k, v) -> (v, k)) alist in
     enumerated (fun i -> List.assoc i alist) (fun k -> List.assoc k rev)
 
-  let gen_names_of_cs, gen_names_to_cs       = project_exn General_name.gen_names
+  let gen_names_of_cs, gen_names_to_cs       = project_exn General_name.Asn.gen_names
   and auth_key_id_of_cs, auth_key_id_to_cs   = project_exn authority_key_id
   and subj_key_id_of_cs, subj_key_id_to_cs   = project_exn octet_string
   and key_usage_of_cs, key_usage_to_cs       = project_exn key_usage
@@ -376,90 +416,77 @@ module Asn = struct
 
   (* XXX 4.2.1.4. - cert policies! ( and other x509 extensions ) *)
 
-  let reparse_extension_exn = case_of_oid_f [
-    (ID.subject_alternative_name, fun cs ->
-      `Subject_alt_name (gen_names_of_cs cs)) ;
-
-    (ID.issuer_alternative_name, fun cs ->
-      `Issuer_alt_name (gen_names_of_cs cs)) ;
-
-    (ID.authority_key_identifier, fun cs ->
-      `Authority_key_id (auth_key_id_of_cs cs)) ;
-
-    (ID.subject_key_identifier, fun cs ->
-      `Subject_key_id (subj_key_id_of_cs cs)) ;
-
-    (ID.key_usage, fun cs ->
-      `Key_usage (key_usage_of_cs cs)) ;
-
-    (ID.basic_constraints, fun cs ->
-      `Basic_constraints (basic_constr_of_cs cs));
-
-    (ID.crl_number, fun cs ->
-      `CRL_number (int_of_cs cs));
-
-    (ID.delta_crl_indicator, fun cs ->
-      `Delta_CRL_indicator (int_of_cs cs));
-
-    (ID.extended_key_usage, fun cs ->
-      `Ext_key_usage (e_key_usage_of_cs cs)) ;
-
-    (ID.private_key_usage_period, fun cs ->
-      `Priv_key_period (pr_key_peri_of_cs cs)) ;
-
-    (ID.name_constraints, fun cs ->
-      `Name_constraints (name_con_of_cs cs)) ;
-
-    (ID.crl_distribution_points, fun cs ->
-      `CRL_distribution_points (crl_distrib_of_cs cs)) ;
-
-    (ID.issuing_distribution_point, fun cs ->
-      `Issuing_distribution_point (issuing_dp_of_cs cs)) ;
-
-    (ID.freshest_crl, fun cs ->
-      `Freshest_CRL (crl_distrib_of_cs cs)) ;
-
-    (ID.reason_code, fun cs ->
-      `Reason (crl_reason_of_cs cs)) ;
-
-    (ID.invalidity_date, fun cs ->
-      `Invalidity_date (time_of_cs cs)) ;
-
-    (ID.certificate_issuer, fun cs ->
-      `Certificate_issuer (gen_names_of_cs cs)) ;
-
-    (ID.certificate_policies_2, fun cs ->
-      `Policies (cert_pol_of_cs cs))
+  let reparse_extension_exn crit = case_of_oid_f [
+      (ID.subject_alternative_name,
+       fun cs -> B (Subject_alt_name, (crit, gen_names_of_cs cs))) ;
+      (ID.issuer_alternative_name,
+       fun cs -> B (Issuer_alt_name, (crit, gen_names_of_cs cs))) ;
+      (ID.authority_key_identifier,
+       fun cs -> B (Authority_key_id, (crit, auth_key_id_of_cs cs))) ;
+      (ID.subject_key_identifier,
+       fun cs -> B (Subject_key_id, (crit, subj_key_id_of_cs cs))) ;
+      (ID.key_usage,
+       fun cs -> B (Key_usage, (crit, key_usage_of_cs cs))) ;
+      (ID.basic_constraints,
+       fun cs -> B (Basic_constraints, (crit, basic_constr_of_cs cs))) ;
+      (ID.crl_number,
+       fun cs -> B (CRL_number, (crit, int_of_cs cs))) ;
+      (ID.delta_crl_indicator,
+       fun cs -> B (Delta_CRL_indicator, (crit, int_of_cs cs))) ;
+      (ID.extended_key_usage,
+       fun cs -> B (Ext_key_usage, (crit, e_key_usage_of_cs cs))) ;
+      (ID.private_key_usage_period,
+       fun cs -> B (Priv_key_period, (crit, pr_key_peri_of_cs cs))) ;
+      (ID.name_constraints,
+       fun cs -> B (Name_constraints, (crit, name_con_of_cs cs))) ;
+      (ID.crl_distribution_points,
+       fun cs -> B (CRL_distribution_points, (crit, crl_distrib_of_cs cs))) ;
+      (ID.issuing_distribution_point,
+       fun cs -> B (Issuing_distribution_point, (crit, issuing_dp_of_cs cs))) ;
+      (ID.freshest_crl,
+       fun cs -> B (Freshest_CRL, (crit, crl_distrib_of_cs cs))) ;
+      (ID.reason_code,
+       fun cs -> B (Reason, (crit, crl_reason_of_cs cs))) ;
+      (ID.invalidity_date,
+       fun cs -> B (Invalidity_date, (crit, time_of_cs cs))) ;
+      (ID.certificate_issuer,
+       fun cs -> B (Certificate_issuer, (crit, gen_names_of_cs cs))) ;
+      (ID.certificate_policies_2,
+       fun cs -> B (Policies, (crit, cert_pol_of_cs cs)))
     ]
-    ~default:(fun oid cs -> `Unsupported (oid, cs))
+      ~default:(fun oid -> fun cs -> B (Unsupported oid, (crit, cs)))
 
-  let unparse_extension = function
-    | `Subject_alt_name  x -> (ID.subject_alternative_name, gen_names_to_cs    x)
-    | `Issuer_alt_name   x -> (ID.issuer_alternative_name , gen_names_to_cs    x)
-    | `Authority_key_id  x -> (ID.authority_key_identifier, auth_key_id_to_cs  x)
-    | `Subject_key_id    x -> (ID.subject_key_identifier  , subj_key_id_to_cs  x)
-    | `Key_usage         x -> (ID.key_usage               , key_usage_to_cs    x)
-    | `Basic_constraints x -> (ID.basic_constraints       , basic_constr_to_cs x)
-    | `CRL_number        x -> (ID.crl_number              , int_to_cs          x)
-    | `Delta_CRL_indicator x -> (ID.delta_crl_indicator   , int_to_cs          x)
-    | `Ext_key_usage     x -> (ID.extended_key_usage      , e_key_usage_to_cs  x)
-    | `Priv_key_period   x -> (ID.private_key_usage_period, pr_key_peri_to_cs  x)
-    | `Name_constraints  x -> (ID.name_constraints        , name_con_to_cs     x)
-    | `CRL_distribution_points x -> (ID.crl_distribution_points, crl_distrib_to_cs x)
-    | `Issuing_distribution_point x -> (ID.issuing_distribution_point, issuing_dp_to_cs x)
-    | `Freshest_CRL      x -> (ID.freshest_crl            , crl_distrib_to_cs  x)
-    | `Reason            x -> (ID.reason_code             , crl_reason_to_cs   x)
-    | `Invalidity_date   x -> (ID.invalidity_date         , time_to_cs         x)
-    | `Certificate_issuer x -> (ID.certificate_issuer     , gen_names_to_cs    x)
-    | `Policies          x -> (ID.certificate_policies_2  , cert_pol_to_cs     x)
-    | `Unsupported (oid, cs) -> (oid, cs)
+  let unparse_extension (B (k, v)) =
+    let v' = match k, v with
+      | Subject_alt_name, (_, x) -> gen_names_to_cs x
+      | Issuer_alt_name, (_, x) -> gen_names_to_cs x
+      | Authority_key_id, (_, x) -> auth_key_id_to_cs x
+      | Subject_key_id, (_, x) -> subj_key_id_to_cs  x
+      | Key_usage, (_, x) -> key_usage_to_cs x
+      | Basic_constraints, (_, x) -> basic_constr_to_cs x
+      | CRL_number, (_, x) -> int_to_cs x
+      | Delta_CRL_indicator, (_, x) -> int_to_cs x
+      | Ext_key_usage, (_, x) -> e_key_usage_to_cs x
+      | Priv_key_period, (_, x) -> pr_key_peri_to_cs x
+      | Name_constraints, (_, x) -> name_con_to_cs x
+      | CRL_distribution_points, (_, x) -> crl_distrib_to_cs x
+      | Issuing_distribution_point, (_, x) -> issuing_dp_to_cs x
+      | Freshest_CRL, (_, x) -> crl_distrib_to_cs x
+      | Reason, (_, x) -> crl_reason_to_cs x
+      | Invalidity_date, (_, x) -> time_to_cs x
+      | Certificate_issuer, (_, x) -> gen_names_to_cs x
+      | Policies, (_, x) -> cert_pol_to_cs x
+      | Unsupported _, (_, x) -> x
+    in
+    to_oid k, critical k v, v'
 
   let extensions_der =
     let extension =
-      let f (oid, b, cs) =
-        (def false b, reparse_extension_exn (oid, cs))
-      and g (b, ext) =
-        let (oid, cs) = unparse_extension ext in (oid, def' false b, cs)
+      let f (oid, crit, cs) =
+        reparse_extension_exn (def false crit) (oid, cs)
+      and g b =
+        let oid, crit, cs = unparse_extension b in
+        (oid, def' false crit, cs)
       in
       map f g @@
       sequence3
@@ -467,5 +494,13 @@ module Asn = struct
         (optional ~label:"critical" bool) (* default false *)
         (required ~label:"value"    octet_string)
     in
-    sequence_of extension
+    let f exts =
+      List.fold_left (fun map (B (k, v)) ->
+          match add_unless_bound k v map with
+          | None -> parse_error "%a already bound" (pp_one k) v
+          | Some b -> b)
+        empty exts
+    and g map = bindings map
+    in
+    map f g @@ sequence_of extension
 end

@@ -39,3 +39,5 @@ let project_exn asn =
     | Ok a      -> a
     | Error err -> Asn.S.error err in
   (dec, Asn.encode c)
+
+let err_to_msg f = Rresult.R.reword_error (function `Parse msg -> `Msg msg) f

@@ -1,59 +1,78 @@
+type _ k =
+  | CN : string k
+  | Serialnumber : string k
+  | C : string k
+  | L : string k
+  | SP : string k
+  | O : string k
+  | OU : string k
+  | T : string k
+  | DNQ : string k
+  | Mail : string k
+  | DC : string k
+  | Given_name : string k
+  | Surname : string k
+  | Initials : string k
+  | Pseudonym : string k
+  | Generation : string k
+  | Other : Asn.oid -> string k
 
-type component = [
-  | `CN           of string
-  | `Serialnumber of string
-  | `C            of string
-  | `L            of string
-  | `SP           of string
-  | `O            of string
-  | `OU           of string
-  | `T            of string
-  | `DNQ          of string
-  | `Mail         of string
-  | `DC           of string
-  | `Given_name   of string
-  | `Surname      of string
-  | `Initials     of string
-  | `Pseudonym    of string
-  | `Generation   of string
-  | `Other        of Asn.oid * string
-]
+module K = struct
+  type 'a t = 'a k
 
-let pp_component ppf = function
-  | `CN s -> Fmt.pf ppf "CN=%s" s
-  | `Serialnumber s -> Fmt.pf ppf "Serialnumber=%s" s
-  | `C s -> Fmt.pf ppf "C=%s" s
-  | `L s -> Fmt.pf ppf "L=%s" s
-  | `SP s -> Fmt.pf ppf "SP=%s" s
-  | `O s -> Fmt.pf ppf "O=%s" s
-  | `OU s -> Fmt.pf ppf "OU=%s" s
-  | `T s -> Fmt.pf ppf "T=%s" s
-  | `DNQ s -> Fmt.pf ppf "DNQ=%s" s
-  | `Mail s -> Fmt.pf ppf "Mail=%s" s
-  | `DC s -> Fmt.pf ppf "DC=%s" s
-  | `Given_name s -> Fmt.pf ppf "Given_name=%s" s
-  | `Surname s -> Fmt.pf ppf "Surname=%s" s
-  | `Initials s -> Fmt.pf ppf "Initials=%s" s
-  | `Pseudonym s -> Fmt.pf ppf "Pseudonym=%s" s
-  | `Generation s -> Fmt.pf ppf "Generation=%s" s
-  | `Other (oid, s) -> Fmt.pf ppf "%a=%s" Asn.OID.pp oid s
+  let compare : type a b. a t -> b t -> (a, b) Gmap.Order.t = fun t t' ->
+    let open Gmap.Order in
+    match t, t' with
+    | CN, CN -> Eq | CN, _ -> Lt | _, CN -> Gt
+    | Serialnumber, Serialnumber -> Eq | Serialnumber, _ -> Lt | _, Serialnumber -> Gt
+    | C, C -> Eq | C, _ -> Lt | _, C -> Gt
+    | L, L -> Eq | L, _ -> Lt | _, L -> Gt
+    | SP, SP -> Eq | SP, _ -> Lt | _, SP -> Gt
+    | O, O -> Eq | O, _ -> Lt | _, O -> Gt
+    | OU, OU -> Eq | OU, _ -> Lt | _, OU -> Gt
+    | T, T -> Eq | T, _ -> Lt | _, T -> Gt
+    | DNQ, DNQ -> Eq | DNQ, _ -> Lt | _, DNQ -> Gt
+    | Mail, Mail -> Eq | Mail, _ -> Lt | _, Mail -> Gt
+    | DC, DC -> Eq | DC, _ -> Lt | _, DC -> Gt
+    | Given_name, Given_name -> Eq | Given_name, _ -> Lt | _, Given_name -> Gt
+    | Surname, Surname -> Eq | Surname, _ -> Lt | _, Surname -> Gt
+    | Initials, Initials -> Eq | Initials, _ -> Lt | _, Initials -> Gt
+    | Pseudonym, Pseudonym -> Eq | Pseudonym, _ -> Lt | _, Pseudonym -> Gt
+    | Generation, Generation -> Eq | Generation, _ -> Lt | _, Generation -> Gt
+    | Other a, Other b ->
+      match Asn.OID.compare a b with
+      | 0 -> Eq
+      | x when x < 0 -> Lt
+      | _ -> Gt
+end
 
-type t = component list
+include Gmap.Make(K)
 
-let compare_unordered_lists cmp l1 l2 =
-  let rec loop = function
-    | (x::xs, y::ys) -> ( match cmp x y with 0 -> loop (xs, ys) | n -> n )
-    | ([], [])       ->  0
-    | ([], _ )       -> -1
-    | (_ , [])       ->  1
-  in
-  loop List.(sort cmp l1, sort cmp l2)
+let pp_component : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
+  match k, v with
+  | CN, s -> Fmt.pf ppf "CN=%s" s
+  | Serialnumber, s -> Fmt.pf ppf "Serialnumber=%s" s
+  | C, s -> Fmt.pf ppf "C=%s" s
+  | L, s -> Fmt.pf ppf "L=%s" s
+  | SP, s -> Fmt.pf ppf "SP=%s" s
+  | O, s -> Fmt.pf ppf "O=%s" s
+  | OU, s -> Fmt.pf ppf "OU=%s" s
+  | T, s -> Fmt.pf ppf "T=%s" s
+  | DNQ, s -> Fmt.pf ppf "DNQ=%s" s
+  | Mail, s -> Fmt.pf ppf "Mail=%s" s
+  | DC, s -> Fmt.pf ppf "DC=%s" s
+  | Given_name, s -> Fmt.pf ppf "Given_name=%s" s
+  | Surname, s -> Fmt.pf ppf "Surname=%s" s
+  | Initials, s -> Fmt.pf ppf "Initials=%s" s
+  | Pseudonym, s -> Fmt.pf ppf "Pseudonym=%s" s
+  | Generation, s -> Fmt.pf ppf "Generation=%s" s
+  | Other oid, s -> Fmt.pf ppf "%a=%s" Asn.OID.pp oid s
 
-(* rfc5280 section 7.1. -- we're too strict on strings and should preserve the
- * order. *)
-let equal n1 n2 = compare_unordered_lists compare n1 n2 = 0
+let equal a b = equal { f = fun _ a b -> compare a b = 0 } a b
 
-let pp ppf dn = Fmt.(list ~sep:(unit "/") pp_component) ppf dn
+let pp ppf dn =
+  let pp_b ppf (B (k, v)) = pp_component k ppf v in
+  Fmt.(list ~sep:(unit "/") pp_b) ppf (bindings dn)
 
 module Asn = struct
   open Asn.S
@@ -85,42 +104,42 @@ module Asn = struct
     let open Registry in
 
     let a_f = case_of_oid_f [
-      (domain_component              , fun x -> `DC           x) ;
-      (X520.common_name              , fun x -> `CN           x) ;
-      (X520.serial_number            , fun x -> `Serialnumber x) ;
-      (X520.country_name             , fun x -> `C            x) ;
-      (X520.locality_name            , fun x -> `L            x) ;
-      (X520.state_or_province_name   , fun x -> `SP           x) ;
-      (X520.organization_name        , fun x -> `O            x) ;
-      (X520.organizational_unit_name , fun x -> `OU           x) ;
-      (X520.title                    , fun x -> `T            x) ;
-      (X520.dn_qualifier             , fun x -> `DNQ          x) ;
-      (PKCS9.email                   , fun x -> `Mail         x) ;
-      (X520.given_name               , fun x -> `Given_name   x) ;
-      (X520.surname                  , fun x -> `Surname      x) ;
-      (X520.initials                 , fun x -> `Initials     x) ;
-      (X520.pseudonym                , fun x -> `Pseudonym    x) ;
-      (X520.generation_qualifier     , fun x -> `Generation   x) ]
-      ~default:(fun oid x -> `Other (oid, x))
+      (domain_component              , fun x -> B (DC, x)) ;
+      (X520.common_name              , fun x -> B (CN, x)) ;
+      (X520.serial_number            , fun x -> B (Serialnumber, x)) ;
+      (X520.country_name             , fun x -> B (C, x)) ;
+      (X520.locality_name            , fun x -> B (L, x)) ;
+      (X520.state_or_province_name   , fun x -> B (SP, x)) ;
+      (X520.organization_name        , fun x -> B (O, x)) ;
+      (X520.organizational_unit_name , fun x -> B (OU, x)) ;
+      (X520.title                    , fun x -> B (T, x)) ;
+      (X520.dn_qualifier             , fun x -> B (DNQ, x)) ;
+      (PKCS9.email                   , fun x -> B (Mail, x)) ;
+      (X520.given_name               , fun x -> B (Given_name, x)) ;
+      (X520.surname                  , fun x -> B (Surname, x)) ;
+      (X520.initials                 , fun x -> B (Initials, x)) ;
+      (X520.pseudonym                , fun x -> B (Pseudonym, x)) ;
+      (X520.generation_qualifier     , fun x -> B (Generation, x)) ]
+      ~default:(fun oid x -> B (Other oid, x))
 
-    and a_g = function
-      | `DC           x   -> (domain_component              , x )
-      | `CN           x   -> (X520.common_name              , x )
-      | `Serialnumber x   -> (X520.serial_number            , x )
-      | `C            x   -> (X520.country_name             , x )
-      | `L            x   -> (X520.locality_name            , x )
-      | `SP           x   -> (X520.state_or_province_name   , x )
-      | `O            x   -> (X520.organization_name        , x )
-      | `OU           x   -> (X520.organizational_unit_name , x )
-      | `T            x   -> (X520.title                    , x )
-      | `DNQ          x   -> (X520.dn_qualifier             , x )
-      | `Mail         x   -> (PKCS9.email                   , x )
-      | `Given_name   x   -> (X520.given_name               , x )
-      | `Surname      x   -> (X520.surname                  , x )
-      | `Initials     x   -> (X520.initials                 , x )
-      | `Pseudonym    x   -> (X520.pseudonym                , x )
-      | `Generation   x   -> (X520.generation_qualifier     , x )
-      | `Other (oid,  x ) -> (oid                           , x )
+    and a_g (B (k, v)) : Asn.oid * string = match k, v with
+      | DC, x -> (domain_component, x )
+      | CN, x -> (X520.common_name, x )
+      | Serialnumber, x -> (X520.serial_number, x )
+      | C, x   -> (X520.country_name, x )
+      | L, x   -> (X520.locality_name, x )
+      | SP, x   -> (X520.state_or_province_name, x )
+      | O, x   -> (X520.organization_name, x )
+      | OU, x   -> (X520.organizational_unit_name, x )
+      | T, x   -> (X520.title, x )
+      | DNQ, x   -> (X520.dn_qualifier, x )
+      | Mail, x   -> (PKCS9.email, x )
+      | Given_name, x   -> (X520.given_name, x )
+      | Surname, x   -> (X520.surname, x )
+      | Initials, x   -> (X520.initials, x )
+      | Pseudonym, x   -> (X520.pseudonym, x )
+      | Generation, x   -> (X520.generation_qualifier, x )
+      | Other oid, x -> (oid, x )
     in
 
     let attribute_tv =
@@ -128,12 +147,27 @@ module Asn = struct
       sequence2
         (required ~label:"attr type"  oid)
         (* This is ANY according to rfc5280. *)
-        (required ~label:"attr value" directory_name) in
-    let rd_name      = set_of attribute_tv in
+        (required ~label:"attr value" directory_name)
+    in
+    let rd_name =
+      let f exts =
+        List.fold_left (fun map (B (k, v)) ->
+            match add_unless_bound k v map with
+            | None -> parse_error "%a already bound" (pp_component k) v
+            | Some b -> b)
+          empty exts
+      and g map = bindings map
+      in
+      map f g @@ set_of attribute_tv
+    in
     let rdn_sequence =
-      map List.concat (List.map (fun x -> [x]))
-      @@
-      sequence_of rd_name
+      let f rdns =
+        (* for each component, the last one present in any rdn wins *)
+        List.fold_left (fun m a -> union { f = fun _ _ y -> Some y } m a)
+          empty rdns
+      and g map = [ map ]
+      in
+      map f g @@ sequence_of rd_name
     in
     rdn_sequence (* A vacuous choice, in the standard. *)
 
@@ -141,6 +175,6 @@ module Asn = struct
     projections_of Asn.der name
 end
 
-let decode_der = Asn.name_of_cstruct
+let decode_der cs = Asn_grammars.err_to_msg (Asn.name_of_cstruct cs)
 
 let encode_der = Asn.name_to_cstruct

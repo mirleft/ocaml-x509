@@ -78,8 +78,10 @@ let decode_pem cs =
   let r, _ = List.partition rsa_p data
   and p, _ = List.partition pk_p data
   in
-  Pem.foldM (fun (_, k) -> Asn.rsa_private_of_cstruct k) r >>= fun k ->
-  Pem.foldM (fun (_, k) -> Asn.private_of_cstruct k) p >>= fun k' ->
+  Pem.foldM (fun (_, k) ->
+      Asn_grammars.err_to_msg (Asn.rsa_private_of_cstruct k)) r >>= fun k ->
+  Pem.foldM (fun (_, k) ->
+      Asn_grammars.err_to_msg (Asn.private_of_cstruct k)) p >>= fun k' ->
   Pem.exactly_one ~what:"private key" (k @ k') >>| fun k ->
   `RSA k
 

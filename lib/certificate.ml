@@ -1,8 +1,6 @@
 open Nocrypto
 open Astring
 
-open Common
-
 type key_type = [ `RSA | `EC of Asn.oid ]
 
 (*
@@ -18,7 +16,7 @@ type tBSCertificate = {
   pk_info    : Public_key.t ;
   issuer_id  : Cstruct.t option ;
   subject_id : Cstruct.t option ;
-  extensions : (bool * Extension.t) list
+  extensions : Extension.t
 }
 
 type certificate = {
@@ -68,7 +66,7 @@ module Asn = struct
 
   let tBSCertificate =
     let f = fun (a, (b, (c, (d, (e, (f, (g, (h, (i, j))))))))) ->
-      let extn = match j with None -> [] | Some xs -> xs
+      let extn = match j with None -> Extension.empty | Some xs -> xs
       in
       { version    = def `V1 a ; serial     = b ;
         signature  = c         ; issuer     = d ;
@@ -81,7 +79,7 @@ module Asn = struct
         validity   = e ; subject    = f ;
         pk_info    = g ; issuer_id  = h ;
         subject_id = i ; extensions = j } ->
-      let extn = match j with [] -> None | xs -> Some xs
+      let extn = if Extension.is_empty j then None else Some j
       in
       (def' `V1 a, (b, (c, (d, (e, (f, (g, (h, (i, extn)))))))))
     in
@@ -135,56 +133,16 @@ module Asn = struct
 
   let (pkcs1_digest_info_of_cstruct, pkcs1_digest_info_to_cstruct) =
     projections_of Asn.der pkcs1_digest_info
-
-  (* A bit of accessors for tree-diving. *)
-  (*
-   * XXX We re-traverse the list over 9000 times. Abstract out the extensions in a
-   * cert into sth more efficient at the cost of losing the printer during
-   * debugging?
-   *)
-  let  extn_subject_alt_name
-     , extn_issuer_alt_name
-     , extn_authority_key_id
-     , extn_subject_key_id
-     , extn_key_usage
-     , extn_ext_key_usage
-     , extn_basic_constr
-     , extn_priv_key_period
-     , extn_name_constraints
-     , extn_crl_distribution_points
-     , extn_policies
-    =
-    let f pred cert =
-      List_ext.map_find cert.tbs_cert.extensions
-        ~f:(fun (crit, ext) ->
-            match pred ext with None -> None | Some x -> Some (crit, x))
-    in
-    (f @@ function `Subject_alt_name  _ as x -> Some x | _ -> None),
-    (f @@ function `Issuer_alt_name   _ as x -> Some x | _ -> None),
-    (f @@ function `Authority_key_id  _ as x -> Some x | _ -> None),
-    (f @@ function `Subject_key_id    _ as x -> Some x | _ -> None),
-    (f @@ function `Key_usage         _ as x -> Some x | _ -> None),
-    (f @@ function `Ext_key_usage     _ as x -> Some x | _ -> None),
-    (f @@ function `Basic_constraints _ as x -> Some x | _ -> None),
-    (f @@ function `Priv_key_period   _ as x -> Some x | _ -> None),
-    (f @@ function `Name_constraints  _ as x -> Some x | _ -> None),
-    (f @@ function `CRL_distribution_points  _ as x -> Some x | _ -> None),
-    (f @@ function `Policies          _ as x -> Some x | _ -> None)
-
-  let extn_unknown cert oid =
-    List_ext.map_find cert.tbs_cert.extensions
-      ~f:(fun (crit, ext) ->
-          match ext with
-          | `Unsupported (o, v) when o = oid -> Some (crit, v)
-          | _ -> None)
 end
 
-let decode_pkcs1_digest_info, encode_pkcs1_digest_info =
-  Asn.(pkcs1_digest_info_of_cstruct, pkcs1_digest_info_to_cstruct)
+let decode_pkcs1_digest_info cs =
+  Asn_grammars.err_to_msg (Asn.pkcs1_digest_info_of_cstruct cs)
+
+let encode_pkcs1_digest_info = Asn.pkcs1_digest_info_to_cstruct
 
 let decode_der cs =
   let open Rresult.R.Infix in
-  Asn.certificate_of_cstruct cs >>| fun asn ->
+  Asn_grammars.err_to_msg (Asn.certificate_of_cstruct cs) >>| fun asn ->
   { asn ; raw = cs }
 
 let encode_der { raw ; _ } = raw
@@ -218,14 +176,14 @@ let pp_sigalg ppf (asym, hash) =
 let pp ppf { asn ; _ } =
   let tbs = asn.tbs_cert in
   let sigalg = Algorithm.to_signature_algorithm tbs.signature in
-  Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %d"
+  Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %a"
     pp_version tbs.version Z.pp_print tbs.serial
     Fmt.(option ~none:(unit "NONE") pp_sigalg) sigalg
     Distinguished_name.pp tbs.issuer
     (Ptime.pp_human ~tz_offset_s:0 ()) (fst tbs.validity)
     (Ptime.pp_human ~tz_offset_s:0 ()) (snd tbs.validity)
     Distinguished_name.pp tbs.subject
-    (List.length tbs.extensions)
+    Extension.pp tbs.extensions
 
 let fingerprint hash cert = Hash.digest hash cert.raw
 
@@ -244,9 +202,7 @@ let supports_keytype c t =
   | (`RSA _), `RSA -> true
   | _              -> false
 
-let subject_common_name cert =
-  List_ext.map_find cert.tbs_cert.subject
-    ~f:(function `CN n -> Some n | _ -> None)
+let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
 
 (* RFC 6125, 6.4.4:
    Therefore, if and only if the presented identifiers do not include a
@@ -259,88 +215,45 @@ let subject_common_name cert =
    domain name portion of an identifier of type DNS-ID, SRV-ID, or
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
-let hostnames { asn = cert ; _ } : string list =
-  match Asn.extn_subject_alt_name cert, subject_common_name cert with
-  | Some (_, `Subject_alt_name names), _    ->
-    List_ext.filter_map
-      names
-      ~f:(function
-          | `DNS x -> Some (String.Ascii.lowercase x)
-          | _      -> None)
-  | _                              , Some x -> [String.Ascii.lowercase x]
-  | _                              , _      -> []
-
-(* we have foo.bar.com and want to split that into ["foo"; "bar"; "com"]
-   forbidden: multiple dots "..", trailing dot "foo." *)
-let split_labels name =
-  let labels = String.cuts ~sep:"." name in
-  if List.exists (fun s -> s = "") labels then
-    None
-  else
-    Some labels
+let hostnames { asn = cert ; _ } =
+  let subj =
+    match Distinguished_name.(find CN cert.tbs_cert.subject) with
+    | None -> Domain_name.Set.empty
+    | Some x -> match Domain_name.of_string x with
+      | Ok d -> Domain_name.Set.singleton d
+      | Error _ -> Domain_name.Set.empty
+  in
+  match Extension.(find Subject_alt_name cert.tbs_cert.extensions) with
+  | None -> subj
+  | Some (_, names) ->
+    match General_name.find DNS names with
+    | None -> subj
+    | Some xs -> xs
 
 let o f g x = f (g x)
 
-type host = [ `Strict of string | `Wildcard of string ]
+type host = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
 
-(* we limit our validation to a single '*' character at the beginning (left-most label)! *)
-let wildcard_matches host cert =
-  let rec wildcard_hostname_matches hostname wildcard =
-    match hostname, wildcard with
-    | [_]  , []               -> true
-    | x::xs, y::ys when x = y -> wildcard_hostname_matches xs ys
-    | _    , _                -> false
-  in
-  let names = hostnames cert in
-  match split_labels host with
-  | None      -> false
-  | Some lbls ->
-    List.map split_labels names |>
-    List_ext.filter_map ~f:(function Some ("*"::xs) -> Some xs | _ -> None) |>
-    List.exists (o (wildcard_hostname_matches (List.rev lbls)) List.rev)
-
-let supports_hostname cert = function
-  | `Strict name ->
-    List.mem (String.Ascii.lowercase name) (hostnames cert)
-  | `Wildcard name ->
-    let name = String.Ascii.lowercase name in
-    List.mem name (hostnames cert) ||
-    wildcard_matches name cert
-
-let cert_usage { asn = cert ; _ } =
-  match Asn.extn_key_usage cert with
-  | Some (_, `Key_usage usages) -> Some usages
-  | _                           -> None
-
-let supports_usage ?(not_present = false) c u =
-  match cert_usage c with
-  | Some x -> List.mem u x
-  | None   -> not_present
-
-let cert_extended_usage { asn = cert ; _ } =
-  match Asn.extn_ext_key_usage cert with
-  | Some (_, `Ext_key_usage usages) -> Some usages
-  | _                               -> None
-
-let supports_extended_usage ?(not_present = false) c u =
-  match cert_extended_usage c with
-  | Some x -> List.mem u x
-  | None   -> not_present
-
-let basic_constraints { asn ; _ } =
-  match Asn.extn_basic_constr asn with
-  | Some (_, `Basic_constraints data) -> Some data
+let is_wildcard name =
+  match Domain_name.get_label name 0 with
+  | Ok "*" -> Some (Domain_name.drop_label_exn name)
   | _ -> None
 
-let unsupported { asn ; _ } oid =
-  Asn.extn_unknown asn oid
+(* we limit our validation to a single '*' character at the beginning (left-most label)! *)
+let wildcard_matches host names =
+  let wildcards = Domain_name.Set.fold (fun n acc ->
+      match is_wildcard n with None -> acc | Some x -> Domain_name.Set.add x acc)
+      names Domain_name.Set.empty
+  in
+  let wildcard_matches domain =
+    pred (Domain_name.count_labels host) = Domain_name.count_labels domain &&
+    Domain_name.is_subdomain ~subdomain:host ~domain
+  in
+  Domain_name.Set.exists wildcard_matches wildcards
 
-let subject_alt_names { asn = cert ; _ } =
-  match Asn.extn_subject_alt_name cert with
-  | Some (_, `Subject_alt_name names) -> names
-  | _ -> []
-
-let crl_distribution_points { asn = cert ; _ } =
-  match Asn.extn_crl_distribution_points cert with
-  | Some (_, `CRL_distribution_points ps) -> ps
-  | _ -> []
+let supports_hostname cert (mode, name) =
+  let names = hostnames cert in
+  Domain_name.Set.mem (Domain_name.raw name) names ||
+  match mode with
+  | `Strict -> false
+  | `Wildcard -> wildcard_matches name names
