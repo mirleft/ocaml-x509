@@ -13,12 +13,11 @@ doc: "https://mirleft.github.io/ocaml-x509/doc"
 bug-reports: "https://github.com/mirleft/ocaml-x509/issues"
 depends: [
   "ocaml" {>= "4.04.2"}
-  "dune" {build & >= "1.2"}
+  "dune" {>= "1.2"}
   "cstruct" {>= "4.0.0"}
   "asn1-combinators" {>= "0.2.0"}
   "ptime"
   "nocrypto" {>= "0.5.3"}
-  "astring"
   "rresult"
   "fmt"
   "alcotest" {with-test}

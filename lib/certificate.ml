@@ -1,5 +1,4 @@
 open Nocrypto
-open Astring
 
 type key_type = [ `RSA | `EC of Asn.oid ]
 
