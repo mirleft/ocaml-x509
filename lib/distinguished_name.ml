@@ -71,7 +71,8 @@ let pp_component : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
 let equal a b = equal { f = fun _ a b -> compare a b = 0 } a b
 
 let pp ppf dn =
-  iter (fun (B (k, v)) -> pp_component k ppf v) dn
+  let pp_b ppf (B (k, v)) = pp_component k ppf v in
+  Fmt.(list ~sep:(unit "/") pp_b) ppf (bindings dn)
 
 module Asn = struct
   open Asn.S
