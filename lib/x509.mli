@@ -248,7 +248,7 @@ module Extension : sig
   type distribution_point =
     distribution_point_name option *
     reason list option *
-    Distinguished_name.t option
+    General_name.t option
 
   (** The type of an extension: the critical flag and the value itself. *)
   type 'a extension = bool * 'a

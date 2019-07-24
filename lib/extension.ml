@@ -57,7 +57,7 @@ type distribution_point_name =
 type distribution_point =
   distribution_point_name option *
   reason list option *
-  Distinguished_name.t option
+  General_name.t option
 
 type 'a extension = bool * 'a
 
@@ -366,7 +366,7 @@ module Asn = struct
     sequence3
       (optional ~label:"distributionPoint" @@ explicit 0 distribution_point_name)
       (optional ~label:"reasons"           @@ implicit 1 reason)
-      (optional ~label:"cRLIssuer"         @@ implicit 2 Distinguished_name.Asn.name)
+      (optional ~label:"cRLIssuer"         @@ implicit 2 General_name.Asn.gen_names)
 
   let crl_distribution_points = sequence_of distribution_point
 
