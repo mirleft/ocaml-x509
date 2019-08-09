@@ -1,12 +1,12 @@
 type _ k =
   | Other : Asn.oid -> string list k
   | Rfc_822 : string list k
-  | DNS : Domain_name.Set.t k
+  | DNS : string list k
   | X400_address : unit k
   | Directory : Distinguished_name.t list k
   | EDI_party : (string option * string) list k
   | URI : string list k
-  | IP : Ipaddr.t list k
+  | IP : Cstruct.t list k
   | Registered_id : Asn.oid list k
 
 module K = struct
@@ -36,8 +36,7 @@ let pp_k : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
   match k, v with
   | Rfc_822, x -> Fmt.pf ppf "rfc822 %a" pp_strs x
   | DNS, x ->
-    Fmt.pf ppf "dns %a" Fmt.(list ~sep:(unit "; ") Domain_name.pp)
-      (Domain_name.Set.elements x)
+    Fmt.pf ppf "dns %a" Fmt.(list ~sep:(unit "; ") string) x
   | X400_address, () -> Fmt.string ppf "x400 address"
   | Directory, x ->
     Fmt.pf ppf "directory %a"
@@ -48,7 +47,7 @@ let pp_k : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
                (pair ~sep:(unit ", ")
                   (option ~none:(unit "") string) string)) xs
   | URI, x -> Fmt.pf ppf "uri %a" pp_strs x
-  | IP, x -> Fmt.pf ppf "ip %a" Fmt.(list ~sep:(unit ";") Ipaddr.pp) x
+  | IP, x -> Fmt.pf ppf "ip %a" Fmt.(list ~sep:(unit ";") Cstruct.hexdump_pp) x
   | Registered_id, x ->
     Fmt.pf ppf "registered id %a"
       Fmt.(list ~sep:(unit ";") Asn.OID.pp) x
@@ -65,7 +64,7 @@ let merge_values : type a. a k -> a -> a -> a = fun k v v' ->
   | EDI_party, a, b -> a @ b
   | Directory, a, b -> a @ b
   | X400_address, (), () -> ()
-  | DNS, a, b -> Domain_name.Set.union a b
+  | DNS, a, b -> a @ b
   | Rfc_822, a, b -> a @ b
 
 module Asn = struct
@@ -100,47 +99,26 @@ module Asn = struct
       (optional ~label:"nameAssigner" @@ implicit 0 Distinguished_name.Asn.directory_name)
       (required ~label:"partyName"    @@ implicit 1 Distinguished_name.Asn.directory_name)
 
-  let to_ip data =
-    let data = Cstruct.to_string data in
-    if String.length data = 4 then
-      match Ipaddr.V4.of_octets data with
-      | Ok addr -> Ipaddr.V4 addr
-      | Error (`Msg m) -> error (`Parse m)
-    else if String.length data = 16 then
-      match Ipaddr.V6.of_octets data with
-      | Ok addr -> Ipaddr.V6 addr
-      | Error (`Msg m) -> error (`Parse m)
-    else
-      error (`Parse "expected 4 or 16 bytes content")
-
-  let of_ip = function
-    | Ipaddr.V4 addr -> Cstruct.of_string (Ipaddr.V4.to_octets addr)
-    | Ipaddr.V6 addr -> Cstruct.of_string (Ipaddr.V6.to_octets addr)
-
   let general_name =
     let f = function
       | `C1 (`C1 (oid, x)) -> B (Other oid, [ x ])
       | `C1 (`C2 x) -> B (Rfc_822, [ x ])
-      | `C1 (`C3 x) ->
-        begin match Domain_name.of_string x with
-          | Ok x -> B (DNS, Domain_name.Set.singleton x)
-          | Error (`Msg m) -> error (`Parse m)
-        end
+      | `C1 (`C3 x) -> B (DNS, [ x ])
       | `C1 (`C4 _x) -> B (X400_address, ())
       | `C1 (`C5 x) -> B (Directory, [ x ])
       | `C1 (`C6 x) -> B (EDI_party, [ x ])
       | `C2 (`C1 x) -> B (URI, [ x ])
-      | `C2 (`C2 x) -> B (IP, [ to_ip x ])
+      | `C2 (`C2 x) -> B (IP, [ x ])
       | `C2 (`C3 x) -> B (Registered_id, [ x ])
     and g (B (k, v)) = match k, v with
       | Other oid, [ x ] -> `C1 (`C1 (oid, x))
       | Rfc_822, [ x ] -> `C1 (`C2 x)
-      | DNS, x -> `C1 (`C3 (Domain_name.(to_string (Set.choose x))))
+      | DNS, [ x ] -> `C1 (`C3 x)
       | X400_address, () -> `C1 (`C4 ())
       | Directory, [ x ] -> `C1 (`C5 x)
       | EDI_party, [ x ] -> `C1 (`C6 x)
       | URI, [ x ] -> `C2 (`C1 x)
-      | IP, [ x ] -> `C2 (`C2 (of_ip x))
+      | IP, [ x ] -> `C2 (`C2 x)
       | Registered_id, [ x ] -> `C2 (`C3 x)
       | _ -> Asn.S.error (`Parse "bad general name")
     in
@@ -176,9 +154,7 @@ module Asn = struct
           | EDI_party, xs -> List.map (fun d -> B (EDI_party, [ d ])) xs
           | Directory, xs -> List.map (fun d -> B (Directory, [ d ])) xs
           | X400_address, () -> [ B (X400_address, ()) ]
-          | DNS, xs ->
-            let add d acc = B (DNS, Domain_name.Set.singleton d) :: acc in
-            List.rev (Domain_name.Set.fold add xs [])
+          | DNS, xs -> List.map (fun d -> B (DNS, [ d ])) xs
           | Rfc_822, xs -> List.map (fun d -> B (Rfc_822, [ d ])) xs)
           (bindings map))
     in

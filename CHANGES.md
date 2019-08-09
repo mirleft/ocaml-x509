@@ -1,3 +1,14 @@
+## v0.7.1 (2019-08-09)
+
+* revert General_name.t (DNS and IP components) to string/Cstruct.t list
+  - NameConstraints uses DNSname with strings with leading dots (.example.com),
+    which are not valid RFC1034 domain names
+  - NameConstraints uses IP with IP/netmask, i.e. using 8 octets for an IPv4
+    address
+  - X509.Certificate.hostnames still return a Domain_name.Set.t
+  - reported by @reynir
+* drop ipaddr dependency
+
 ## 0.7.0 (2019-07-24)
 
 * major restructuring, it is unlikely any pre-0.7.0 users will work with 0.7.0+

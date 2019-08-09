@@ -227,7 +227,12 @@ let hostnames { asn = cert ; _ } =
   | Some (_, names) ->
     match General_name.find DNS names with
     | None -> subj
-    | Some xs -> xs
+    | Some xs ->
+      List.fold_left (fun acc s ->
+          match Domain_name.of_string s with
+          | Ok d -> Domain_name.Set.add d acc
+          | Error _ -> acc)
+        Domain_name.Set.empty xs
 
 let o f g x = f (g x)
 

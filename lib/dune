@@ -6,4 +6,4 @@
                   extension pem signing_request general_name)
  (flags (:standard -safe-string))
  (libraries asn1-combinators rresult fmt ptime cstruct nocrypto gmap
-            domain-name ipaddr))
+            domain-name))

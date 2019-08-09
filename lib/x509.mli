@@ -148,12 +148,12 @@ module General_name : sig
   type _ k =
     | Other : Asn.oid -> string list k
     | Rfc_822 : string list k
-    | DNS : Domain_name.Set.t k
+    | DNS : string list k
     | X400_address : unit k
     | Directory : Distinguished_name.t list k
     | EDI_party : (string option * string) list k
     | URI : string list k
-    | IP : Ipaddr.t list k
+    | IP : Cstruct.t list k
     | Registered_id : Asn.oid list k
 
   include Gmap.S with type 'a key = 'a k
