@@ -51,10 +51,14 @@ let test_izenpe () =
   let expected = "O=IZENPE S.A. - CIF A01337260-RMerc.Vitoria-Gasteiz T1055 F62 S8/2.5.4.9=Avda del Mediterraneo Etorbidea 14 - 01010 Vitoria-Gasteiz" in
   Alcotest.(check string "directory in SAN is correct" expected data)
 
+let test_name_constraints () =
+  ignore (cert "name-constraints")
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca ;
   "jfd_ca", `Quick, test_jfd_ca ;
   "jfd_ca'", `Quick, test_jfd_ca' ;
   "SAN dir explicit or implicit", `Quick, test_izenpe ;
+  "name constraint parsing (DNS: .gr)", `Quick, test_name_constraints ;
 ]
