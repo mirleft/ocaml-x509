@@ -1,5 +1,7 @@
 ## development branch
 
+* export X509.Distinguished_name.common_name : t -> string option, which
+  extracts the common name of a distinguished name
 * Distinguished_name.t is now a Relative_distinguished_name.t list, a
   Relative_distinguished_name is a Set.S with element type attribute, a variant.
   It used to be an attribute (expressed as GADT) Gmap.t, but this representation

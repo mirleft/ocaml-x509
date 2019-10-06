@@ -101,6 +101,14 @@ let pp ppf dn =
   in
   Fmt.(list ~sep:(unit "/") pp_rdn) ppf dn
 
+let common_name t =
+  let is_cn = function CN _ -> true | _ -> false
+  in
+  List.fold_left (fun acc dn ->
+      match Relative_distinguished_name.find_first_opt is_cn dn with
+      | Some CN x -> Some x | _ -> acc)
+    None t
+
 module Asn = struct
   open Asn.S
   open Asn_grammars
