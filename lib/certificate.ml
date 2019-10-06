@@ -216,11 +216,19 @@ let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
    Section 6.4.3. *)
 let hostnames { asn = cert ; _ } =
   let subj =
-    match Distinguished_name.(find CN cert.tbs_cert.subject) with
-    | None -> Domain_name.Set.empty
-    | Some x -> match Domain_name.of_string x with
-      | Ok d -> Domain_name.Set.singleton d
-      | Error _ -> Domain_name.Set.empty
+    let is_cn = function
+      | Distinguished_name.CN _ -> true
+      | _ -> false
+    in
+    List.fold_left (fun acc dn ->
+        match
+          Distinguished_name.Relative_distinguished_name.find_first_opt is_cn dn
+        with
+        | Some Distinguished_name.CN x -> (match Domain_name.of_string x with
+            | Ok d -> Domain_name.Set.singleton d
+            | Error _ -> Domain_name.Set.empty)
+        | _ -> acc)
+      Domain_name.Set.empty cert.tbs_cert.subject
   in
   match Extension.(find Subject_alt_name cert.tbs_cert.extensions) with
   | None -> subj
