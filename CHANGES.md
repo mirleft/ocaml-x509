@@ -1,3 +1,11 @@
+## development branch
+
+* Distinguished_name.t is now a Relative_distinguished_name.t list, a
+  Relative_distinguished_name is a Set.S with element type attribute, a variant.
+  It used to be an attribute (expressed as GADT) Gmap.t, but this representation
+  did not conform to RFC 5280, reported by @paurkedal (#117, fixed by #118)
+* Now using Set.find_first_opt, which bumps lower OCaml bound to 4.05.0
+
 ## v0.7.1 (2019-08-09)
 
 * revert General_name.t (DNS and IP components) to string/Cstruct.t list

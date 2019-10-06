@@ -54,6 +54,27 @@ let test_izenpe () =
 let test_name_constraints () =
   ignore (cert "name-constraints")
 
+let check_dn =
+  (module Distinguished_name: Alcotest.TESTABLE with type t = Distinguished_name.t)
+
+let test_distinguished_name () =
+  let open Distinguished_name in
+  let crt = cert "PostaCARoot" in
+  let expected = [
+    Relative_distinguished_name.singleton (DC "rs") ;
+    Relative_distinguished_name.singleton (DC "posta") ;
+    Relative_distinguished_name.singleton (DC "ca") ;
+    Relative_distinguished_name.singleton (CN "Configuration") ;
+    Relative_distinguished_name.singleton (CN "Services") ;
+    Relative_distinguished_name.singleton (CN "Public Key Services") ;
+    Relative_distinguished_name.singleton (CN "AIA") ;
+    Relative_distinguished_name.singleton (CN "Posta CA Root")
+  ] in
+  Alcotest.(check check_dn "complex issuer is good"
+              expected (Certificate.issuer crt)) ;
+  Alcotest.(check check_dn "complex subject is good"
+              expected (Certificate.subject crt))
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca ;
@@ -61,4 +82,5 @@ let regression_tests = [
   "jfd_ca'", `Quick, test_jfd_ca' ;
   "SAN dir explicit or implicit", `Quick, test_izenpe ;
   "name constraint parsing (DNS: .gr)", `Quick, test_name_constraints ;
+  "complex distinguished name", `Quick, test_distinguished_name ;
 ]

@@ -101,29 +101,33 @@ end
 (** X.500 distinguished name *)
 module Distinguished_name : sig
 
-  (** The polymorphic variant of a distinguished name component, as defined in
-    X.500. *)
-  type _ k =
-    | CN : string k
-    | Serialnumber : string k
-    | C : string k
-    | L : string k
-    | SP : string k
-    | O : string k
-    | OU : string k
-    | T : string k
-    | DNQ : string k
-    | Mail : string k
-    | DC : string k
-    | Given_name : string k
-    | Surname : string k
-    | Initials : string k
-    | Pseudonym : string k
-    | Generation : string k
-    | Other : Asn.oid -> string k
+  (** The variant of a relative distinguished name component, as defined in
+    X.500: an attribute type and value. *)
+  type attribute =
+    | CN of string
+    | Serialnumber of string
+    | C of string
+    | L of string
+    | SP of string
+    | O of string
+    | OU of string
+    | T of string
+    | DNQ of string
+    | Mail of string
+    | DC of string
+    | Given_name of string
+    | Surname of string
+    | Initials of string
+    | Pseudonym of string
+    | Generation of string
+    | Other of Asn.oid * string
 
-  (** A distinguished name is a list of {!component}. *)
-  include Gmap.S with type 'a key = 'a k
+  (** Relative_distinguished_name is a set of attributes. *)
+  module Relative_distinguished_name : Set.S with type elt = attribute
+
+  (** A distinguished name is a list of relative distinguished names, starting
+      with the most significant component. *)
+  type t = Relative_distinguished_name.t list
 
   (** [equal a b] is [true] if the distinguished names [a] and [b] are equal. *)
   val equal : t -> t -> bool
