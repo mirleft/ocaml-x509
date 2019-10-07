@@ -5,6 +5,7 @@
   It used to be an attribute (expressed as GADT) Gmap.t, but this representation
   did not conform to RFC 5280, reported by @paurkedal (#117, fixed by #118)
 * Now using Set.find_first_opt, which bumps lower OCaml bound to 4.05.0
+* Improved pretty-printing for DNs including RFC 4514 conformance (@paurkedal, #119).
 
 ## v0.7.1 (2019-08-09)
 

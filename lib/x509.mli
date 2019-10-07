@@ -132,7 +132,41 @@ module Distinguished_name : sig
   (** [equal a b] is [true] if the distinguished names [a] and [b] are equal. *)
   val equal : t -> t -> bool
 
-  (** [pp ppf dn] pretty-prints the distinguished name. *)
+  (** [make_pp ()] creates a customized pretty-printer for {!t}.
+
+      @param format
+        Determines RDN order, escaping rules, and the default spacing:
+        - [`RFC4514] produces the
+          {{:https://tools.ietf.org/html/rfc4514}RFC4514}.
+          RDNs are written in reverse order of the ASN.1 representation and
+          spacing defaults to tight.
+        - [`OpenSSL] produces the a format similar to OpenSSL.  RDNs are written
+          in the order of the ASN.1 representation, and spacing defaults to
+          loose.
+        - [`OSF] emits RDNs in the order they occur in the ASN.1 representation,
+          each prefixed by a slashes, using tight spacing.  This format is
+          designed by analogy to RFC4514, substituting slash for comma an
+          semicolon, and may currently not be fully compliant with the OSF
+          specifications.
+      @param spacing
+        Determines whether to add space around separators:
+        - [`Tight] to not add any redundant space,
+        - [`Medium] to add space after comma and around plus signs, and
+        - [`Loose] to also add space around equality signs.
+        This parameter is currently ignored for the OSF format.
+
+      The pretty-printer can be wrapped in a box to control line breaking and
+      set it apart, otherwise the RDN components will flow with the surrounding
+      text. *)
+  val make_pp :
+    format: [`RFC4514 | `OpenSSL | `OSF] ->
+    ?spacing: [`Tight | `Medium | `Loose] ->
+    unit -> t Fmt.t
+
+  (** [pp ppf dn] pretty-prints the distinguished name. This is currently
+      [Fmt.hbox (make_pp ~format:`OSF ())]. If your application relies on the
+      precise format, it is advicable to create a custom formatter with
+      {!make_pp} to guard against future changes to the default format. *)
   val pp : t Fmt.t
 
   (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs]. *)
