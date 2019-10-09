@@ -148,11 +148,14 @@ module Distinguished_name : sig
           designed by analogy to RFC4514, substituting slash for comma an
           semicolon, and may currently not be fully compliant with the OSF
           specifications.
+
       @param spacing
         Determines whether to add space around separators:
+
         - [`Tight] to not add any redundant space,
         - [`Medium] to add space after comma and around plus signs, and
         - [`Loose] to also add space around equality signs.
+
         This parameter is currently ignored for the OSF format.
 
       The pretty-printer can be wrapped in a box to control line breaking and
