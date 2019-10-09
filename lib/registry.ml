@@ -188,9 +188,12 @@ module X520 = struct
   and pseudonym                     = x520 <| 65
 end
 
+let ucl_data_networks = base 0 9 <| 2342 <| 19200300
+let directory_pilot = ucl_data_networks <| 100 <| 1
 (* The single rfc4519 oid rfc5280 requires us to be aware of.... *)
-let domain_component =
-  base 0 9 <| 2342 <| 19200300 <| 100 <| 1 <| 25
+let domain_component = directory_pilot <| 25
+(* rfc4514 oid required for compliance *)
+let userid = directory_pilot <| 1
 
 module Cert_extn = struct
   let ce = base 2 5 <| 29

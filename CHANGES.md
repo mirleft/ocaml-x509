@@ -8,6 +8,9 @@
   did not conform to RFC 5280, reported by @paurkedal (#117, fixed by #118)
 * Now using Set.find_first_opt, which bumps lower OCaml bound to 4.05.0
 * Improved pretty-printing for DNs including RFC 4514 conformance (@paurkedal, #119).
+* Extension.pp now outputs extension key and its value (#120)
+* rename Distinguished_name.SP constructor (stateOrProvince) to ST, as widely used (#121)
+* support Street and UID in Distinguished_name to satisfy RFC 4514 demands (#121)
 
 ## v0.7.1 (2019-08-09)
 
