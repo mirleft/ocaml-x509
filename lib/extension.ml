@@ -11,6 +11,19 @@ type key_usage = [
   | `Decipher_only
 ]
 
+let pp_key_usage ppf ku =
+  Fmt.string ppf
+    (match ku with
+     | `Digital_signature ->  "digital signature"
+     | `Content_commitment -> "content commitment"
+     | `Key_encipherment -> "key encipherment"
+     | `Data_encipherment -> "data encipherment"
+     | `Key_agreement -> "key agreement"
+     | `Key_cert_sign -> "key cert sign"
+     | `CRL_sign -> "CRL sign"
+     | `Encipher_only -> "encipher only"
+     | `Decipher_only -> "decipher only")
+
 type extended_key_usage = [
   | `Any
   | `Server_auth
@@ -25,7 +38,26 @@ type extended_key_usage = [
   | `Other of Asn.oid
 ]
 
+let pp_extended_key_usage ppf = function
+  | `Any -> Fmt.string ppf "any"
+  | `Server_auth -> Fmt.string ppf "server authentication"
+  | `Client_auth -> Fmt.string ppf "client authentication"
+  | `Code_signing -> Fmt.string ppf "code signing"
+  | `Email_protection -> Fmt.string ppf "email protection"
+  | `Ipsec_end -> Fmt.string ppf "ipsec end"
+  | `Ipsec_tunnel -> Fmt.string ppf "ipsec tunnel"
+  | `Ipsec_user -> Fmt.string ppf "ipsec user"
+  | `Time_stamping -> Fmt.string ppf "time stamping"
+  | `Ocsp_signing -> Fmt.string ppf "ocsp signing"
+  | `Other oid -> Asn.OID.pp ppf oid
+
 type authority_key_id = Cstruct.t option * General_name.t * Z.t option
+
+let pp_authority_key_id ppf (id, issuer, serial) =
+  Fmt.pf ppf "identifier %a@ issuer %a@ serial %s@ "
+    Fmt.(option ~none:(unit "none") Cstruct.hexdump_pp) id
+    General_name.pp issuer
+    (match serial with None -> "none" | Some x -> Z.to_string x)
 
 type priv_key_usage_period = [
   | `Interval   of Ptime.t * Ptime.t
@@ -33,9 +65,30 @@ type priv_key_usage_period = [
   | `Not_before of Ptime.t
 ]
 
+let pp_priv_key_usage_period ppf =
+  let pp_ptime = Ptime.pp_human ~tz_offset_s:0 () in
+  function
+  | `Interval (start, stop) ->
+    Fmt.pf ppf "from %a till %a" pp_ptime start pp_ptime stop
+  | `Not_after after -> Fmt.pf ppf "not after %a" pp_ptime after
+  | `Not_before before -> Fmt.pf ppf "not before %a" pp_ptime before
+
 type name_constraint = (General_name.b * int * int option) list
 
+let pp_name_constraints ppf (permitted, excluded) =
+  let pp_one ppf (General_name.B (k, base), min, max) =
+    Fmt.pf ppf "base %a min %u max %a"
+      (General_name.pp_k k) base min Fmt.(option ~none:(unit "none") int) max
+  in
+  Fmt.pf ppf "permitted %a@ excluded %a"
+    Fmt.(list ~sep:(unit ", ") pp_one) permitted
+    Fmt.(list ~sep:(unit ", ") pp_one) excluded
+
 type policy = [ `Any | `Something of Asn.oid ]
+
+let pp_policy ppf = function
+  | `Any -> Fmt.string ppf "any"
+  | `Something oid -> Fmt.pf ppf "some oid %a" Asn.OID.pp oid
 
 type reason = [
   | `Unspecified
@@ -50,14 +103,44 @@ type reason = [
   | `AA_compromise
 ]
 
+let pp_reason ppf r =
+  Fmt.string ppf (match r with
+      | `Unspecified -> "unspecified"
+      | `Key_compromise -> "key compromise"
+      | `CA_compromise -> "CA compromise"
+      | `Affiliation_changed -> "affiliation changed"
+      | `Superseded -> "superseded"
+      | `Cessation_of_operation -> "cessation of operation"
+      | `Certificate_hold -> "certificate hold"
+      | `Remove_from_CRL -> "remove from CRL"
+      | `Privilege_withdrawn -> "privilege withdrawn"
+      | `AA_compromise -> "AA compromise")
+
 type distribution_point_name =
   [ `Full of General_name.t
   | `Relative of Distinguished_name.t ]
+
+let pp_distribution_point_name ppf = function
+  | `Full name -> Fmt.pf ppf "full %a" General_name.pp name
+  | `Relative name -> Fmt.pf ppf "relative %a" Distinguished_name.pp name
 
 type distribution_point =
   distribution_point_name option *
   reason list option *
   General_name.t option
+
+let pp_distribution_point ppf (name, reasons, issuer) =
+  Fmt.pf ppf "name %a reason %a issuer %a"
+    Fmt.(option ~none:(unit "none") pp_distribution_point_name) name
+    Fmt.(option ~none:(unit "none") (list ~sep:(unit ", ") pp_reason)) reasons
+    Fmt.(option ~none:(unit "none") General_name.pp) issuer
+
+let pp_issuing_distribution_point ppf (name, onlyuser, onlyca, onlysome, indirectcrl, onlyattributes) =
+  Fmt.pf ppf "name %a only user certs %B only CA certs %B only reasons %a indirectcrl %B only attribute certs %B"
+    Fmt.(option ~none:(unit "none") pp_distribution_point_name) name
+    onlyuser onlyca
+    Fmt.(option ~none:(unit "no") (list ~sep:(unit ", ") pp_reason)) onlysome
+    indirectcrl onlyattributes
 
 type 'a extension = bool * 'a
 
@@ -85,42 +168,55 @@ type _ k =
 let pp_one : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
   let c_to_str b = if b then "critical " else "" in
   match k, v with
-  | Subject_alt_name, (crit, _alt) ->
-    Fmt.pf ppf "%ssubjectAlternativeName" (c_to_str crit)
-  | Authority_key_id, (crit, _kid) ->
-    Fmt.pf ppf "%sauthorityKeyIdentifier" (c_to_str crit)
-  | Subject_key_id, (crit, _kid) ->
-    Fmt.pf ppf "%ssubjectKeyIdentifier" (c_to_str crit)
-  | Issuer_alt_name, (crit, _alt) ->
-    Fmt.pf ppf "%sissuerAlternativeNames" (c_to_str crit)
-  | Key_usage, (crit, _ku) ->
-    Fmt.pf ppf "%skeyUsage" (c_to_str crit)
-  | Ext_key_usage, (crit, _eku) ->
-    Fmt.pf ppf "%sextendedKeyUsage" (c_to_str crit)
-  | Basic_constraints, (crit, _bc) ->
-    Fmt.pf ppf "%sbasicConstraints" (c_to_str crit)
-  | CRL_number, (crit, _i) ->
-    Fmt.pf ppf "%scRLNumber" (c_to_str crit)
-  | Delta_CRL_indicator, (crit, _indicator) ->
-    Fmt.pf ppf "%sdeltaCRLIndicator" (c_to_str crit)
-  | Priv_key_period, (crit, _) ->
-    Fmt.pf ppf "%sprivateKeyUsagePeriod" (c_to_str crit)
-  | Name_constraints, (crit, _) ->
-    Fmt.pf ppf "%snameConstraints" (c_to_str crit)
-  | CRL_distribution_points, (crit, _) ->
-    Fmt.pf ppf "%scRLDistributionPoints" (c_to_str crit)
-  | Issuing_distribution_point, (crit, _) ->
-    Fmt.pf ppf "%sissuingDistributionPoint" (c_to_str crit)
-  | Freshest_CRL, (crit, _) ->
-    Fmt.pf ppf "%sfreshestCRL" (c_to_str crit)
-  | Reason, (crit, _) ->
-    Fmt.pf ppf "%sreason" (c_to_str crit)
-  | Invalidity_date, (crit, _) ->
-    Fmt.pf ppf "%sinvalidityDate" (c_to_str crit)
-  | Certificate_issuer, (crit, _) ->
-    Fmt.pf ppf "%scertificateIssuers" (c_to_str crit)
-  | Policies, (crit, _) ->
-    Fmt.pf ppf "%spolicies" (c_to_str crit)
+  | Subject_alt_name, (crit, alt) ->
+    Fmt.pf ppf "%ssubjectAlternativeName %a" (c_to_str crit)
+      General_name.pp alt
+  | Authority_key_id, (crit, kid) ->
+    Fmt.pf ppf "%sauthorityKeyIdentifier %a" (c_to_str crit)
+      pp_authority_key_id kid
+  | Subject_key_id, (crit, kid) ->
+    Fmt.pf ppf "%ssubjectKeyIdentifier %a" (c_to_str crit)
+      Cstruct.hexdump_pp kid
+  | Issuer_alt_name, (crit, alt) ->
+    Fmt.pf ppf "%sissuerAlternativeNames %a" (c_to_str crit)
+      General_name.pp alt
+  | Key_usage, (crit, ku) ->
+    Fmt.pf ppf "%skeyUsage %a" (c_to_str crit)
+      Fmt.(list ~sep:(unit ", ") pp_key_usage) ku
+  | Ext_key_usage, (crit, eku) ->
+    Fmt.pf ppf "%sextendedKeyUsage %a" (c_to_str crit)
+      Fmt.(list ~sep:(unit ", ") pp_extended_key_usage) eku
+  | Basic_constraints, (crit, (ca, depth)) ->
+    Fmt.pf ppf "%sbasicConstraints CA %B depth %a" (c_to_str crit) ca
+      Fmt.(option ~none:(unit "none") int) depth
+  | CRL_number, (crit, i) ->
+    Fmt.pf ppf "%scRLNumber %u" (c_to_str crit) i
+  | Delta_CRL_indicator, (crit, indicator) ->
+    Fmt.pf ppf "%sdeltaCRLIndicator %u" (c_to_str crit) indicator
+  | Priv_key_period, (crit, period) ->
+    Fmt.pf ppf "%sprivateKeyUsagePeriod %a" (c_to_str crit)
+      pp_priv_key_usage_period period
+  | Name_constraints, (crit, ncs) ->
+    Fmt.pf ppf "%snameConstraints %a" (c_to_str crit) pp_name_constraints ncs
+  | CRL_distribution_points, (crit, points) ->
+    Fmt.pf ppf "%scRLDistributionPoints %a" (c_to_str crit)
+      Fmt.(list ~sep:(unit "; ") pp_distribution_point) points
+  | Issuing_distribution_point, (crit, point) ->
+    Fmt.pf ppf "%sissuingDistributionPoint %a" (c_to_str crit)
+      pp_issuing_distribution_point point
+  | Freshest_CRL, (crit, points) ->
+    Fmt.pf ppf "%sfreshestCRL %a" (c_to_str crit)
+      Fmt.(list ~sep:(unit "; ") pp_distribution_point) points
+  | Reason, (crit, reason) ->
+    Fmt.pf ppf "%sreason %a" (c_to_str crit) pp_reason reason
+  | Invalidity_date, (crit, date) ->
+    Fmt.pf ppf "%sinvalidityDate %a" (c_to_str crit)
+      (Ptime.pp_human ~tz_offset_s:0 ()) date
+  | Certificate_issuer, (crit, name) ->
+    Fmt.pf ppf "%scertificateIssuer %a" (c_to_str crit) General_name.pp name
+  | Policies, (crit, pols) ->
+    Fmt.pf ppf "%spolicies %a" (c_to_str crit)
+      Fmt.(list ~sep:(unit "; ") pp_policy) pols
   | Unsupported oid, (crit, cs) ->
     Fmt.pf ppf "%sunsupported %a: %a" (c_to_str crit) Asn.OID.pp oid
       Cstruct.hexdump_pp cs

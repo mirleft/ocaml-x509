@@ -172,6 +172,10 @@ module Distinguished_name : sig
       {!make_pp} to guard against future changes to the default format. *)
   val pp : t Fmt.t
 
+  (** [common_name t] is [Some x] if the distinguished name [t] contains a
+      [CN x], [None] otherwise. *)
+  val common_name : t -> string option
+
   (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs]. *)
   val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
