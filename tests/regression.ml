@@ -48,7 +48,7 @@ let test_izenpe () =
   let dir = General_name.(get Directory san) in
   Alcotest.(check int "directory san len is 1" 1 (List.length dir));
   let data = Fmt.to_to_string Distinguished_name.pp (List.hd dir) in
-  let expected = "O=IZENPE S.A. - CIF A01337260-RMerc.Vitoria-Gasteiz T1055 F62 S8/2.5.4.9=Avda del Mediterraneo Etorbidea 14 - 01010 Vitoria-Gasteiz" in
+  let expected = "/O=IZENPE S.A. - CIF A01337260-RMerc.Vitoria-Gasteiz T1055 F62 S8/2.5.4.9=#417664612064656c204d65646974657272616e656f2045746f726269646561203134202d203031303130205669746f7269612d4761737465697a" in
   Alcotest.(check string "directory in SAN is correct" expected data)
 
 let test_name_constraints () =
@@ -75,6 +75,37 @@ let test_distinguished_name () =
   Alcotest.(check check_dn "complex subject is good"
               expected (Certificate.subject crt))
 
+let test_distinguished_name_pp () =
+  let module Dn = struct
+    include Distinguished_name
+    let cn s = Relative_distinguished_name.singleton (CN s)
+    let o s = Relative_distinguished_name.singleton (O s)
+    let initials s = Relative_distinguished_name.singleton (Initials s)
+    let (+) = Relative_distinguished_name.union
+  end in
+  let dn1 = "DN1", Dn.[o "Blanc";
+                       cn "John Doe" + initials "J.D." + initials "N.N."] in
+  let dn2 = "DN2", Dn.[o " Escapist"; cn "# 2"; cn " \"+,;/<>\\  "] in
+  let pp1 = "RFC4514", Fmt.hbox (Dn.make_pp ~format:`RFC4514 ()) in
+  let pp2 = "RFC4514-spacy",
+    Fmt.hbox (Dn.make_pp ~format:`RFC4514 ~spacing:`Loose ()) in
+  let pp3 = "OpenSSL", Fmt.hbox (Dn.make_pp ~format:`OpenSSL ()) in
+  let pp4 = "OSF", Fmt.hbox (Dn.make_pp ~format:`OSF ()) in
+  let pp5 = "RFC4514-vbox", Fmt.vbox (Dn.make_pp ~format:`RFC4514 ()) in
+  let check (pp_desc, pp) (dn_desc, dn) expected =
+    Alcotest.(check string) (Printf.sprintf "%s %s" pp_desc dn_desc)
+      expected (Fmt.to_to_string pp dn)
+  in
+  check pp1 dn1 {|CN=John Doe+Initials=J.D.+Initials=N.N.,O=Blanc|} ;
+  check pp1 dn2 {|CN=\ \"\+\,\;/\<\>\\ \ ,CN=\# 2,O=\ Escapist|} ;
+  check pp2 dn1 {|CN = John Doe + Initials = J.D. + Initials = N.N., O = Blanc|} ;
+  check pp2 dn2 {|CN = \ \"\+\,\;/\<\>\\ \ , CN = \# 2, O = \ Escapist|} ;
+  check pp3 dn1 {|O = Blanc, CN = John Doe + Initials = J.D. + Initials = N.N.|} ;
+  check pp3 dn2 {|O = \ Escapist, CN = \# 2, CN = \ \"\+\,\;/\<\>\\ \ |} ;
+  check pp4 dn1 {|/O=Blanc/CN=John Doe+Initials=J.D.+Initials=N.N.|} ;
+  check pp4 dn2 {|/O=\ Escapist/CN=\# 2/CN=\ \"\+,;\/\<\>\\ \ |} ;
+  check pp5 dn1 "CN=John Doe+\nInitials=J.D.+\nInitials=N.N.,\nO=Blanc"
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca ;
@@ -83,4 +114,5 @@ let regression_tests = [
   "SAN dir explicit or implicit", `Quick, test_izenpe ;
   "name constraint parsing (DNS: .gr)", `Quick, test_name_constraints ;
   "complex distinguished name", `Quick, test_distinguished_name ;
+  "distinguished name pp", `Quick, test_distinguished_name_pp ;
 ]
