@@ -1,3 +1,7 @@
+## v0.8.1 (2019-10-10)
+
+* export Private_key.decode_der and encode_der
+
 ## v0.8.0 (2019-10-10)
 
 * export X509.Distinguished_name.common_name : t -> string option, which

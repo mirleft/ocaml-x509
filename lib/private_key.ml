@@ -65,9 +65,16 @@ module Asn = struct
     projections_of Asn.der private_key_info
 end
 
-(* TODO expose decode/encode_der? *)
 (* TODO what about RSA PRIVATE vs PRIVATE?
    - atm decode handles both, encode uses PRIVATE *)
+
+let decode_der cs =
+  let open Rresult.R.Infix in
+  Asn_grammars.err_to_msg (Asn.private_of_cstruct cs) >>| fun key ->
+  `RSA key
+
+let encode_der = function
+  | `RSA k -> Asn.private_to_cstruct k
 
 let decode_pem cs =
   let open Rresult.R.Infix in
