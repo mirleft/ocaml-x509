@@ -3,7 +3,7 @@ type attribute =
   | Serialnumber of string
   | C of string
   | L of string
-  | SP of string
+  | ST of string
   | O of string
   | OU of string
   | T of string
@@ -15,6 +15,8 @@ type attribute =
   | Initials of string
   | Pseudonym of string
   | Generation of string
+  | Street of string
+  | Userid of string
   | Other of Asn.oid * string
 
 (* Escaping is described in RFC4514. Escaing '=' is optional, otherwise the
@@ -46,7 +48,7 @@ let pp_attribute ?osf ?(ava_equal = Fmt.any "=") () ppf attr =
   | Serialnumber s -> aux "Serialnumber" s
   | C s -> aux "C" s
   | L s -> aux "L" s
-  | SP s -> aux "SP" s
+  | ST s -> aux "ST" s
   | O s -> aux "O" s
   | OU s -> aux "OU" s
   | T s -> aux "T" s
@@ -58,6 +60,8 @@ let pp_attribute ?osf ?(ava_equal = Fmt.any "=") () ppf attr =
   | Initials s -> aux "Initials" s
   | Pseudonym s -> aux "Pseudonym" s
   | Generation s -> aux "Generation" s
+  | Street s -> aux "Street" s
+  | Userid s -> aux "UID" s
   | Other (oid, s) ->
     Fmt.pf ppf "%a%a#%a" Asn.OID.pp oid ava_equal () pp_string_hex s
 
@@ -74,8 +78,8 @@ module K = struct
     | C _, _ -> -1 | _, C _ -> 1
     | L a, L b -> String.compare a b
     | L _, _ -> -1 | _, L _ -> 1
-    | SP a, SP b -> String.compare a b
-    | SP _, _ -> -1 | _, SP _ -> 1
+    | ST a, ST b -> String.compare a b
+    | ST _, _ -> -1 | _, ST _ -> 1
     | O a, O b -> String.compare a b
     | O _, _ -> -1 | _, O _ -> 1
     | OU a, OU b -> String.compare a b
@@ -98,6 +102,10 @@ module K = struct
     | Pseudonym _, _ -> -1 | _, Pseudonym _ -> 1
     | Generation a, Generation b -> String.compare a b
     | Generation _, _ -> -1 | _, Generation _ -> 1
+    | Street a, Street b -> String.compare a b
+    | Street _, _ -> -1 | _, Street _ -> 1
+    | Userid a, Userid b -> String.compare a b
+    | Userid _, _ -> -1 | _, Userid _ -> 1
     | Other (oid_a, v_a), Other (oid_b, v_b) ->
       match Asn.OID.compare oid_a oid_b with
       | 0 -> String.compare v_a v_b
@@ -186,7 +194,7 @@ module Asn = struct
       (X520.serial_number            , fun x -> Serialnumber x) ;
       (X520.country_name             , fun x -> C x) ;
       (X520.locality_name            , fun x -> L x) ;
-      (X520.state_or_province_name   , fun x -> SP x) ;
+      (X520.state_or_province_name   , fun x -> ST x) ;
       (X520.organization_name        , fun x -> O x) ;
       (X520.organizational_unit_name , fun x -> OU x) ;
       (X520.title                    , fun x -> T x) ;
@@ -196,7 +204,9 @@ module Asn = struct
       (X520.surname                  , fun x -> Surname x) ;
       (X520.initials                 , fun x -> Initials x) ;
       (X520.pseudonym                , fun x -> Pseudonym x) ;
-      (X520.generation_qualifier     , fun x -> Generation x) ]
+      (X520.generation_qualifier     , fun x -> Generation x) ;
+      (X520.street_address           , fun x -> Street x) ;
+      (userid                        , fun x -> Userid x)]
       ~default:(fun oid x -> Other (oid, x))
 
     and a_g = function
@@ -205,7 +215,7 @@ module Asn = struct
       | Serialnumber x -> (X520.serial_number, x )
       | C x -> (X520.country_name, x )
       | L x -> (X520.locality_name, x )
-      | SP x -> (X520.state_or_province_name, x )
+      | ST x -> (X520.state_or_province_name, x )
       | O x -> (X520.organization_name, x )
       | OU x -> (X520.organizational_unit_name, x )
       | T x -> (X520.title, x )
@@ -216,6 +226,8 @@ module Asn = struct
       | Initials x -> (X520.initials, x )
       | Pseudonym x -> (X520.pseudonym, x )
       | Generation x -> (X520.generation_qualifier, x )
+      | Street x -> (X520.street_address, x )
+      | Userid x -> (userid, x )
       | Other (oid, x) -> (oid, x )
     in
 

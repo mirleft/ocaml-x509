@@ -108,7 +108,7 @@ module Distinguished_name : sig
     | Serialnumber of string
     | C of string
     | L of string
-    | SP of string
+    | ST of string
     | O of string
     | OU of string
     | T of string
@@ -120,6 +120,8 @@ module Distinguished_name : sig
     | Initials of string
     | Pseudonym of string
     | Generation of string
+    | Street of string
+    | Userid of string
     | Other of Asn.oid * string
 
   (** Relative_distinguished_name is a set of attributes. *)

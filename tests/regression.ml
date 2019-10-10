@@ -48,7 +48,7 @@ let test_izenpe () =
   let dir = General_name.(get Directory san) in
   Alcotest.(check int "directory san len is 1" 1 (List.length dir));
   let data = Fmt.to_to_string Distinguished_name.pp (List.hd dir) in
-  let expected = "/O=IZENPE S.A. - CIF A01337260-RMerc.Vitoria-Gasteiz T1055 F62 S8/2.5.4.9=#417664612064656c204d65646974657272616e656f2045746f726269646561203134202d203031303130205669746f7269612d4761737465697a" in
+  let expected = "/O=IZENPE S.A. - CIF A01337260-RMerc.Vitoria-Gasteiz T1055 F62 S8/Street=Avda del Mediterraneo Etorbidea 14 - 01010 Vitoria-Gasteiz" in
   Alcotest.(check string "directory in SAN is correct" expected data)
 
 let test_name_constraints () =
