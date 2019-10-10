@@ -90,6 +90,14 @@ module Private_key : sig
   (** The polymorphic variant of private keys. *)
   type t = [ `RSA of Nocrypto.Rsa.priv ]
 
+  (** [decode_der der] is [t], where the private key of [der] is extracted.
+      It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo structure. *)
+  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
+
+  (** [encode_der key] is [der], the encoded private key as PKCS8 (RFC 5208,
+      Section 5) PrivateKeyInfo structure. *)
+  val encode_der : t -> Cstruct.t
+
   (** [decode_pem pem] is [t], where the private key of [pem] is extracted.
       Both RSA PRIVATE KEY and PRIVATE KEY stanzas are supported. *)
   val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
