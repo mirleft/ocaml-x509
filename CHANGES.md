@@ -1,4 +1,4 @@
-## development branch
+## v0.8.0 (2019-10-10)
 
 * export X509.Distinguished_name.common_name : t -> string option, which
   extracts the common name of a distinguished name
