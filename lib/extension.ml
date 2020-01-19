@@ -300,6 +300,50 @@ include Gmap.Make(K)
 
 let pp ppf m = iter (fun (B (k, v)) -> pp_one k ppf v ; Fmt.sp ppf ()) m
 
+type host = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
+
+module Host_set = Set.Make(struct
+    type t = host
+    let compare a b = match a, b with
+      | (`Strict, a), (`Strict, b)
+      | (`Wildcard, a), (`Wildcard, b) -> Domain_name.compare a b
+      | (`Strict, _), (`Wildcard, _) -> -1
+      | (`Wildcard, _), (`Strict, _) -> 1
+  end)
+
+let is_wildcard name =
+  match Domain_name.get_label name 0 with
+  | Ok "*" -> Some (Domain_name.drop_label_exn name)
+  | _ -> None
+
+let host name =
+  match Domain_name.of_string name with
+  | Error _ -> None
+  | Ok dn ->
+    let wild, name = match is_wildcard dn with
+      | None -> `Strict, dn
+      | Some dn' -> `Wildcard, dn'
+    in
+    match Domain_name.host name with
+    | Error _ -> None
+    | Ok hostname -> Some (wild, hostname)
+
+let hostnames exts =
+  match find Subject_alt_name exts with
+  | None -> None
+  | Some (_, names) ->
+    match General_name.find DNS names with
+    | None -> None
+    | Some xs ->
+      let names =
+        List.fold_left (fun acc s ->
+            match host s with
+            | Some (typ, hostname) -> Host_set.add (typ, hostname) acc
+            | None -> acc)
+          Host_set.empty xs
+      in
+      if Host_set.is_empty names then None else Some names
+
 module Asn = struct
   open Asn.S
   open Asn_grammars

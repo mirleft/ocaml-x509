@@ -114,6 +114,22 @@ let raw_sign raw digest key =
 
 let info sr = sr.info
 
+let hostnames csr =
+  let info = info csr in
+  let subj =
+    match Distinguished_name.common_name info.subject with
+    | None -> Extension.Host_set.empty
+    | Some x ->
+      match Extension.host x with
+      | Some (typ, n) -> Extension.Host_set.singleton (typ, n)
+      | None -> Extension.Host_set.empty
+  in
+  match Ext.(find Extensions info.extensions) with
+  | None -> subj
+  | Some exts -> match Extension.hostnames exts with
+    | Some names -> names
+    | None -> subj
+
 let validate_signature { info ; signature ; signature_algorithm } =
   (* TODO: may be wrong if remote used some non-utf string encoding *)
   let raw = Asn.request_info_to_cs info in

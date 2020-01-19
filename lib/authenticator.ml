@@ -1,4 +1,4 @@
-type t = ?host:Certificate.host -> Certificate.t list -> Validation.r
+type t = ?host:[`host] Domain_name.t -> Certificate.t list -> Validation.r
 
 (* XXX
    * Authenticator just hands off a list of certs. Should be indexed.
