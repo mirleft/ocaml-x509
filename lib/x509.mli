@@ -761,11 +761,12 @@ module Validation : sig
       The certificate has to be valid in the given [time].  If a [host] is
       provided, the certificate is checked for this name.  The
       [`Wildcard hostname] of the fingerprint list must match the name in the
-      certificate, using {!hostnames}. *)
+      certificate, using {!hostnames}. Note that public key pinning is usually
+      better than certificate pinning, see
+      {{:https://www.imperialviolet.org/2011/05/04/pinning.html}this article}. *)
   val trust_cert_fingerprint :
     ?host:Certificate.host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
     fingerprints:('a Domain_name.t * Cstruct.t) list -> Certificate.t list -> r
-  [@@ocaml.deprecated "Pin public keys (use trust_key_fingerprint) instead of certificates."]
 end
 
 (** Certificate chain authenticators *)
@@ -795,10 +796,11 @@ module Authenticator : sig
   (** [server_cert_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify the first
       element of the certificate chain, using
-      {!Validation.trust_cert_fingerprint}. *)
+      {!Validation.trust_cert_fingerprint}. Note that public key pinning is
+      usually better than certificate pinning, see
+      {{:https://www.imperialviolet.org/2011/05/04/pinning.html}this article}. *)
   val server_cert_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
     fingerprints:('a Domain_name.t * Cstruct.t) list -> t
-  [@@ocaml.deprecated "Pin public keys (use server_key_fingerprint) instead of certificates."]
 
   (** [null] is [authenticator], which always returns [Ok ()]. (Useful for
       testing purposes only.) *)
