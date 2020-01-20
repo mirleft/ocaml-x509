@@ -393,19 +393,22 @@ module Certificate : sig
   (** [public_key certificate] is [pk], the public key of the [certificate]. *)
   val public_key : t -> Public_key.t
 
-  (** [hostnames certficate] are [hostnames], the list of hostnames this
-      [certificate] is valid for.  Currently, these are the DNS names of the
-      {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}Subject Alternative Name}
-      extension, if present, or otherwise the singleton list containing the common
-      name. *)
-  val hostnames : t -> Domain_name.Set.t
-
   (** The polymorphic variant for hostname validation. *)
   type host = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
 
-  (** [supports_hostname certificate host] is [result], whether the [certificate]
-      contains the given [host], using {!hostnames}. *)
-  val supports_hostname : t -> host -> bool
+  (** The module for a set of hostnames. *)
+  module Host_set : Set.S with type elt = host
+
+  (** [hostnames certficate] is the set of domain names this
+      [certificate] is valid for.  Currently, these are the DNS names of the
+      {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}Subject Alternative Name}
+      extension, if present, or otherwise the singleton set containing the common
+      name of the certificate subject. *)
+  val hostnames : t -> Host_set.t
+
+  (** [supports_hostname certificate hostname] is [result], whether the
+      [certificate] contains the given [hostname], using {!hostnames}. *)
+  val supports_hostname : t -> [`host] Domain_name.t -> bool
 
   (** [fingerprint hash cert] is [digest], the digest of [cert] using the
       specified [hash] algorithm *)
@@ -481,6 +484,12 @@ module Signing_request : sig
       {!signing_request}. *)
   val info : t -> request_info
 
+  (** [hostnames signing_request] is the set of domain names this
+      [signing_request] is requesting. This is either the content of the DNS
+      entries of the SubjectAlternativeName extension, or the common name of the
+      [signing_request]. *)
+  val hostnames : t -> Certificate.Host_set.t
+
   (** [create subject ~digest ~extensions private] creates [signing_request],
       a certification request using the given [subject], [digest] (defaults to
       [`SHA256]) and list of [extensions]. *)
@@ -505,7 +514,7 @@ module Signing_request : sig
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
     ?digest:Nocrypto.Hash.hash -> ?serial:Z.t ->
     ?extensions:Extension.t -> Private_key.t ->
-    Distinguished_name.t -> Certificate.t
+    Distinguished_name.t -> (Certificate.t, [> R.msg ]) result
 end
 
 (** X.509 Certificate Revocation Lists. *)
@@ -657,7 +666,7 @@ module Validation : sig
   (** The polymorphic variant of a leaf certificate validation error. *)
   type leaf_validation_error = [
     | `LeafCertificateExpired of Certificate.t * Ptime.t option
-    | `LeafInvalidName of Certificate.t * Certificate.host option
+    | `LeafInvalidName of Certificate.t * [`host] Domain_name.t option
     | `LeafInvalidVersion of Certificate.t
     | `LeafInvalidExtensions of Certificate.t
   ]
@@ -704,14 +713,14 @@ module Validation : sig
       certificate is checked to contain the given [host], using {!hostnames}.
       The returned certificate is the root of the chain, a member of the given
       list of [anchors]. *)
-  val verify_chain : ?host:Certificate.host -> ?time:Ptime.t ->
+  val verify_chain : ?host:[`host] Domain_name.t -> ?time:Ptime.t ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
     anchors:(Certificate.t list) -> Certificate.t list ->
     (Certificate.t, chain_error) result
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
-    | `ServerNameNotPresent of Certificate.t * [ `raw ] Domain_name.t
+    | `ServerNameNotPresent of Certificate.t * [`host] Domain_name.t
     | `NameNotInList of Certificate.t
     | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
   ]
@@ -738,7 +747,7 @@ module Validation : sig
       {!verify_chain}, the result will be [Ok] and contain the actual
       certificate chain and the trust anchor. *)
   val verify_chain_of_trust :
-    ?host:Certificate.host -> ?time:Ptime.t ->
+    ?host:[`host] Domain_name.t -> ?time:Ptime.t ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
     anchors:(Certificate.t list) -> Certificate.t list -> r
 
@@ -746,27 +755,30 @@ module Validation : sig
 
   (** [trust_key_fingerprint ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified against the
-      given [fingerprints] map (hostname to public key fingerprint) using
-      {!key_fingerprint}.  The certificate has to be valid in the given [time].
-      If a [host] is provided, the certificate is checked for this name.  The
-      [`Wildcard hostname] of the fingerprint list must match the name in the
-      certificate, using {!hostnames}. *)
+      given [fingerprints] list using {!key_fingerprint}.  If [time] is
+      provided, the certificate has to be valid at the given timestamp.  If
+      [host] is provided, the certificate is checked for this name.  The
+      [hostname] of the fingerprint list must match the name in the certificate,
+      using {!hostnames}. *)
   val trust_key_fingerprint :
-    ?host:Certificate.host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:('a Domain_name.t * Cstruct.t) list -> Certificate.t list -> r
+    ?host:[`host] Domain_name.t -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
+    fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
+    Certificate.t list -> r
 
   (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified to match the
-      given [fingerprints] map (hostname to fingerprint) using {!fingerprint}.
-      The certificate has to be valid in the given [time].  If a [host] is
-      provided, the certificate is checked for this name.  The
-      [`Wildcard hostname] of the fingerprint list must match the name in the
-      certificate, using {!hostnames}. Note that public key pinning is usually
-      better than certificate pinning, see
-      {{:https://www.imperialviolet.org/2011/05/04/pinning.html}this article}. *)
+      given [fingerprints] list using {!fingerprint}.  If [time] is provided,
+      the certificate is checked to be valid in at the given timestamp.  If
+      [host] is provided, the certificate is checked for this name.  The
+      [hostname] of the fingerprint list must match the name in the
+      certificate, using {!hostnames}. Note that
+      {{!trust_key_fingerprint}public key pinning} has
+      {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
+      over certificate pinning. *)
   val trust_cert_fingerprint :
-    ?host:Certificate.host -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:('a Domain_name.t * Cstruct.t) list -> Certificate.t list -> r
+    ?host:[`host] Domain_name.t -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
+    fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
+    Certificate.t list -> r
 end
 
 (** Certificate chain authenticators *)
@@ -774,7 +786,7 @@ module Authenticator : sig
 
   (** An authenticator [a] is a function type which takes a hostname and a
       certificate stack to an authentication decision {!Validation.r}. *)
-  type t = ?host:Certificate.host -> Certificate.t list -> Validation.r
+  type t = ?host:[`host] Domain_name.t -> Certificate.t list -> Validation.r
 
   (** [chain_of_trust ?time trust_anchors] is [authenticator], which uses the
       given [time] and list of [trust_anchors] to verify the certificate chain.
@@ -791,16 +803,17 @@ module Authenticator : sig
       fingerprint of the first element of the certificate chain matches the
       given fingerprint, using {!Validation.trust_key_fingerprint}. *)
   val server_key_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:('a Domain_name.t * Cstruct.t) list -> t
+    fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
 
   (** [server_cert_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify the first
       element of the certificate chain, using
-      {!Validation.trust_cert_fingerprint}. Note that public key pinning is
-      usually better than certificate pinning, see
-      {{:https://www.imperialviolet.org/2011/05/04/pinning.html}this article}. *)
+      {!Validation.trust_cert_fingerprint}.  Note that
+      {{!server_key_fingerprint}public key pinning} has
+      {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
+      over certificate pinning. *)
   val server_cert_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
-    fingerprints:('a Domain_name.t * Cstruct.t) list -> t
+    fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
 
   (** [null] is [authenticator], which always returns [Ok ()]. (Useful for
       testing purposes only.) *)

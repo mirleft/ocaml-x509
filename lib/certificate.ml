@@ -203,6 +203,10 @@ let supports_keytype c t =
 
 let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
 
+type host = Extension.host
+
+module Host_set = Extension.Host_set
+
 (* RFC 6125, 6.4.4:
    Therefore, if and only if the presented identifiers do not include a
    DNS-ID, SRV-ID, URI-ID, or any application-specific identifier types
@@ -217,47 +221,26 @@ let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
 let hostnames { asn = cert ; _ } =
   let subj =
     match Distinguished_name.common_name cert.tbs_cert.subject with
-    | None -> Domain_name.Set.empty
-    | Some x -> match Domain_name.of_string x with
-      | Ok d -> Domain_name.Set.singleton d
-      | Error _ -> Domain_name.Set.empty
+    | None -> Host_set.empty
+    | Some x ->
+      match Extension.host x with
+      | Some (wild, d) -> Host_set.singleton (wild, d)
+      | None -> Host_set.empty
   in
-  match Extension.(find Subject_alt_name cert.tbs_cert.extensions) with
+  match Extension.hostnames cert.tbs_cert.extensions with
+  | Some names -> names
   | None -> subj
-  | Some (_, names) ->
-    match General_name.find DNS names with
-    | None -> subj
-    | Some xs ->
-      List.fold_left (fun acc s ->
-          match Domain_name.of_string s with
-          | Ok d -> Domain_name.Set.add d acc
-          | Error _ -> acc)
-        Domain_name.Set.empty xs
 
-let o f g x = f (g x)
-
-type host = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
-
-let is_wildcard name =
-  match Domain_name.get_label name 0 with
-  | Ok "*" -> Some (Domain_name.drop_label_exn name)
-  | _ -> None
-
-(* we limit our validation to a single '*' character at the beginning (left-most label)! *)
-let wildcard_matches host names =
-  let wildcards = Domain_name.Set.fold (fun n acc ->
-      match is_wildcard n with None -> acc | Some x -> Domain_name.Set.add x acc)
-      names Domain_name.Set.empty
-  in
-  let wildcard_matches domain =
-    pred (Domain_name.count_labels host) = Domain_name.count_labels domain &&
-    Domain_name.is_subdomain ~subdomain:host ~domain
-  in
-  Domain_name.Set.exists wildcard_matches wildcards
-
-let supports_hostname cert (mode, name) =
+let supports_hostname cert name =
   let names = hostnames cert in
-  Domain_name.Set.mem (Domain_name.raw name) names ||
-  match mode with
-  | `Strict -> false
-  | `Wildcard -> wildcard_matches name names
+  let wc_name_opt =
+    match Domain_name.drop_label name with
+    | Error _ -> None
+    | Ok name -> match Domain_name.host name with
+      | Ok hostname -> Some hostname
+      | Error _ -> None
+  in
+  Host_set.mem (`Strict, name) names
+  || (match wc_name_opt with
+      | None -> false
+      | Some wc_name -> Host_set.mem (`Wildcard, wc_name) names)

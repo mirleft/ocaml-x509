@@ -88,17 +88,15 @@ let first_certs = [
 ]
 
 let test_valid_ca_cert server chain valid name ca () =
-  match valid, Validation.verify_chain_of_trust ~host:name ~anchors:ca (server :: chain) with
+  let anchors = ca
+  and host = host name
+  and full_chain = server :: chain
+  in
+  match valid, Validation.verify_chain_of_trust ~host ~anchors full_chain with
   | false, Ok _   -> Alcotest.fail "expected to fail, but didn't"
   | false, Error _ -> ()
   | true , Ok _   -> ()
   | true , Error c -> Alcotest.failf "valid certificate %a" Validation.pp_validation_error c
-
-let strict_test_valid_ca_cert server chain valid name ca =
-  test_valid_ca_cert server chain valid (`Strict, host name) ca
-
-let wildcard_test_valid_ca_cert server chain valid name ca =
-  test_valid_ca_cert server chain valid (`Wildcard, host name) ca
 
 let test_cert c usages extusage () =
   let ku, eku =
@@ -133,17 +131,11 @@ let first_cert_ca_test (ca, x) =
     (List.map
        (fun (name, valid, cns, _, _) ->
         let c = first_cert name in
-        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, strict_test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
-        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, wildcard_test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
+        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
         List.mapi (fun i cn ->
                    "certificate verification testing using CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                   `Quick, strict_test_valid_ca_cert c [] valid cn [ca])
-                  cns @
-        List.mapi (fun i cn ->
-                   "certificate verification testing using CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                   `Quick, wildcard_test_valid_ca_cert c [] valid cn [ca])
-                  cns
-       )
+                   `Quick, test_valid_ca_cert c [] valid cn [ca])
+                  cns)
     first_certs)
 
 let ca_tests f =
@@ -172,15 +164,14 @@ let first_wildcard_cert_ca_test (ca, x) =
     (List.map
        (fun (name, _, _) ->
         let c = first_cert name in
-        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, strict_test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
-        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, wildcard_test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
+        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
         List.mapi (fun i cn ->
                    "wildcard certificate CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                   `Quick, wildcard_test_valid_ca_cert c [] true cn [ca])
+                   `Quick, test_valid_ca_cert c [] true cn [ca])
                   [ "foo.foobar.com" ; "bar.foobar.com" ; "www.foobar.com" ] @
         List.mapi (fun i cn ->
                    "wildcard certificate CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                   `Quick, wildcard_test_valid_ca_cert c [] false cn [ca])
+                   `Quick, test_valid_ca_cert c [] false cn [ca])
                   [ "foo.foo.foobar.com" ; "bar.fbar.com" ; "foobar.com" ; "com" ; "foobar.com.bla" ]
        )
     first_wildcard_certs)
@@ -243,15 +234,10 @@ let second_cert_ca_test (cavalid, ca, x) =
            List.map
              (fun (name, cns, valid, _, _) ->
               let c = second_cert name in
-              ("verification CA " ^ x ^ " cn blablbalbala", `Quick, strict_test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
-              ("verification CA " ^ x ^ " cn blablbalbala", `Quick, wildcard_test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
+              ("verification CA " ^ x ^ " cn blablbalbala", `Quick, test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
               List.mapi (fun i cn ->
                          "strict certificate verification testing using CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                         `Quick, strict_test_valid_ca_cert c chain (cavalid && imvalid && valid) cn [ca])
-                        cns @
-              List.mapi (fun i cn ->
-                         "wildcard certificate verification testing using CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                         `Quick, wildcard_test_valid_ca_cert c chain (cavalid && imvalid && valid) cn [ca])
+                         `Quick, test_valid_ca_cert c chain (cavalid && imvalid && valid) cn [ca])
                         cns)
              second_certs)
           intermediate_cas))
@@ -270,15 +256,14 @@ let second_wildcard_cert_ca_test (cavalid, ca, x) =
        (fun (imvalid, im) ->
         let chain = [im_cert im] in
         let c = second_cert "second-subj-wild" in
-        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, strict_test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
-        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, wildcard_test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
+        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
         List.mapi (fun i cn ->
                    "wildcard certificate verification CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                   `Quick, wildcard_test_valid_ca_cert c chain (cavalid && imvalid) cn [ca])
+                   `Quick, test_valid_ca_cert c chain (cavalid && imvalid) cn [ca])
                   [ "a.foobar.com" ; "foo.foobar.com" ; "foobar.foobar.com" ; "www.foobar.com" ] @
         List.mapi (fun i cn ->
                    "wildcard certificate verification CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                   `Quick, wildcard_test_valid_ca_cert c chain false cn [ca])
+                   `Quick, test_valid_ca_cert c chain false cn [ca])
                   [ "a.b.foobar.com" ; "f.foobar.com.com" ; "f.f.f." ; "foobar.com.uk" ; "foooo.bar.com" ; "foobar.com" ])
        intermediate_cas)
 
@@ -288,15 +273,14 @@ let second_no_cn_cert_ca_test (_, ca, x) =
        (fun (_, im) ->
         let chain = [im_cert im] in
         let c = second_cert "second-no-cn" in
-        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, strict_test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
-        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, wildcard_test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
+        ("verification CA " ^ x ^ " cn blablbalbala", `Quick, test_valid_ca_cert c chain false "blablabalbal" [ca]) ::
         List.mapi (fun i cn ->
                    "certificate verification CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                   `Quick, strict_test_valid_ca_cert c chain false cn [ca])
+                   `Quick, test_valid_ca_cert c chain false cn [ca])
                   [ "a.foobar.com" ; "foo.foobar.com" ; "foobar.foobar.com" ; "foobar.com" ; "www.foobar.com" ] @
         List.mapi (fun i cn ->
                    "certificate verification CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                   `Quick, wildcard_test_valid_ca_cert c chain false cn [ca])
+                   `Quick, test_valid_ca_cert c chain false cn [ca])
                   [ "a.b.foobar.com" ; "f.foobar.com.com" ; "f.f.f." ; "foobar.com.uk" ; "foooo.bar.com" ])
        intermediate_cas)
 
@@ -304,12 +288,12 @@ let invalid_tests =
   let c = second_cert "second" in
   let h = "second.foobar.com" in
   [
-    "invalid chain", `Quick, strict_test_valid_ca_cert c [] false h [cacert] ;
-    "broken chain", `Quick, strict_test_valid_ca_cert c [cacert] false h [cacert] ;
-    "no trust anchor", `Quick, strict_test_valid_ca_cert c [im_cert "cacert"] false h [] ;
-    "2chain", `Quick, strict_test_valid_ca_cert c [im_cert "cacert" ; cacert] true h [cacert] ;
-    "3chain", `Quick, strict_test_valid_ca_cert c [im_cert "cacert" ; cacert ; cacert] true h [cacert] ;
-    "chain-order", `Quick, strict_test_valid_ca_cert c [im_cert "cacert" ; im_cert "cacert" ; cacert] true h [cacert] ;
+    "invalid chain", `Quick, test_valid_ca_cert c [] false h [cacert] ;
+    "broken chain", `Quick, test_valid_ca_cert c [cacert] false h [cacert] ;
+    "no trust anchor", `Quick, test_valid_ca_cert c [im_cert "cacert"] false h [] ;
+    "2chain", `Quick, test_valid_ca_cert c [im_cert "cacert" ; cacert] true h [cacert] ;
+    "3chain", `Quick, test_valid_ca_cert c [im_cert "cacert" ; cacert ; cacert] true h [cacert] ;
+    "chain-order", `Quick, test_valid_ca_cert c [im_cert "cacert" ; im_cert "cacert" ; cacert] true h [cacert] ;
     "not a CA", `Quick, (fun _ -> Alcotest.(check int "is not a CA" 0
                                               (List.length (Validation.valid_cas [im_cert "cacert"])))) ;
     "not a CA", `Quick, (fun _ -> Alcotest.(check int "is also not a CA" 0

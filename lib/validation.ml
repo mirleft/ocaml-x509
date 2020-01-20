@@ -177,7 +177,7 @@ let pp_ca_error ppf = function
 
 type leaf_validation_error = [
   | `LeafCertificateExpired of Certificate.t * Ptime.t option
-  | `LeafInvalidName of Certificate.t * Certificate.host option
+  | `LeafInvalidName of Certificate.t * [`host] Domain_name.t option
   | `LeafInvalidVersion of Certificate.t
   | `LeafInvalidExtensions of Certificate.t
 ]
@@ -188,14 +188,8 @@ let pp_leaf_validation_error ppf = function
     Fmt.pf ppf "leaf certificate %a expired (now %a)" Certificate.pp c
       Fmt.(option ~none:(unit "no timestamp provided") pp_pt) now
   | `LeafInvalidName (c, n) ->
-    let str, data = match n with
-      | None -> "none", Domain_name.(host_exn root)
-      | Some x ->
-        (match fst x with
-         | `Wildcard -> "wildcard "
-         | `Strict -> ""), snd x
-    in
-    Fmt.pf ppf "leaf certificate %a does not contain the name %s%a" Certificate.pp c str Domain_name.pp data
+    Fmt.pf ppf "leaf certificate %a does not contain the name %a"
+      Certificate.pp c Fmt.(option ~none:(unit "none") Domain_name.pp) n
   | `LeafInvalidVersion c ->
     Fmt.pf ppf "leaf certificate %a: version 3 is required for extensions" Certificate.pp c
   | `LeafInvalidExtensions c ->
@@ -252,7 +246,7 @@ let pp_chain_error ppf = function
   | `Chain c -> pp_chain_validation_error ppf c
 
 type fingerprint_validation_error = [
-  | `ServerNameNotPresent of Certificate.t * [ `raw ] Domain_name.t
+  | `ServerNameNotPresent of Certificate.t * [`host] Domain_name.t
   | `NameNotInList of Certificate.t
   | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
 ]
@@ -411,15 +405,12 @@ let fingerprint_verification ?host ?time fingerprints fp = function
       let fp_matches (_, fp') = Cstruct.equal fp' fingerprint in
       if List.exists fp_matches fingerprints then
         let name, _ = List.find fp_matches fingerprints in
-        let name = Domain_name.raw name in
-        if maybe_validate_hostname server (Some (`Wildcard, name)) then
+        if maybe_validate_hostname server (Some name) then
           Ok None
         else
           Error (`Fingerprint (`ServerNameNotPresent (server, name)))
       else
-        let name_matches (n, _) =
-          Certificate.supports_hostname server (`Wildcard, Domain_name.raw n)
-        in
+        let name_matches (n, _) = Certificate.supports_hostname server n in
         if List.exists name_matches fingerprints then
           let (_, fp) = List.find name_matches fingerprints in
           Error (`Fingerprint (`InvalidFingerprint (server, fingerprint, fp)))

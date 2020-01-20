@@ -34,10 +34,15 @@ type request_info = {
   extensions : Ext.t ;
 }
 
-type t = {
+type request = {
   info : request_info ;
   signature_algorithm : Algorithm.t ;
   signature : Cstruct.t
+}
+
+type t = {
+  asn : request ;
+  raw : Cstruct.t ;
 }
 
 module Asn = struct
@@ -112,22 +117,39 @@ let raw_sign raw digest key =
   match key with
     | `RSA priv -> Nocrypto.Rsa.PKCS1.sig_encode ~key:priv sigval
 
-let info sr = sr.info
+let info { asn ; _ } = asn.info
 
-let validate_signature { info ; signature ; signature_algorithm } =
-  (* TODO: may be wrong if remote used some non-utf string encoding *)
-  let raw = Asn.request_info_to_cs info in
-  Validation.validate_raw_signature raw signature_algorithm signature info.public_key
+let hostnames csr =
+  let info = info csr in
+  let subj =
+    match Distinguished_name.common_name info.subject with
+    | None -> Extension.Host_set.empty
+    | Some x ->
+      match Extension.host x with
+      | Some (typ, n) -> Extension.Host_set.singleton (typ, n)
+      | None -> Extension.Host_set.empty
+  in
+  match Ext.(find Extensions info.extensions) with
+  | None -> subj
+  | Some exts -> match Extension.hostnames exts with
+    | Some names -> names
+    | None -> subj
+
+let validate_signature { asn ; raw } =
+  let raw_data = Validation.raw_cert_hack raw asn.signature in
+  Validation.validate_raw_signature raw_data asn.signature_algorithm asn.signature
+    asn.info.public_key
 
 let decode_der cs =
   let open Rresult.R.Infix in
   Asn_grammars.err_to_msg (Asn.signing_request_of_cs cs) >>= fun csr ->
+  let csr = { raw = cs ; asn = csr } in
   if validate_signature csr then
     Ok csr
   else
     Error (`Msg "couldn't validate signature")
 
-let encode_der = Asn.signing_request_to_cs
+let encode_der { raw ; _ } = raw
 
 let decode_pem cs =
   let open Rresult.R.Infix in
@@ -148,7 +170,9 @@ let create subject ?(digest = `SHA256) ?(extensions = Ext.empty) = function
     let info_cs = Asn.request_info_to_cs info in
     let signature = raw_sign info_cs digest (`RSA priv) in
     let signature_algorithm = Algorithm.of_signature_algorithm `RSA digest in
-    { info ; signature_algorithm ; signature }
+    let asn = { info ; signature_algorithm ; signature } in
+    let raw = Asn.signing_request_to_cs asn in
+    { asn ; raw }
 
 let sign signing_request
     ~valid_from ~valid_until
@@ -156,12 +180,14 @@ let sign signing_request
     ?(serial = Nocrypto.(Rng.Z.gen_r Numeric.Z.one Numeric.Z.(one lsl 64)))
     ?(extensions = Extension.empty)
     key issuer =
-  assert (validate_signature signing_request);
-  let signature_algo =
-    Algorithm.of_signature_algorithm (Private_key.keytype key) digest
-  and info = signing_request.info
-  in
-  let tbs_cert : Certificate.tBSCertificate = {
+  if not (validate_signature signing_request) then
+    Error (`Msg "could not validate signature of signing request")
+  else
+    let signature_algo =
+      Algorithm.of_signature_algorithm (Private_key.keytype key) digest
+    and info = signing_request.asn.info
+    in
+    let tbs_cert : Certificate.tBSCertificate = {
       version = `V3 ;
       serial ;
       signature = signature_algo ;
@@ -172,13 +198,13 @@ let sign signing_request
       issuer_id = None ;
       subject_id = None ;
       extensions
-  } in
-  let tbs_raw = Certificate.Asn.tbs_certificate_to_cstruct tbs_cert in
-  let signature_val = raw_sign tbs_raw digest key in
-  let asn = {
-    Certificate.tbs_cert ;
-    signature_algo ;
-    signature_val ;
-  } in
-  let raw = Certificate.Asn.certificate_to_cstruct asn in
-  { Certificate.asn ; raw }
+    } in
+    let tbs_raw = Certificate.Asn.tbs_certificate_to_cstruct tbs_cert in
+    let signature_val = raw_sign tbs_raw digest key in
+    let asn = {
+      Certificate.tbs_cert ;
+      signature_algo ;
+      signature_val ;
+    } in
+    let raw = Certificate.Asn.certificate_to_cstruct asn in
+    Ok { Certificate.asn ; raw }
