@@ -7,13 +7,14 @@ type t = ?host:[`host] Domain_name.t -> Certificate.t list -> Validation.r
    * Authenticator authenticates against time it was *created* at, not at the moment of
    * authentication. This has repercussions to long-lived authenticators; reconsider.
    * *)
-let chain_of_trust ?time ?(crls = []) cas =
+let chain_of_trust ?time ?crls ?(hash_whitelist = Validation.sha2) cas =
   let revoked = match crls with
-    | [] -> None
-    | crls -> Some (Crl.is_revoked crls)
+    | None -> None
+    | Some crls -> Some (Crl.is_revoked crls ~hash_whitelist)
   in
   fun ?host certificates ->
-    Validation.verify_chain_of_trust ?host ?time ?revoked ~anchors:cas certificates
+    Validation.verify_chain_of_trust ?host ?time ?revoked ~hash_whitelist
+      ~anchors:cas certificates
 
 let server_key_fingerprint ?time ~hash ~fingerprints =
   fun ?host certificates ->

@@ -1,5 +1,8 @@
 open Nocrypto
 
+let sha2 = [ `SHA256 ; `SHA384 ; `SHA512 ]
+let all_hashes = [ `MD5 ; `SHA1 ; `SHA224 ] @ sha2
+
 let maybe_validate_hostname cert = function
   | None   -> true
   | Some x -> Certificate.supports_hostname cert x
@@ -10,18 +13,15 @@ let issuer_matches_subject
 
 let is_self_signed cert = issuer_matches_subject cert cert
 
-let validate_raw_signature raw signature_algo signature_val pk_info =
-  match pk_info with
-  | `RSA issuing_key ->
+let validate_raw_signature hash_whitelist raw signature_algo signature_val pk_info =
+  match pk_info, Algorithm.to_signature_algorithm signature_algo with
+  | `RSA issuing_key, Some (`RSA, siga) ->
+    List.mem siga hash_whitelist &&
     ( match Rsa.PKCS1.sig_decode ~key:issuing_key signature_val with
       | None           -> false
       | Some signature ->
-        match
-          Certificate.decode_pkcs1_digest_info signature,
-          Algorithm.to_signature_algorithm signature_algo
-        with
-        | Ok (algo, hash), Some (`RSA, h) ->
-          h = algo && Cstruct.equal hash (Hash.digest algo raw)
+        match Certificate.decode_pkcs1_digest_info signature with
+        | Ok (a, hash) -> siga = a && Cstruct.equal hash (Hash.digest a raw)
         | _ -> false )
   | _ -> false
 
@@ -33,9 +33,10 @@ let raw_cert_hack raw signature =
   let lenl   = 2 + if 0x80 land snd = 0 then 0 else 0x7F land snd in
   Cstruct.(sub raw lenl (len raw - (siglen + lenl + 19 + off)))
 
-let validate_signature { Certificate.asn = trusted ; _ } cert =
+let validate_signature hash_whitelist { Certificate.asn = trusted ; _ } cert =
   let tbs_raw = raw_cert_hack cert.Certificate.raw cert.asn.signature_val in
-  validate_raw_signature tbs_raw cert.asn.signature_algo cert.asn.signature_val trusted.tbs_cert.pk_info
+  validate_raw_signature hash_whitelist tbs_raw cert.asn.signature_algo
+    cert.asn.signature_val trusted.tbs_cert.pk_info
 
 let validate_time time { Certificate.asn = cert ; _ } =
   match time with
@@ -293,11 +294,11 @@ let is_cert_valid now cert =
   | (_, false, _)      -> Error (`IntermediateInvalidVersion cert)
   | (_, _, false)      -> Error (`IntermediateInvalidExtensions cert)
 
-let is_ca_cert_valid now cert =
+let is_ca_cert_valid hash_whitelist now cert =
   match
     is_self_signed cert,
     version_matches_extensions cert,
-    validate_signature cert cert,
+    validate_signature hash_whitelist cert cert,
     validate_time now cert,
     valid_trust_anchor_extensions cert
   with
@@ -308,7 +309,8 @@ let is_ca_cert_valid now cert =
   | (_, _, _, false, _)            -> Error (`CACertificateExpired (cert, now))
   | (_, _, _, _, false)            -> Error (`CAInvalidExtensions cert)
 
-let valid_ca ?time cacert = is_ca_cert_valid time cacert
+let valid_ca ?(hash_whitelist = all_hashes) ?time cacert =
+  is_ca_cert_valid hash_whitelist time cacert
 
 let is_server_cert_valid ?host now cert =
   match
@@ -323,11 +325,11 @@ let is_server_cert_valid ?host now cert =
   | (_, _, false, _)         -> Error (`LeafInvalidVersion cert)
   | (_, _, _, false)         -> Error (`LeafInvalidExtensions cert)
 
-let signs pathlen trusted cert =
+let signs hash pathlen trusted cert =
   match
     issuer_matches_subject trusted cert,
     ext_authority_matches_subject trusted cert,
-    validate_signature trusted cert,
+    validate_signature hash trusted cert,
     validate_path_len pathlen trusted
   with
   | (true, true, true, true) -> Ok ()
@@ -339,27 +341,27 @@ let signs pathlen trusted cert =
 let issuer trusted cert =
   List.filter (fun p -> issuer_matches_subject p cert) trusted
 
-let rec validate_anchors revoked pathlen cert = function
+let rec validate_anchors revoked hash pathlen cert = function
   | []    -> Error (`NoTrustAnchor cert)
-  | x::xs -> match signs pathlen x cert with
+  | x::xs -> match signs hash pathlen x cert with
     | Ok _    -> if revoked ~issuer:x ~cert then Error (`Revoked cert) else Ok x
-    | Error _ -> validate_anchors revoked pathlen cert xs
+    | Error _ -> validate_anchors revoked hash pathlen cert xs
 
 let lift_leaf f x =
   match f x with
   | Ok () -> Ok ()
   | Error e -> Error (`Leaf e)
 
-let verify_single_chain ?time ?(revoked = fun ~issuer:_ ~cert:_ -> false) anchors chain =
+let verify_single_chain ?time ?(revoked = fun ~issuer:_ ~cert:_ -> false) hash anchors chain =
   let rec climb pathlen = function
     | cert :: issuer :: certs ->
       is_cert_valid time issuer >>= fun () ->
-      if revoked ~issuer ~cert then Error (`Revoked cert) else Ok () >>= fun () ->
-        signs pathlen issuer cert >>= fun () ->
-        climb (succ pathlen) (issuer :: certs)
+      (if revoked ~issuer ~cert then Error (`Revoked cert) else Ok ()) >>= fun () ->
+      signs hash pathlen issuer cert >>= fun () ->
+      climb (succ pathlen) (issuer :: certs)
     | [c] ->
       let anchors = issuer anchors c in
-      validate_anchors revoked pathlen c anchors
+      validate_anchors revoked hash pathlen c anchors
     | [] -> Error `EmptyCertificateChain
   in
   climb 0 chain
@@ -369,12 +371,12 @@ let lift_chain f x =
   | Ok x -> Ok x
   | Error e -> Error (`Chain e)
 
-let verify_chain ?host ?time ?revoked ~anchors = function
+let verify_chain ?host ?time ?revoked ?(hash_whitelist = sha2) ~anchors = function
   | [] -> Error (`Chain `EmptyCertificateChain)
   | server :: certs ->
     let anchors = List.filter (validate_time time) anchors in
     lift_leaf (is_server_cert_valid ?host time) server >>= fun () ->
-    lift_chain (verify_single_chain ?time ?revoked anchors) (server :: certs)
+    lift_chain (verify_single_chain ?time ?revoked hash_whitelist anchors) (server :: certs)
 
 let rec any_m e f = function
   | [] -> Error e
@@ -382,7 +384,7 @@ let rec any_m e f = function
     | Ok ta -> Ok (Some (c, ta))
     | Error _ -> any_m e f cs
 
-let verify_chain_of_trust ?host ?time ?revoked ~anchors = function
+let verify_chain_of_trust ?host ?time ?revoked ?(hash_whitelist = sha2) ~anchors = function
   | [] -> Error `EmptyCertificateChain
   | server :: certs ->
     (* verify server! *)
@@ -392,10 +394,12 @@ let verify_chain_of_trust ?host ?time ?revoked ~anchors = function
     and anchors = List.filter (validate_time time) anchors
     in
     (* exists there one which is good? *)
-    any_m `InvalidChain (verify_single_chain ?time ?revoked anchors) paths
+    any_m `InvalidChain (verify_single_chain ?time ?revoked hash_whitelist anchors) paths
 
-let valid_cas ?time cas =
-  List.filter (fun cert -> Rresult.R.is_ok (is_ca_cert_valid time cert)) cas
+let valid_cas ?(hash_whitelist = all_hashes) ?time cas =
+  List.filter (fun cert ->
+      Rresult.R.is_ok (is_ca_cert_valid hash_whitelist time cert))
+    cas
 
 let fingerprint_verification ?host ?time fingerprints fp = function
   | [] -> Error `EmptyCertificateChain

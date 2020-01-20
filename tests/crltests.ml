@@ -18,13 +18,15 @@ let with_loaded_files file ~f =
   with e -> Unix.close fd1 ; Unix.close fd2 ;
     Alcotest.failf "exception %s" (Printexc.to_string e)
 
+let hash_whitelist = [ `SHA1 ; `SHA256 ; `SHA384 ; `SHA512 ]
+
 let one f () =
   with_loaded_files f ~f:(fun cert crl ->
       let open Rresult.R.Infix in
       Certificate.decode_pem cert >>= fun cert ->
       let pubkey = Certificate.public_key cert in
       CRL.decode_der crl >>= fun crl ->
-      if not (CRL.validate crl pubkey) then
+      if not (CRL.validate crl ~hash_whitelist pubkey) then
         Error (`Msg "couldn't verify cert")
       else
         Ok ())

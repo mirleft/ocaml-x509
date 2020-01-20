@@ -447,9 +447,12 @@ module Signing_request : sig
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
-  (** [decode_der cstruct] is [signing_request], the ASN.1 decoded
-      [cstruct] or an error. *)
-  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
+  (** [decode_der ~hash_whitelist cstruct] is [signing_request], the ASN.1
+      decoded [cstruct] or an error. The signature on the signing request
+      is validated, and its hash algorithm must be in [hash_whitelist] (by
+      default only SHA-2 is accepted). *)
+  val decode_der : ?hash_whitelist:Nocrypto.Hash.hash list -> Cstruct.t ->
+    (t, [> R.msg ]) result
 
   (** [encode_der sr] is [cstruct], the ASN.1 encoded representation of the [sr]. *)
   val encode_der : t -> Cstruct.t
@@ -504,22 +507,24 @@ module Signing_request : sig
 
   (** {1 Provision a signing request to a certificate} *)
 
-  (** [sign signing_request ~digest ~valid_from ~valid_until ~serial ~extensions private issuer]
-      creates [certificate], a signed certificate.  Public key and subject are
-      taken from the [signing_request], the [extensions] are added to the X.509
-      certificate.  The [private] key is used to sign the certificate, the
-      [issuer] is recorded in the certificate.  The digest defaults to
-      [`SHA256].  The [serial] defaults to a random value between 1 and 2^64.
-      Certificate version is always 3.  Please note that the extensions in the
-      [signing_request] are ignored, you can pass them using:
+  (** [sign signing_request ~valid_from ~valid_until ~hash_whitelist ~digest ~serial ~extensions private issuer]
+      creates [certificate], a signed certificate.  Signing can fail if the
+      signature on the [signing_request] is invalid, or its hash algorithm does
+      not occur in [hash_whitelist] (default all SHA-2 algorithms).  Public key
+      and subject are taken from the [signing_request], the [extensions] are
+      added to the X.509 certificate.  The [private] key is used to sign the
+      certificate, the [issuer] is recorded in the certificate.  The digest
+      defaults to [`SHA256].  The [serial] defaults to a random value between 1
+      and 2^64.  Certificate version is always 3.  Please note that the
+      extensions in the [signing_request] are ignored, you can pass them using:
 
 {[match Ext.find Extensions (info csr).extensions with
 | Ok ext -> ext
 | Error _ -> Extension.empty
 ]} *)
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
-    ?digest:Nocrypto.Hash.hash -> ?serial:Z.t ->
-    ?extensions:Extension.t -> Private_key.t ->
+    ?hash_whitelist:Nocrypto.Hash.hash list -> ?digest:Nocrypto.Hash.hash ->
+    ?serial:Z.t -> ?extensions:Extension.t -> Private_key.t ->
     Distinguished_name.t -> (Certificate.t, [> R.msg ]) result
 end
 
@@ -588,19 +593,25 @@ module CRL : sig
 
   (** {1 Validation and verification of CRLs} *)
 
-  (** [validate t pk] validates the digital signature of the revocation list. *)
-  val validate : t -> Public_key.t -> bool
+  (** [validate t ~hash_whitelist pk] validates the digital signature of the
+      revocation list. The [hash_whitelist] defaults to SHA-2. *)
+  val validate : t -> ?hash_whitelist:Nocrypto.Hash.hash list -> Public_key.t ->
+    bool
 
-  (** [verify t ~time cert] verifies that the issuer of [t] matches the subject
-      of [cert], and validates the digital signature of the revocation list.  If
-      [time] is provided, it must be after [this_update] and before
-      [next_update] of [t]. *)
-  val verify : t -> ?time:Ptime.t -> Certificate.t -> bool
+  (** [verify t ~hash_whitelist ~time cert] verifies that the issuer of [t]
+      matches the subject of [cert], and validates the digital signature of the
+      revocation list.  The used hash algorithm must be in the [hash_whitelist]
+      (defaults to SHA-2). If [time] is provided, it must be after [this_update]
+      and before [next_update] of [t]. *)
+  val verify : t -> ?hash_whitelist:Nocrypto.Hash.hash list -> ?time:Ptime.t ->
+    Certificate.t -> bool
 
-  (** [is_revoked crls ~issuer ~cert] is [true] if there exists a revocation of
-      [cert] in [crls] which is signed by the [issuer].  The subject of [issuer]
-      must match the issuer of the crl. *)
-  val is_revoked : t list -> issuer:Certificate.t -> cert:Certificate.t -> bool
+  (** [is_revoked crls ~hash_whitelist ~issuer ~cert] is [true] if there exists
+      a revocation of [cert] in [crls] which is signed by the [issuer].  The
+      subject of [issuer] must match the issuer of the crl.  The hash algorithm
+      used for signing must be in the [hash_whitelist] (defaults to SHA-2).  *)
+  val is_revoked : t list -> ?hash_whitelist:Nocrypto.Hash.hash list ->
+    issuer:Certificate.t -> cert:Certificate.t -> bool
 
   (** {1 Construction and signing of CRLs} *)
 
@@ -659,16 +670,19 @@ module Validation : sig
   (** [pp_ca_error ppf ca_error] pretty-prints the CA error [ca_error]. *)
   val pp_ca_error : ca_error Fmt.t
 
-  (** [valid_ca ~time certificate] is [result], which is [Ok ()] if the given
-      certificate is self-signed, it is valid at [time], its extensions are not
-      present (if X.509 version 1 certificate), or are appropriate for a CA
-      (BasicConstraints is present and true, KeyUsage extension contains
-      keyCertSign). *)
-  val valid_ca : ?time:Ptime.t -> Certificate.t -> (unit, ca_error) result
+  (** [valid_ca ~hash_whitelist ~time certificate] is [result], which is [Ok ()]
+      if the given certificate is self-signed with any hash algorithm of
+      [hash_whitelist] (defaults to any hash), it is valid at [time], its
+      extensions are not present (if X.509 version 1 certificate), or are
+      appropriate for a CA (BasicConstraints is present and true, KeyUsage
+      extension contains keyCertSign). *)
+  val valid_ca : ?hash_whitelist:Nocrypto.Hash.hash list -> ?time:Ptime.t ->
+    Certificate.t -> (unit, ca_error) result
 
-  (** [valid_cas ~time certificates] is [valid_certificates], only those
-      certificates which pass the {!valid_ca} check. *)
-  val valid_cas : ?time:Ptime.t -> Certificate.t list -> Certificate.t list
+  (** [valid_cas ~hash_whitelist ~time certificates] is [valid_certificates],
+      only those certificates which pass the {!valid_ca} check. *)
+  val valid_cas : ?hash_whitelist:Nocrypto.Hash.hash list -> ?time:Ptime.t ->
+    Certificate.t list -> Certificate.t list
 
   (** {1 Chain of trust verification} *)
 
@@ -711,19 +725,21 @@ module Validation : sig
   (** [pp_chain_error ppf chain_error] pretty-prints the [chain_error]. *)
   val pp_chain_error : chain_error Fmt.t
 
-  (** [verify_chain ~host ~time ~revoked ~anchors chain] is [result], either
-      [Ok] and the trust anchor used to verify the chain, or [Error] and the
-      chain error.  RFC 5280 describes the implemented
+  (** [verify_chain ~host ~time ~revoked ~hash_whitelist ~anchors chain] is
+      [result], either [Ok] and the trust anchor used to verify the chain, or
+      [Error] and the chain error.  RFC 5280 describes the implemented
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}path validation}
       algorithm: The validity period of the given certificates is checked
-      against the [time].  The X509v3 extensions of the [chain] are checked,
-      then a chain of trust from [anchors] to the server certificate is
-      validated.  The path length constraints are checked.  The server
-      certificate is checked to contain the given [host], using {!hostnames}.
-      The returned certificate is the root of the chain, a member of the given
-      list of [anchors]. *)
+      against the [time].  The signature algorithm must be present in
+      [hash_whitelist] (defaults to SHA-2).  The X509v3 extensions of the
+      [chain] are checked, then a chain of trust from [anchors] to the server
+      certificate is validated.  The path length constraints are checked.  The
+      server certificate is checked to contain the given [host], using
+      {!hostnames}.  The returned certificate is the root of the chain, a member
+      of the given list of [anchors]. *)
   val verify_chain : ?host:[`host] Domain_name.t -> ?time:Ptime.t ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
+    ?hash_whitelist:Nocrypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list ->
     (Certificate.t, chain_error) result
 
@@ -748,8 +764,8 @@ module Validation : sig
 
   type r = ((Certificate.t list * Certificate.t) option, validation_error) result
 
-  (** [verify_chain_of_trust ~host ~time ~revoked ~anchors certificates] is
-      [result].  First, all possible paths are constructed using the
+  (** [verify_chain_of_trust ~host ~time ~revoked ~hash_whitelist ~anchors certificates]
+      is [result].  First, all possible paths are constructed using the
       {!build_paths} function, the first certificate of the chain is verified to
       be a valid leaf certificate (no BasicConstraints extension) and contains
       the given [host] (using {!hostnames}); if some path is valid, using
@@ -758,6 +774,7 @@ module Validation : sig
   val verify_chain_of_trust :
     ?host:[`host] Domain_name.t -> ?time:Ptime.t ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
+    ?hash_whitelist:Nocrypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list -> r
 
   (** {1 Fingerprint verification} *)
@@ -797,15 +814,17 @@ module Authenticator : sig
       certificate stack to an authentication decision {!Validation.r}. *)
   type t = ?host:[`host] Domain_name.t -> Certificate.t list -> Validation.r
 
-  (** [chain_of_trust ?time trust_anchors] is [authenticator], which uses the
-      given [time] and list of [trust_anchors] to verify the certificate chain.
-      This is an implementation of the algorithm described in
+  (** [chain_of_trust ~time ~crls ~hash_whitelist trust_anchors] is
+      [authenticator], which uses the given [time] and list of [trust_anchors]
+      to verify the certificate chain. All signatures must use a hash algorithm
+      specified in [hash_whitelist], defaults to SHA-2.  Signatures on revocation
+      lists [crls] must also use a hash algorithm in [hash_whitelist]. This is
+      an implementation of the algorithm described in
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC 5280}, using
       {!Validation.verify_chain_of_trust}.  The given trust anchors are not
-      checked to be valid trust anchors any further (you have to do this
-      manually with {!Validation.valid_ca} or {!Validation.valid_cas})!  *)
+      validated, you can filter them with {!Validation.valid_cas} if desired. *)
   val chain_of_trust : ?time:Ptime.t -> ?crls:CRL.t list ->
-    Certificate.t list -> t
+    ?hash_whitelist:Nocrypto.Hash.hash list -> Certificate.t list -> t
 
   (** [server_key_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify that the
