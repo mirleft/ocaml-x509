@@ -194,6 +194,9 @@ let serial { asn ; _ } = asn.tbs_cert.serial
 
 let validity { asn ; _ } = asn.tbs_cert.validity
 
+let signature_algorithm { asn ; _ } =
+  Algorithm.to_signature_algorithm asn.signature_algo
+
 let public_key { asn = cert ; _ } = cert.tbs_cert.pk_info
 
 let supports_keytype c t =

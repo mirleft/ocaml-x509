@@ -393,6 +393,9 @@ module Certificate : sig
   (** [public_key certificate] is [pk], the public key of the [certificate]. *)
   val public_key : t -> Public_key.t
 
+  (** [signature_algorithm certificate] is the algorithm used for the signature. *)
+  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Nocrypto.Hash.hash) option
+
   (** The polymorphic variant for hostname validation. *)
   type host = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
 
@@ -483,6 +486,9 @@ module Signing_request : sig
   (** [info signing_request] is {!request_info}, the information inside the
       {!signing_request}. *)
   val info : t -> request_info
+
+  (** [signature_algorithm signing_request] is the algorithm used for the signature. *)
+  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Nocrypto.Hash.hash) option
 
   (** [hostnames signing_request] is the set of domain names this
       [signing_request] is requesting. This is either the content of the DNS
@@ -576,6 +582,9 @@ module CRL : sig
 
   (** [crl_number t] is the number of the CRL. *)
   val crl_number : t -> int option
+
+  (** [signature_algorithm t] is the algorithm used for the signature. *)
+  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Nocrypto.Hash.hash) option
 
   (** {1 Validation and verification of CRLs} *)
 

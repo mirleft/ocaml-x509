@@ -118,6 +118,9 @@ let crl_number { asn ; _ } =
   | None -> None
   | Some (_, x) -> Some x
 
+let signature_algorithm { asn ; _ } =
+  Algorithm.to_signature_algorithm asn.signature_algo
+
 let validate { raw ; asn } pub =
   let tbs_raw = Validation.raw_cert_hack raw asn.signature_val in
   Validation.validate_raw_signature tbs_raw asn.signature_algo asn.signature_val pub

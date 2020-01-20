@@ -119,6 +119,9 @@ let raw_sign raw digest key =
 
 let info { asn ; _ } = asn.info
 
+let signature_algorithm { asn ; _ } =
+  Algorithm.to_signature_algorithm asn.signature_algorithm
+
 let hostnames csr =
   let info = info csr in
   let subj =
