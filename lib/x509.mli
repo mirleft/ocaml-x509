@@ -514,7 +514,7 @@ module Signing_request : sig
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
     ?digest:Nocrypto.Hash.hash -> ?serial:Z.t ->
     ?extensions:Extension.t -> Private_key.t ->
-    Distinguished_name.t -> Certificate.t
+    Distinguished_name.t -> (Certificate.t, [> R.msg ]) result
 end
 
 (** X.509 Certificate Revocation Lists. *)

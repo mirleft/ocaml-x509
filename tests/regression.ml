@@ -154,6 +154,7 @@ let hostname_tests = [
   "pads.ccc.de hostnames", `Quick, cert_hostnames (cert "pads.ccc.de") (Certificate.Host_set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "pads.ccc.de"))) (host_set ["pads.ccc.de"]));
   "first hostnames", `Quick, cert_hostnames (cert "../testcertificates/first/first") (host_set ["foo.foobar.com"; "foobar.com"]);
   "CSR your_new_domain hostnames", `Quick, csr_hostnames (csr "your-new-domain") (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]);
+  "CSR your_new_domain_raw hostnames", `Quick, csr_hostnames (csr "your-new-domain-raw") (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]);
   "CSR bar.com hostnames", `Quick, csr_hostnames (csr "wild-bar") (Certificate.Host_set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "bar.com"))) (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]));
   "CSR foo.com hostnames", `Quick, csr_hostnames (csr "wild-foo-cn") (Certificate.Host_set.singleton (`Wildcard, Domain_name.(host_exn (of_string_exn "foo.com"))));
 ]
