@@ -118,11 +118,15 @@ let crl_number { asn ; _ } =
   | None -> None
   | Some (_, x) -> Some x
 
-let validate { raw ; asn } pub =
-  let tbs_raw = Validation.raw_cert_hack raw asn.signature_val in
-  Validation.validate_raw_signature tbs_raw asn.signature_algo asn.signature_val pub
+let signature_algorithm { asn ; _ } =
+  Algorithm.to_signature_algorithm asn.signature_algo
 
-let verify ({ asn ; _ } as crl) ?time cert =
+let validate { raw ; asn } ?(hash_whitelist = Validation.sha2) pub =
+  let tbs_raw = Validation.raw_cert_hack raw asn.signature_val in
+  Validation.validate_raw_signature hash_whitelist tbs_raw asn.signature_algo
+    asn.signature_val pub
+
+let verify ({ asn ; _ } as crl) ?hash_whitelist ?time cert =
   Distinguished_name.equal asn.tbs_crl.issuer (Certificate.subject cert) &&
   (match time with
    | None -> true
@@ -130,18 +134,18 @@ let verify ({ asn ; _ } as crl) ?time cert =
                match asn.tbs_crl.next_update with
                | None -> true
                | Some y -> Ptime.is_earlier ~than:y x) &&
-  validate crl (Certificate.public_key cert)
+  validate ?hash_whitelist crl (Certificate.public_key cert)
 
 let reason (revoked : revoked_cert) =
   match Extension.(find Reason revoked.extensions) with
   | Some (_, x) -> Some x
   | None -> None
 
-let is_revoked (crls : t list) ~issuer:super ~cert =
+let is_revoked (crls : t list) ?hash_whitelist ~issuer:super ~cert =
   List.exists (fun crl ->
       if
         Distinguished_name.equal (Certificate.subject super) (issuer crl) &&
-        validate crl (Certificate.public_key super)
+        validate ?hash_whitelist crl (Certificate.public_key super)
       then
         try
           let entry = List.find

@@ -21,8 +21,13 @@ let test_jc_jc () =
                  Validation.pp_validation_error e
   | Ok _ -> Alcotest.fail "chain validated when it shouldn't"
 
-let test_jc_ca () =
+let test_jc_ca_fail () =
   match Validation.verify_chain_of_trust ~host:(host "jabber.ccc.de") ~anchors:[cacert] [jc ; cacert] with
+  | Error `InvalidChain -> ()
+  | _ -> Alcotest.fail "something went wrong with jc_ca"
+
+let test_jc_ca_all_hashes () =
+  match Validation.verify_chain_of_trust ~hash_whitelist:[`SHA1] ~host:(host "jabber.ccc.de") ~anchors:[cacert] [jc ; cacert] with
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jc_ca"
 
@@ -108,7 +113,8 @@ let test_distinguished_name_pp () =
 
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
-  "jc_ca", `Quick, test_jc_ca ;
+  "jc_ca", `Quick, test_jc_ca_fail ;
+  "jc_ca", `Quick, test_jc_ca_all_hashes ;
   "jfd_ca", `Quick, test_jfd_ca ;
   "jfd_ca'", `Quick, test_jfd_ca' ;
   "SAN dir explicit or implicit", `Quick, test_izenpe ;

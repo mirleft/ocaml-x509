@@ -119,6 +119,9 @@ let raw_sign raw digest key =
 
 let info { asn ; _ } = asn.info
 
+let signature_algorithm { asn ; _ } =
+  Algorithm.to_signature_algorithm asn.signature_algorithm
+
 let hostnames csr =
   let info = info csr in
   let subj =
@@ -135,16 +138,16 @@ let hostnames csr =
     | Some names -> names
     | None -> subj
 
-let validate_signature { asn ; raw } =
+let validate_signature hash { asn ; raw } =
   let raw_data = Validation.raw_cert_hack raw asn.signature in
-  Validation.validate_raw_signature raw_data asn.signature_algorithm asn.signature
-    asn.info.public_key
+  Validation.validate_raw_signature hash raw_data asn.signature_algorithm
+    asn.signature asn.info.public_key
 
-let decode_der cs =
+let decode_der ?(hash_whitelist = Validation.sha2) cs =
   let open Rresult.R.Infix in
   Asn_grammars.err_to_msg (Asn.signing_request_of_cs cs) >>= fun csr ->
   let csr = { raw = cs ; asn = csr } in
-  if validate_signature csr then
+  if validate_signature hash_whitelist csr then
     Ok csr
   else
     Error (`Msg "couldn't validate signature")
@@ -176,11 +179,12 @@ let create subject ?(digest = `SHA256) ?(extensions = Ext.empty) = function
 
 let sign signing_request
     ~valid_from ~valid_until
+    ?(hash_whitelist = Validation.sha2)
     ?(digest = `SHA256)
     ?(serial = Nocrypto.(Rng.Z.gen_r Numeric.Z.one Numeric.Z.(one lsl 64)))
     ?(extensions = Extension.empty)
     key issuer =
-  if not (validate_signature signing_request) then
+  if not (validate_signature hash_whitelist signing_request) then
     Error (`Msg "could not validate signature of signing request")
   else
     let signature_algo =
