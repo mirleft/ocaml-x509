@@ -108,6 +108,13 @@ and[@ocaml.warning "-8"] of_signature_algorithm public_key_algorithm digest =
  * PKCS1/RFC5280 allows params to be `ANY', depending on the algorithm.  I don't
  * know of one that uses anything other than NULL and OID, however, so we accept
  * only that.
+
+   RFC 3279 Section 2.2.1 defines for RSA Signature Algorithms SHALL have null
+   as parameter, but certificates in the wild don't contain the parameter field
+   at all (it is optional). We accept both, and output a null paramter.
+   Section 2.2.2 specifies DSA to have a null parameter,
+   Section 2.2.3 specifies ECDSA to have a null parameter,
+   Section 2.3.1 specifies rsaEncryption (for RSA public keys) requires null.
  *)
 
 let identifier =
@@ -120,6 +127,9 @@ let identifier =
     and null x = function
       | Some (`C1 ()) -> x
       | _             -> parse_error "Algorithm: expected null parameters"
+    and null_or_none x = function
+      | None | Some (`C1 ()) -> x
+      | _                    -> parse_error "Algorithm: expected null or none parameter"
     and oid f = function
       | Some (`C2 id) -> f id
       | _             -> parse_error "Algorithm: expected parameter OID"
@@ -129,16 +139,16 @@ let identifier =
 
       (ANSI_X9_62.ec_pub_key, oid (fun id -> EC_pub id)) ;
 
-      (PKCS1.rsa_encryption          , null RSA          ) ;
-      (PKCS1.md2_rsa_encryption      , null MD2_RSA      ) ;
-      (PKCS1.md4_rsa_encryption      , null MD4_RSA      ) ;
-      (PKCS1.md5_rsa_encryption      , null MD5_RSA      ) ;
-      (PKCS1.ripemd160_rsa_encryption, null RIPEMD160_RSA) ;
-      (PKCS1.sha1_rsa_encryption     , null SHA1_RSA     ) ;
-      (PKCS1.sha256_rsa_encryption   , null SHA256_RSA   ) ;
-      (PKCS1.sha384_rsa_encryption   , null SHA384_RSA   ) ;
-      (PKCS1.sha512_rsa_encryption   , null SHA512_RSA   ) ;
-      (PKCS1.sha224_rsa_encryption   , null SHA224_RSA   ) ;
+      (PKCS1.rsa_encryption          , null RSA                  ) ;
+      (PKCS1.md2_rsa_encryption      , null_or_none MD2_RSA      ) ;
+      (PKCS1.md4_rsa_encryption      , null_or_none MD4_RSA      ) ;
+      (PKCS1.md5_rsa_encryption      , null_or_none MD5_RSA      ) ;
+      (PKCS1.ripemd160_rsa_encryption, null_or_none RIPEMD160_RSA) ;
+      (PKCS1.sha1_rsa_encryption     , null_or_none SHA1_RSA     ) ;
+      (PKCS1.sha256_rsa_encryption   , null_or_none SHA256_RSA   ) ;
+      (PKCS1.sha384_rsa_encryption   , null_or_none SHA384_RSA   ) ;
+      (PKCS1.sha512_rsa_encryption   , null_or_none SHA512_RSA   ) ;
+      (PKCS1.sha224_rsa_encryption   , null_or_none SHA224_RSA   ) ;
 
       (ANSI_X9_62.ecdsa_sha1         , none ECDSA_SHA1   ) ;
       (ANSI_X9_62.ecdsa_sha224       , none ECDSA_SHA224 ) ;
