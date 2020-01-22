@@ -1,3 +1,31 @@
+## v0.9.0 (2020-01-22)
+
+* BREAKING add a whitelist of hash algorithms used for signatures. The default
+  whitelist is the SHA-2 family (without SHA-224), Validation.valid_ca{,s} use
+  all algorithms as default
+  reported by @emillon in #123, fixed in #128
+* BREAKING Certificate.hostnames and Signing_request.hostnames (new) return a
+  set of [`Wildcard|`Strict] * [`host] Domain_name.t (Certificate.Host_set.t)
+  reported by @mmaker in #88, fixed in #127
+* BREAKING #127 Signing_request.sign returns a result type now, an error is
+  returned if the signing request was not properly signed
+* BREAKING #127 Validation.{verify_chain_of_trust, trust_key_fingerprint,
+  trust_cert_fingerptint} and the type Authenticator.t changed, no longer use
+  of a Certificate.host, but instead a [`host] Domain_name.t (previously, it was
+  a pair)
+* BUGFIX support AlgorithmIdentifier of RSA signature algorithms with parameter
+  not present
+  reported by @Ulrar in #108, fixed in #129
+* BUGFIX #127 preserve a signed signing request (Country in a DN sometimes uses
+  a non-utf8 string encoding)
+* remove deprecation from Validation.trust_cert_fingerprint and
+  Authenticator.server_cert_fingerprint
+  requested by @mben-romdhane in #125, fixed in #126
+* Certificate.signature_algorithm, CRL.signature_algorithm, and
+  Signing_request.signature_algorithm are now provided, returning a
+  ([`RSA|`ECDSA] * Nocrypto.Hash.hash) option
+  requested by @psafont in #123, fixed in #128
+
 ## v0.8.1 (2019-10-10)
 
 * export Private_key.decode_der and encode_der

@@ -111,6 +111,9 @@ let test_distinguished_name_pp () =
   check pp4 dn2 {|/O=\ Escapist/CN=\# 2/CN=\ \"\+,;\/\<\>\\ \ |} ;
   check pp5 dn1 "CN=John Doe+\nInitials=J.D.+\nInitials=N.N.,\nO=Blanc"
 
+let test_yubico () =
+  ignore (cert "yubico")
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca_fail ;
@@ -121,6 +124,7 @@ let regression_tests = [
   "name constraint parsing (DNS: .gr)", `Quick, test_name_constraints ;
   "complex distinguished name", `Quick, test_distinguished_name ;
   "distinguished name pp", `Quick, test_distinguished_name_pp ;
+  "algorithm without null", `Quick, test_yubico ;
 ]
 
 let host_set_test =
