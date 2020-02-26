@@ -112,10 +112,10 @@ module Asn = struct
 end
 
 let raw_sign raw digest key =
-  let hash = Nocrypto.Hash.digest digest raw in
+  let hash = Mirage_crypto.Hash.digest digest raw in
   let sigval = Certificate.encode_pkcs1_digest_info (digest, hash) in
   match key with
-    | `RSA priv -> Nocrypto.Rsa.PKCS1.sig_encode ~key:priv sigval
+    | `RSA priv -> Mirage_crypto_pk.Rsa.PKCS1.sig_encode ~key:priv sigval
 
 let info { asn ; _ } = asn.info
 
@@ -168,7 +168,7 @@ let encode_pem v =
 
 let create subject ?(digest = `SHA256) ?(extensions = Ext.empty) = function
   | `RSA priv ->
-    let public_key = `RSA (Nocrypto.Rsa.pub_of_priv priv) in
+    let public_key = `RSA (Mirage_crypto_pk.Rsa.pub_of_priv priv) in
     let info : request_info = { subject ; public_key ; extensions } in
     let info_cs = Asn.request_info_to_cs info in
     let signature = raw_sign info_cs digest (`RSA priv) in
@@ -181,7 +181,7 @@ let sign signing_request
     ~valid_from ~valid_until
     ?(hash_whitelist = Validation.sha2)
     ?(digest = `SHA256)
-    ?(serial = Nocrypto.(Rng.Z.gen_r Numeric.Z.one Numeric.Z.(one lsl 64)))
+    ?(serial = Mirage_crypto_pk.(Z_extra.gen_r Z.one Z.(one lsl 64)))
     ?(extensions = Extension.empty)
     key issuer =
   if not (validate_signature hash_whitelist signing_request) then

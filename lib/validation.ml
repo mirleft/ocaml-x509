@@ -1,5 +1,3 @@
-open Nocrypto
-
 let sha2 = [ `SHA256 ; `SHA384 ; `SHA512 ]
 let all_hashes = [ `MD5 ; `SHA1 ; `SHA224 ] @ sha2
 
@@ -17,11 +15,11 @@ let validate_raw_signature hash_whitelist raw signature_algo signature_val pk_in
   match pk_info, Algorithm.to_signature_algorithm signature_algo with
   | `RSA issuing_key, Some (`RSA, siga) ->
     List.mem siga hash_whitelist &&
-    ( match Rsa.PKCS1.sig_decode ~key:issuing_key signature_val with
+    ( match Mirage_crypto_pk.Rsa.PKCS1.sig_decode ~key:issuing_key signature_val with
       | None           -> false
       | Some signature ->
         match Certificate.decode_pkcs1_digest_info signature with
-        | Ok (a, hash) -> siga = a && Cstruct.equal hash (Hash.digest a raw)
+        | Ok (a, hash) -> siga = a && Cstruct.equal hash (Mirage_crypto.Hash.digest a raw)
         | _ -> false )
   | _ -> false
 

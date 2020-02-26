@@ -30,7 +30,7 @@ let invalid_cas = [
 ]
 
 let cert_public_is_pub cert =
-  let pub = Nocrypto.Rsa.pub_of_priv priv in
+  let pub = Mirage_crypto_pk.Rsa.pub_of_priv priv in
   ( match Certificate.public_key cert with
     | `RSA pub' when pub = pub' -> ()
     | _ -> Alcotest.fail "public / private key doesn't match" )

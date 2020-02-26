@@ -9,5 +9,5 @@ let suites =
 
 let () =
   Printexc.record_backtrace true;
-  Nocrypto_entropy_unix.initialize ();
+  Mirage_crypto_rng_unix.initialize ();
   Alcotest.run "X509 tests" suites

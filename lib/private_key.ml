@@ -1,5 +1,5 @@
 
-type t = [ `RSA of Nocrypto.Rsa.priv ]
+type t = [ `RSA of Mirage_crypto_pk.Rsa.priv ]
 
 let keytype = function
   | `RSA _ -> `RSA
@@ -7,7 +7,7 @@ let keytype = function
 module Asn = struct
   open Asn_grammars
   open Asn.S
-  open Nocrypto
+  open Mirage_crypto_pk
 
   (* RSA *)
   let other_prime_infos =
@@ -20,7 +20,11 @@ module Asn = struct
   let rsa_private_key =
     let f (v, (n, (e, (d, (p, (q, (dp, (dq, (q', other))))))))) =
       match (v, other) with
-      | (0, None) -> ({ Rsa.e; d; n; p; q; dp; dq; q' } : Rsa.priv)
+      | (0, None) ->
+        begin match Rsa.priv ~e ~d ~n ~p ~q ~dp ~dq ~q' with
+          | Ok p -> p
+          | Error (`Msg m) -> parse_error "bad RSA private key %s" m
+        end
       | _         -> parse_error "multi-prime RSA keys not supported"
     and g { Rsa.e; d; n; p; q; dp; dq; q' } =
       (0, (n, (e, (d, (p, (q, (dp, (dq, (q', None))))))))) in

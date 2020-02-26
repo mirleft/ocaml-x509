@@ -1,5 +1,3 @@
-open Nocrypto
-
 type key_type = [ `RSA | `EC of Asn.oid ]
 
 (*
@@ -184,7 +182,7 @@ let pp ppf { asn ; _ } =
     Distinguished_name.pp tbs.subject
     Extension.pp tbs.extensions
 
-let fingerprint hash cert = Hash.digest hash cert.raw
+let fingerprint hash cert = Mirage_crypto.Hash.digest hash cert.raw
 
 let issuer { asn ; _ } = asn.tbs_cert.issuer
 

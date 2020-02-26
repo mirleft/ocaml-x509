@@ -58,9 +58,8 @@ module Cs = struct
     let rec block acc = function
       | `Begin t :: tail ->
         accumulate t [] tail >>= fun (body, tail) ->
-        R.of_option ~none:(fun () -> Error (`Msg "base64 decoding failed"))
-          (Nocrypto.Base64.decode body) >>= fun data ->
-        block ((t, data) :: acc) tail
+        R.open_error_msg (Base64.decode (Cstruct.to_string body)) >>= fun data ->
+        block ((t, Cstruct.of_string data) :: acc) tail
       | _::xs -> block acc xs
       | []    -> Ok (List.rev acc)
     in
@@ -74,7 +73,7 @@ module Cs = struct
       | x -> let here, rest = split x 64 in
         split_at_64 (here :: acc) rest
     in
-    let raw = Nocrypto.Base64.encode value in
+    let raw = Cstruct.of_string (Base64.encode_string (Cstruct.to_string value)) in
     let pieces = split_at_64 [] raw in
     let nl = of_string "\n" in
     let lines = List.flatten (List.map (fun x -> [ x ; nl ]) pieces)

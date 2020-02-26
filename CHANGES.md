@@ -1,3 +1,8 @@
+## v0.10.0
+
+* BREAKING use mirage-crypto and mirage-crypto-pk instead of nocrypto
+  raise lower OCaml bound to 4.07.0, test 4.10.0 in CI
+
 ## v0.9.0 (2020-01-22)
 
 * BREAKING add a whitelist of hash algorithms used for signatures. The default
