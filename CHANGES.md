@@ -1,4 +1,4 @@
-## v0.10.0
+## v0.10.0 (2020-03-11)
 
 * BREAKING #131 use mirage-crypto and mirage-crypto-pk instead of nocrypto
   raise lower OCaml bound to 4.07.0, test 4.10.0 in CI
