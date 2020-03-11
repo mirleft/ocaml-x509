@@ -12,22 +12,24 @@ let cert file =
 let jc = cert "jabber.ccc.de"
 let cacert = cert "cacert"
 
-let host str = Domain_name.host_exn (Domain_name.of_string_exn str)
+let time () = None
+
+let host str = Some (Domain_name.host_exn (Domain_name.of_string_exn str))
 
 let test_jc_jc () =
-  match Validation.verify_chain_of_trust ~host:(host "jabber.ccc.de") ~anchors:[jc] [jc] with
+  match Validation.verify_chain_of_trust ~host:(host "jabber.ccc.de") ~time ~anchors:[jc] [jc] with
   | Error `InvalidChain -> ()
   | Error e -> Alcotest.failf "something went wrong with jc_jc (expected invalid_chain, got %a"
                  Validation.pp_validation_error e
   | Ok _ -> Alcotest.fail "chain validated when it shouldn't"
 
 let test_jc_ca_fail () =
-  match Validation.verify_chain_of_trust ~host:(host "jabber.ccc.de") ~anchors:[cacert] [jc ; cacert] with
+  match Validation.verify_chain_of_trust ~host:(host "jabber.ccc.de") ~time ~anchors:[cacert] [jc ; cacert] with
   | Error `InvalidChain -> ()
   | _ -> Alcotest.fail "something went wrong with jc_ca"
 
 let test_jc_ca_all_hashes () =
-  match Validation.verify_chain_of_trust ~hash_whitelist:[`SHA1] ~host:(host "jabber.ccc.de") ~anchors:[cacert] [jc ; cacert] with
+  match Validation.verify_chain_of_trust ~hash_whitelist:[`SHA1] ~host:(host "jabber.ccc.de") ~time ~anchors:[cacert] [jc ; cacert] with
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jc_ca"
 
@@ -35,12 +37,12 @@ let telesec = cert "telesec"
 let jfd = [ cert "jabber.fu-berlin.de" ; cert "fu-berlin" ; cert "dfn" ]
 
 let test_jfd_ca () =
-  match Validation.verify_chain_of_trust ~host:(host "jabber.fu-berlin.de") ~anchors:[telesec] (jfd@[telesec]) with
+  match Validation.verify_chain_of_trust ~host:(host "jabber.fu-berlin.de") ~time ~anchors:[telesec] (jfd@[telesec]) with
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jfd_ca"
 
 let test_jfd_ca' () =
-  match Validation.verify_chain_of_trust ~host:(host "jabber.fu-berlin.de") ~anchors:[telesec] jfd with
+  match Validation.verify_chain_of_trust ~host:(host "jabber.fu-berlin.de") ~time ~anchors:[telesec] jfd with
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jfd_ca'"
 
@@ -129,15 +131,15 @@ let regression_tests = [
 
 let host_set_test =
   let module M = struct
-    type t = Certificate.Host_set.t
+    type t = Host.Set.t
     let pp ppf hs =
       let pp_one ppf (typ, name) =
         Fmt.pf ppf "%s%a"
           (match typ with `Strict -> "" | `Wildcard -> "*.")
           Domain_name.pp name
       in
-      Fmt.(list ~sep:(unit ", ") pp_one) ppf (Certificate.Host_set.elements hs)
-    let equal = Certificate.Host_set.equal
+      Fmt.(list ~sep:(unit ", ") pp_one) ppf (Host.Set.elements hs)
+    let equal = Host.Set.equal
   end in (module M: Alcotest.TESTABLE with type t = M.t)
 
 let cert_hostnames cert names () =
@@ -153,18 +155,18 @@ let csr_hostnames cert names () =
   Alcotest.check host_set_test __LOC__ (Signing_request.hostnames cert) names
 
 let host_set xs =
-  Certificate.Host_set.of_list
+  Host.Set.of_list
     (List.map (fun n -> `Strict, Domain_name.(host_exn (of_string_exn n))) xs)
 
 let hostname_tests = [
-  "cacert hostnames", `Quick, cert_hostnames cacert Certificate.Host_set.empty;
+  "cacert hostnames", `Quick, cert_hostnames cacert Host.Set.empty;
   "izenpe hostnames", `Quick, cert_hostnames (cert "izenpe") (host_set ["izenpe.com"]);
   "jabber.ccc.de hostnames", `Quick, cert_hostnames jc (host_set [ "jabber.ccc.de" ; "conference.jabber.ccc.de" ; "jabberd.jabber.ccc.de" ; "pubsub.jabber.ccc.de" ; "vjud.jabber.ccc.de" ]);
   "jaber.fu-berlin.de hostnames", `Quick, cert_hostnames (cert "jabber.fu-berlin.de") (host_set [ "jabber.fu-berlin.de" ; "conference.jabber.fu-berlin.de" ; "proxy.jabber.fu-berlin.de" ; "echo.jabber.fu-berlin.de" ; "file.jabber.fu-berlin.de" ; "jitsi-videobridge.jabber.fu-berlin.de" ; "multicast.jabber.fu-berlin.de" ; "pubsub.jabber.fu-berlin.de" ]);
-  "pads.ccc.de hostnames", `Quick, cert_hostnames (cert "pads.ccc.de") (Certificate.Host_set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "pads.ccc.de"))) (host_set ["pads.ccc.de"]));
+  "pads.ccc.de hostnames", `Quick, cert_hostnames (cert "pads.ccc.de") (Host.Set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "pads.ccc.de"))) (host_set ["pads.ccc.de"]));
   "first hostnames", `Quick, cert_hostnames (cert "../testcertificates/first/first") (host_set ["foo.foobar.com"; "foobar.com"]);
   "CSR your_new_domain hostnames", `Quick, csr_hostnames (csr "your-new-domain") (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]);
   "CSR your_new_domain_raw hostnames", `Quick, csr_hostnames (csr "your-new-domain-raw") (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]);
-  "CSR bar.com hostnames", `Quick, csr_hostnames (csr "wild-bar") (Certificate.Host_set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "bar.com"))) (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]));
-  "CSR foo.com hostnames", `Quick, csr_hostnames (csr "wild-foo-cn") (Certificate.Host_set.singleton (`Wildcard, Domain_name.(host_exn (of_string_exn "foo.com"))));
+  "CSR bar.com hostnames", `Quick, csr_hostnames (csr "wild-bar") (Host.Set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "bar.com"))) (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]));
+  "CSR foo.com hostnames", `Quick, csr_hostnames (csr "wild-foo-cn") (Host.Set.singleton (`Wildcard, Domain_name.(host_exn (of_string_exn "foo.com"))));
 ]

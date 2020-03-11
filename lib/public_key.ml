@@ -1,15 +1,17 @@
 type t = [
-  | `RSA    of Nocrypto.Rsa.pub
+  | `RSA    of Mirage_crypto_pk.Rsa.pub
   | `EC_pub of Asn.oid
 ]
 
 module Asn = struct
   open Asn_grammars
   open Asn.S
-  open Nocrypto
+  open Mirage_crypto_pk
 
   let rsa_public_key =
-    let f (n, e) = { Rsa.n ; e }
+    let f (n, e) = match Rsa.pub ~e ~n with
+      | Ok p -> p
+      | Error (`Msg m) -> parse_error "bad RSA public key %s" m
     and g ({ Rsa.n; e } : Rsa.pub) = (n, e) in
     map f g @@
     sequence2
@@ -41,11 +43,11 @@ module Asn = struct
 end
 
 let id = function
-  | `RSA p -> Nocrypto.Hash.digest `SHA1 (Asn.rsa_public_to_cstruct p)
+  | `RSA p -> Mirage_crypto.Hash.digest `SHA1 (Asn.rsa_public_to_cstruct p)
   | `EC_pub _ -> Cstruct.empty
 
 let fingerprint ?(hash = `SHA256) pub =
-  Nocrypto.Hash.digest hash (Asn.pub_info_to_cstruct pub)
+  Mirage_crypto.Hash.digest hash (Asn.pub_info_to_cstruct pub)
 
 let encode_der = Asn.pub_info_to_cstruct
 

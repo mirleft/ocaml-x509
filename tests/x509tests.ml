@@ -1,5 +1,7 @@
 open X509
 
+let time () = None
+
 let with_loaded_file file ~f =
   let fullpath = "./testcertificates/" ^ file ^ ".pem" in
   let fd = Unix.(openfile fullpath [O_RDONLY] 0) in
@@ -30,7 +32,7 @@ let invalid_cas = [
 ]
 
 let cert_public_is_pub cert =
-  let pub = Nocrypto.Rsa.pub_of_priv priv in
+  let pub = Mirage_crypto_pk.Rsa.pub_of_priv priv in
   ( match Certificate.public_key cert with
     | `RSA pub' when pub = pub' -> ()
     | _ -> Alcotest.fail "public / private key doesn't match" )
@@ -91,10 +93,10 @@ let allowed_hashes = [ `MD5 ; `SHA1 ; `SHA224 ; `SHA256 ; `SHA384 ; `SHA512 ]
 
 let test_valid_ca_cert ?(hash_whitelist = allowed_hashes) server chain valid name ca () =
   let anchors = ca
-  and host = host name
+  and host = Some (host name)
   and full_chain = server :: chain
   in
-  match valid, Validation.verify_chain_of_trust ~hash_whitelist ~host ~anchors full_chain with
+  match valid, Validation.verify_chain_of_trust ~time ~hash_whitelist ~host ~anchors full_chain with
   | false, Ok _   -> Alcotest.fail "expected to fail, but didn't"
   | false, Error _ -> ()
   | true , Ok _   -> ()

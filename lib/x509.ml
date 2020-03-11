@@ -1,3 +1,5 @@
+module Host = Host
+
 module Public_key = Public_key
 
 module Private_key = Private_key

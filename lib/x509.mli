@@ -44,6 +44,20 @@
 
 open Rresult
 
+module Host : sig
+  (** The polymorphic variant for hostname validation. *)
+  type t = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
+
+  val pp : t Fmt.t
+
+  (** The module for a set of hostnames. *)
+  module Set : sig
+    include Set.S with type elt = t
+
+    val pp : t Fmt.t
+  end
+end
+
 (** RSA public key DER and PEM encoding and decoding *)
 module Public_key : sig
   (** Public keys as specified in {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
@@ -52,7 +66,7 @@ module Public_key : sig
   (** The polymorphic variant of public keys, with
       {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
       {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
-  type t = [ `RSA of Nocrypto.Rsa.pub | `EC_pub of Asn.oid ]
+  type t = [ `RSA of Mirage_crypto_pk.Rsa.pub | `EC_pub of Asn.oid ]
 
   (** [id public_key] is [digest], the 160-bit [`SHA1] hash of the BIT
       STRING subjectPublicKey (excluding tag, length, and number of
@@ -64,7 +78,7 @@ module Public_key : sig
   (** [fingerprint ?hash public_key] is [digest], the hash (by
       default SHA256) of the DER encoded public key (equivalent to
       [openssl x509 -noout -pubkey | openssl pkey -pubin -outform DER | openssl dgst -HASH]).  *)
-  val fingerprint : ?hash:Nocrypto.Hash.hash -> t -> Cstruct.t
+  val fingerprint : ?hash:Mirage_crypto.Hash.hash -> t -> Cstruct.t
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
@@ -88,7 +102,7 @@ module Private_key : sig
       in PEM format  *)
 
   (** The polymorphic variant of private keys. *)
-  type t = [ `RSA of Nocrypto.Rsa.priv ]
+  type t = [ `RSA of Mirage_crypto_pk.Rsa.priv ]
 
   (** [decode_der der] is [t], where the private key of [der] is extracted.
       It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo structure. *)
@@ -343,11 +357,11 @@ module Certificate : sig
   (** [decode_pkcs1_digest_info buffer] is [hash, signature], the hash and raw
       signature of the given [buffer] in ASN.1 DER encoding, or an error. *)
   val decode_pkcs1_digest_info : Cstruct.t ->
-    (Nocrypto.Hash.hash * Cstruct.t, [> R.msg ]) result
+    (Mirage_crypto.Hash.hash * Cstruct.t, [> R.msg ]) result
 
   (** [encode_pkcs1_digest_info (hash, signature)] is [data], the ASN.1 DER
       encoded hash and signature. *)
-  val encode_pkcs1_digest_info : Nocrypto.Hash.hash * Cstruct.t -> Cstruct.t
+  val encode_pkcs1_digest_info : Mirage_crypto.Hash.hash * Cstruct.t -> Cstruct.t
 
   (** {1 Abstract certificate type} *)
 
@@ -394,20 +408,14 @@ module Certificate : sig
   val public_key : t -> Public_key.t
 
   (** [signature_algorithm certificate] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Nocrypto.Hash.hash) option
-
-  (** The polymorphic variant for hostname validation. *)
-  type host = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
-
-  (** The module for a set of hostnames. *)
-  module Host_set : Set.S with type elt = host
+  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
 
   (** [hostnames certficate] is the set of domain names this
       [certificate] is valid for.  Currently, these are the DNS names of the
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}Subject Alternative Name}
       extension, if present, or otherwise the singleton set containing the common
       name of the certificate subject. *)
-  val hostnames : t -> Host_set.t
+  val hostnames : t -> Host.Set.t
 
   (** [supports_hostname certificate hostname] is [result], whether the
       [certificate] contains the given [hostname], using {!hostnames}. *)
@@ -415,7 +423,7 @@ module Certificate : sig
 
   (** [fingerprint hash cert] is [digest], the digest of [cert] using the
       specified [hash] algorithm *)
-  val fingerprint : Nocrypto.Hash.hash -> t -> Cstruct.t
+  val fingerprint : Mirage_crypto.Hash.hash -> t -> Cstruct.t
 
   (** [subject certificate] is [dn], the subject as {{!distinguished_name}dn} of
       the [certificate]. *)
@@ -451,7 +459,7 @@ module Signing_request : sig
       decoded [cstruct] or an error. The signature on the signing request
       is validated, and its hash algorithm must be in [hash_whitelist] (by
       default only SHA-2 is accepted). *)
-  val decode_der : ?hash_whitelist:Nocrypto.Hash.hash list -> Cstruct.t ->
+  val decode_der : ?hash_whitelist:Mirage_crypto.Hash.hash list -> Cstruct.t ->
     (t, [> R.msg ]) result
 
   (** [encode_der sr] is [cstruct], the ASN.1 encoded representation of the [sr]. *)
@@ -491,18 +499,18 @@ module Signing_request : sig
   val info : t -> request_info
 
   (** [signature_algorithm signing_request] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Nocrypto.Hash.hash) option
+  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
 
   (** [hostnames signing_request] is the set of domain names this
       [signing_request] is requesting. This is either the content of the DNS
       entries of the SubjectAlternativeName extension, or the common name of the
       [signing_request]. *)
-  val hostnames : t -> Certificate.Host_set.t
+  val hostnames : t -> Host.Set.t
 
   (** [create subject ~digest ~extensions private] creates [signing_request],
       a certification request using the given [subject], [digest] (defaults to
       [`SHA256]) and list of [extensions]. *)
-  val create : Distinguished_name.t -> ?digest:Nocrypto.Hash.hash ->
+  val create : Distinguished_name.t -> ?digest:Mirage_crypto.Hash.hash ->
     ?extensions:Ext.t -> Private_key.t -> t
 
   (** {1 Provision a signing request to a certificate} *)
@@ -523,9 +531,9 @@ module Signing_request : sig
 | Error _ -> Extension.empty
 ]} *)
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
-    ?hash_whitelist:Nocrypto.Hash.hash list -> ?digest:Nocrypto.Hash.hash ->
-    ?serial:Z.t -> ?extensions:Extension.t -> Private_key.t ->
-    Distinguished_name.t -> (Certificate.t, [> R.msg ]) result
+    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+    ?digest:Mirage_crypto.Hash.hash -> ?serial:Z.t -> ?extensions:Extension.t ->
+    Private_key.t -> Distinguished_name.t -> (Certificate.t, [> R.msg ]) result
 end
 
 (** X.509 Certificate Revocation Lists. *)
@@ -589,13 +597,13 @@ module CRL : sig
   val crl_number : t -> int option
 
   (** [signature_algorithm t] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Nocrypto.Hash.hash) option
+  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
 
   (** {1 Validation and verification of CRLs} *)
 
   (** [validate t ~hash_whitelist pk] validates the digital signature of the
       revocation list. The [hash_whitelist] defaults to SHA-2. *)
-  val validate : t -> ?hash_whitelist:Nocrypto.Hash.hash list -> Public_key.t ->
+  val validate : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list -> Public_key.t ->
     bool
 
   (** [verify t ~hash_whitelist ~time cert] verifies that the issuer of [t]
@@ -603,21 +611,21 @@ module CRL : sig
       revocation list.  The used hash algorithm must be in the [hash_whitelist]
       (defaults to SHA-2). If [time] is provided, it must be after [this_update]
       and before [next_update] of [t]. *)
-  val verify : t -> ?hash_whitelist:Nocrypto.Hash.hash list -> ?time:Ptime.t ->
+  val verify : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
     Certificate.t -> bool
 
   (** [is_revoked crls ~hash_whitelist ~issuer ~cert] is [true] if there exists
       a revocation of [cert] in [crls] which is signed by the [issuer].  The
       subject of [issuer] must match the issuer of the crl.  The hash algorithm
       used for signing must be in the [hash_whitelist] (defaults to SHA-2).  *)
-  val is_revoked : t list -> ?hash_whitelist:Nocrypto.Hash.hash list ->
+  val is_revoked : t list -> ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     issuer:Certificate.t -> cert:Certificate.t -> bool
 
   (** {1 Construction and signing of CRLs} *)
 
   (** [revoked ~digest ~issuer ~this_update ~next_update ~extensions certs priv]
       constructs a revocation list with the given parameters. *)
-  val revoke : ?digest:Nocrypto.Hash.hash ->
+  val revoke : ?digest:Mirage_crypto.Hash.hash ->
     issuer:Distinguished_name.t ->
     this_update:Ptime.t -> ?next_update:Ptime.t ->
     ?extensions:Extension.t ->
@@ -676,12 +684,12 @@ module Validation : sig
       extensions are not present (if X.509 version 1 certificate), or are
       appropriate for a CA (BasicConstraints is present and true, KeyUsage
       extension contains keyCertSign). *)
-  val valid_ca : ?hash_whitelist:Nocrypto.Hash.hash list -> ?time:Ptime.t ->
+  val valid_ca : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
     Certificate.t -> (unit, ca_error) result
 
   (** [valid_cas ~hash_whitelist ~time certificates] is [valid_certificates],
       only those certificates which pass the {!valid_ca} check. *)
-  val valid_cas : ?hash_whitelist:Nocrypto.Hash.hash list -> ?time:Ptime.t ->
+  val valid_cas : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
     Certificate.t list -> Certificate.t list
 
   (** {1 Chain of trust verification} *)
@@ -737,9 +745,10 @@ module Validation : sig
       server certificate is checked to contain the given [host], using
       {!hostnames}.  The returned certificate is the root of the chain, a member
       of the given list of [anchors]. *)
-  val verify_chain : ?host:[`host] Domain_name.t -> ?time:Ptime.t ->
+  val verify_chain : host:[`host] Domain_name.t option ->
+    time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
-    ?hash_whitelist:Nocrypto.Hash.hash list ->
+    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list ->
     (Certificate.t, chain_error) result
 
@@ -764,7 +773,7 @@ module Validation : sig
 
   type r = ((Certificate.t list * Certificate.t) option, validation_error) result
 
-  (** [verify_chain_of_trust ~host ~time ~revoked ~hash_whitelist ~anchors certificates]
+  (** [verify_chain_of_trust host ~time ~revoked ~hash_whitelist ~anchors certificates]
       is [result].  First, all possible paths are constructed using the
       {!build_paths} function, the first certificate of the chain is verified to
       be a valid leaf certificate (no BasicConstraints extension) and contains
@@ -772,14 +781,14 @@ module Validation : sig
       {!verify_chain}, the result will be [Ok] and contain the actual
       certificate chain and the trust anchor. *)
   val verify_chain_of_trust :
-    ?host:[`host] Domain_name.t -> ?time:Ptime.t ->
+    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
-    ?hash_whitelist:Nocrypto.Hash.hash list ->
+    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list -> r
 
   (** {1 Fingerprint verification} *)
 
-  (** [trust_key_fingerprint ~time ~hash ~fingerprints certificates] is
+  (** [trust_key_fingerprint host ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified against the
       given [fingerprints] list using {!key_fingerprint}.  If [time] is
       provided, the certificate has to be valid at the given timestamp.  If
@@ -787,11 +796,12 @@ module Validation : sig
       [hostname] of the fingerprint list must match the name in the certificate,
       using {!hostnames}. *)
   val trust_key_fingerprint :
-    ?host:[`host] Domain_name.t -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
+    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
     Certificate.t list -> r
 
-  (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates] is
+  (** [trust_cert_fingerprint host ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified to match the
       given [fingerprints] list using {!fingerprint}.  If [time] is provided,
       the certificate is checked to be valid in at the given timestamp.  If
@@ -802,7 +812,8 @@ module Validation : sig
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
   val trust_cert_fingerprint :
-    ?host:[`host] Domain_name.t -> ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
+    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
     Certificate.t list -> r
 end
@@ -812,7 +823,7 @@ module Authenticator : sig
 
   (** An authenticator [a] is a function type which takes a hostname and a
       certificate stack to an authentication decision {!Validation.r}. *)
-  type t = ?host:[`host] Domain_name.t -> Certificate.t list -> Validation.r
+  type t = host:[`host] Domain_name.t option -> Certificate.t list -> Validation.r
 
   (** [chain_of_trust ~time ~crls ~hash_whitelist trust_anchors] is
       [authenticator], which uses the given [time] and list of [trust_anchors]
@@ -823,14 +834,15 @@ module Authenticator : sig
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC 5280}, using
       {!Validation.verify_chain_of_trust}.  The given trust anchors are not
       validated, you can filter them with {!Validation.valid_cas} if desired. *)
-  val chain_of_trust : ?time:Ptime.t -> ?crls:CRL.t list ->
-    ?hash_whitelist:Nocrypto.Hash.hash list -> Certificate.t list -> t
+  val chain_of_trust : time:(unit -> Ptime.t option) -> ?crls:CRL.t list ->
+    ?hash_whitelist:Mirage_crypto.Hash.hash list -> Certificate.t list -> t
 
   (** [server_key_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify that the
       fingerprint of the first element of the certificate chain matches the
       given fingerprint, using {!Validation.trust_key_fingerprint}. *)
-  val server_key_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
+  val server_key_fingerprint : time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
 
   (** [server_cert_fingerprint ~time hash fingerprints] is an [authenticator]
@@ -840,10 +852,7 @@ module Authenticator : sig
       {{!server_key_fingerprint}public key pinning} has
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
-  val server_cert_fingerprint : ?time:Ptime.t -> hash:Nocrypto.Hash.hash ->
+  val server_cert_fingerprint : time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
-
-  (** [null] is [authenticator], which always returns [Ok ()]. (Useful for
-      testing purposes only.) *)
-  val null : t
 end

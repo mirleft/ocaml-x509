@@ -1,5 +1,3 @@
-open Nocrypto
-
 let sha2 = [ `SHA256 ; `SHA384 ; `SHA512 ]
 let all_hashes = [ `MD5 ; `SHA1 ; `SHA224 ] @ sha2
 
@@ -17,11 +15,11 @@ let validate_raw_signature hash_whitelist raw signature_algo signature_val pk_in
   match pk_info, Algorithm.to_signature_algorithm signature_algo with
   | `RSA issuing_key, Some (`RSA, siga) ->
     List.mem siga hash_whitelist &&
-    ( match Rsa.PKCS1.sig_decode ~key:issuing_key signature_val with
+    ( match Mirage_crypto_pk.Rsa.PKCS1.sig_decode ~key:issuing_key signature_val with
       | None           -> false
       | Some signature ->
         match Certificate.decode_pkcs1_digest_info signature with
-        | Ok (a, hash) -> siga = a && Cstruct.equal hash (Hash.digest a raw)
+        | Ok (a, hash) -> siga = a && Cstruct.equal hash (Mirage_crypto.Hash.digest a raw)
         | _ -> false )
   | _ -> false
 
@@ -312,7 +310,7 @@ let is_ca_cert_valid hash_whitelist now cert =
 let valid_ca ?(hash_whitelist = all_hashes) ?time cacert =
   is_ca_cert_valid hash_whitelist time cacert
 
-let is_server_cert_valid ?host now cert =
+let is_server_cert_valid host now cert =
   match
     validate_time now cert,
     maybe_validate_hostname cert host,
@@ -352,10 +350,10 @@ let lift_leaf f x =
   | Ok () -> Ok ()
   | Error e -> Error (`Leaf e)
 
-let verify_single_chain ?time ?(revoked = fun ~issuer:_ ~cert:_ -> false) hash anchors chain =
+let verify_single_chain now ?(revoked = fun ~issuer:_ ~cert:_ -> false) hash anchors chain =
   let rec climb pathlen = function
     | cert :: issuer :: certs ->
-      is_cert_valid time issuer >>= fun () ->
+      is_cert_valid now issuer >>= fun () ->
       (if revoked ~issuer ~cert then Error (`Revoked cert) else Ok ()) >>= fun () ->
       signs hash pathlen issuer cert >>= fun () ->
       climb (succ pathlen) (issuer :: certs)
@@ -371,12 +369,13 @@ let lift_chain f x =
   | Ok x -> Ok x
   | Error e -> Error (`Chain e)
 
-let verify_chain ?host ?time ?revoked ?(hash_whitelist = sha2) ~anchors = function
+let verify_chain ~host ~time ?revoked ?(hash_whitelist = sha2) ~anchors = function
   | [] -> Error (`Chain `EmptyCertificateChain)
   | server :: certs ->
-    let anchors = List.filter (validate_time time) anchors in
-    lift_leaf (is_server_cert_valid ?host time) server >>= fun () ->
-    lift_chain (verify_single_chain ?time ?revoked hash_whitelist anchors) (server :: certs)
+    let now = time () in
+    let anchors = List.filter (validate_time now) anchors in
+    lift_leaf (is_server_cert_valid host now) server >>= fun () ->
+    lift_chain (verify_single_chain now ?revoked hash_whitelist anchors) (server :: certs)
 
 let rec any_m e f = function
   | [] -> Error e
@@ -384,24 +383,25 @@ let rec any_m e f = function
     | Ok ta -> Ok (Some (c, ta))
     | Error _ -> any_m e f cs
 
-let verify_chain_of_trust ?host ?time ?revoked ?(hash_whitelist = sha2) ~anchors = function
+let verify_chain_of_trust ~host ~time ?revoked ?(hash_whitelist = sha2) ~anchors = function
   | [] -> Error `EmptyCertificateChain
   | server :: certs ->
+    let now = time () in
     (* verify server! *)
-    lift_leaf (is_server_cert_valid ?host time) server >>= fun () ->
+    lift_leaf (is_server_cert_valid host now) server >>= fun () ->
     (* build all paths *)
     let paths = build_paths server certs
-    and anchors = List.filter (validate_time time) anchors
+    and anchors = List.filter (validate_time now) anchors
     in
     (* exists there one which is good? *)
-    any_m `InvalidChain (verify_single_chain ?time ?revoked hash_whitelist anchors) paths
+    any_m `InvalidChain (verify_single_chain now ?revoked hash_whitelist anchors) paths
 
 let valid_cas ?(hash_whitelist = all_hashes) ?time cas =
   List.filter (fun cert ->
       Rresult.R.is_ok (is_ca_cert_valid hash_whitelist time cert))
     cas
 
-let fingerprint_verification ?host ?time fingerprints fp = function
+let fingerprint_verification host now fingerprints fp = function
   | [] -> Error `EmptyCertificateChain
   | server::_ ->
     let verify_fingerprint server fingerprints =
@@ -421,18 +421,20 @@ let fingerprint_verification ?host ?time fingerprints fp = function
         else
           Error (`Fingerprint (`NameNotInList server))
     in
-    match validate_time time server, maybe_validate_hostname server host with
+    match validate_time now server, maybe_validate_hostname server host with
     | true , true  -> verify_fingerprint server fingerprints
-    | false, _     -> Error (`Leaf (`LeafCertificateExpired (server, time)))
+    | false, _     -> Error (`Leaf (`LeafCertificateExpired (server, now)))
     | _    , false -> Error (`Leaf (`LeafInvalidName (server, host)))
 
-let trust_key_fingerprint ?host ?time ~hash ~fingerprints =
+let trust_key_fingerprint ~host ~time ~hash ~fingerprints =
+  let now = time () in
   let fp cert = Public_key.fingerprint ~hash (Certificate.public_key cert) in
-  fingerprint_verification ?host ?time fingerprints fp
+  fingerprint_verification host now fingerprints fp
 
-let trust_cert_fingerprint ?host ?time ~hash ~fingerprints =
+let trust_cert_fingerprint ~host ~time ~hash ~fingerprints =
+  let now = time () in
   let fp = Certificate.fingerprint hash in
-  fingerprint_verification ?host ?time fingerprints fp
+  fingerprint_verification host now fingerprints fp
 
 (* RFC5246 says 'root certificate authority MAY be omitted' *)
 
