@@ -745,7 +745,8 @@ module Validation : sig
       server certificate is checked to contain the given [host], using
       {!hostnames}.  The returned certificate is the root of the chain, a member
       of the given list of [anchors]. *)
-  val verify_chain : ?host:[`host] Domain_name.t -> ?time:Ptime.t ->
+  val verify_chain : host:[`host] Domain_name.t option ->
+    time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
     ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list ->
@@ -772,7 +773,7 @@ module Validation : sig
 
   type r = ((Certificate.t list * Certificate.t) option, validation_error) result
 
-  (** [verify_chain_of_trust ~host ~time ~revoked ~hash_whitelist ~anchors certificates]
+  (** [verify_chain_of_trust host ~time ~revoked ~hash_whitelist ~anchors certificates]
       is [result].  First, all possible paths are constructed using the
       {!build_paths} function, the first certificate of the chain is verified to
       be a valid leaf certificate (no BasicConstraints extension) and contains
@@ -780,14 +781,14 @@ module Validation : sig
       {!verify_chain}, the result will be [Ok] and contain the actual
       certificate chain and the trust anchor. *)
   val verify_chain_of_trust :
-    ?host:[`host] Domain_name.t -> ?time:Ptime.t ->
+    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
     ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list -> r
 
   (** {1 Fingerprint verification} *)
 
-  (** [trust_key_fingerprint ~time ~hash ~fingerprints certificates] is
+  (** [trust_key_fingerprint host ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified against the
       given [fingerprints] list using {!key_fingerprint}.  If [time] is
       provided, the certificate has to be valid at the given timestamp.  If
@@ -795,11 +796,12 @@ module Validation : sig
       [hostname] of the fingerprint list must match the name in the certificate,
       using {!hostnames}. *)
   val trust_key_fingerprint :
-    ?host:[`host] Domain_name.t -> ?time:Ptime.t -> hash:Mirage_crypto.Hash.hash ->
+    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
     Certificate.t list -> r
 
-  (** [trust_cert_fingerprint ~time ~hash ~fingerprints certificates] is
+  (** [trust_cert_fingerprint host ~time ~hash ~fingerprints certificates] is
       [result], the first element of [certificates] is verified to match the
       given [fingerprints] list using {!fingerprint}.  If [time] is provided,
       the certificate is checked to be valid in at the given timestamp.  If
@@ -810,7 +812,8 @@ module Validation : sig
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
   val trust_cert_fingerprint :
-    ?host:[`host] Domain_name.t -> ?time:Ptime.t -> hash:Mirage_crypto.Hash.hash ->
+    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
     Certificate.t list -> r
 end
@@ -820,7 +823,7 @@ module Authenticator : sig
 
   (** An authenticator [a] is a function type which takes a hostname and a
       certificate stack to an authentication decision {!Validation.r}. *)
-  type t = ?host:[`host] Domain_name.t -> Certificate.t list -> Validation.r
+  type t = host:[`host] Domain_name.t option -> Certificate.t list -> Validation.r
 
   (** [chain_of_trust ~time ~crls ~hash_whitelist trust_anchors] is
       [authenticator], which uses the given [time] and list of [trust_anchors]
@@ -831,14 +834,15 @@ module Authenticator : sig
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC 5280}, using
       {!Validation.verify_chain_of_trust}.  The given trust anchors are not
       validated, you can filter them with {!Validation.valid_cas} if desired. *)
-  val chain_of_trust : ?time:Ptime.t -> ?crls:CRL.t list ->
+  val chain_of_trust : time:(unit -> Ptime.t option) -> ?crls:CRL.t list ->
     ?hash_whitelist:Mirage_crypto.Hash.hash list -> Certificate.t list -> t
 
   (** [server_key_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify that the
       fingerprint of the first element of the certificate chain matches the
       given fingerprint, using {!Validation.trust_key_fingerprint}. *)
-  val server_key_fingerprint : ?time:Ptime.t -> hash:Mirage_crypto.Hash.hash ->
+  val server_key_fingerprint : time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
 
   (** [server_cert_fingerprint ~time hash fingerprints] is an [authenticator]
@@ -848,10 +852,7 @@ module Authenticator : sig
       {{!server_key_fingerprint}public key pinning} has
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
-  val server_cert_fingerprint : ?time:Ptime.t -> hash:Mirage_crypto.Hash.hash ->
+  val server_cert_fingerprint : time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
-
-  (** [null] is [authenticator], which always returns [Ok ()]. (Useful for
-      testing purposes only.) *)
-  val null : t
 end
