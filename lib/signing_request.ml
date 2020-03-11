@@ -126,11 +126,11 @@ let hostnames csr =
   let info = info csr in
   let subj =
     match Distinguished_name.common_name info.subject with
-    | None -> Extension.Host_set.empty
+    | None -> Host.Set.empty
     | Some x ->
-      match Extension.host x with
-      | Some (typ, n) -> Extension.Host_set.singleton (typ, n)
-      | None -> Extension.Host_set.empty
+      match Host.host x with
+      | Some (typ, n) -> Host.Set.singleton (typ, n)
+      | None -> Host.Set.empty
   in
   match Ext.(find Extensions info.extensions) with
   | None -> subj

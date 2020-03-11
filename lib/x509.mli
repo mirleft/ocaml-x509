@@ -44,6 +44,20 @@
 
 open Rresult
 
+module Host : sig
+  (** The polymorphic variant for hostname validation. *)
+  type t = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
+
+  val pp : t Fmt.t
+
+  (** The module for a set of hostnames. *)
+  module Set : sig
+    include Set.S with type elt = t
+
+    val pp : t Fmt.t
+  end
+end
+
 (** RSA public key DER and PEM encoding and decoding *)
 module Public_key : sig
   (** Public keys as specified in {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
@@ -396,18 +410,12 @@ module Certificate : sig
   (** [signature_algorithm certificate] is the algorithm used for the signature. *)
   val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
 
-  (** The polymorphic variant for hostname validation. *)
-  type host = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
-
-  (** The module for a set of hostnames. *)
-  module Host_set : Set.S with type elt = host
-
   (** [hostnames certficate] is the set of domain names this
       [certificate] is valid for.  Currently, these are the DNS names of the
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}Subject Alternative Name}
       extension, if present, or otherwise the singleton set containing the common
       name of the certificate subject. *)
-  val hostnames : t -> Host_set.t
+  val hostnames : t -> Host.Set.t
 
   (** [supports_hostname certificate hostname] is [result], whether the
       [certificate] contains the given [hostname], using {!hostnames}. *)
@@ -497,7 +505,7 @@ module Signing_request : sig
       [signing_request] is requesting. This is either the content of the DNS
       entries of the SubjectAlternativeName extension, or the common name of the
       [signing_request]. *)
-  val hostnames : t -> Certificate.Host_set.t
+  val hostnames : t -> Host.Set.t
 
   (** [create subject ~digest ~extensions private] creates [signing_request],
       a certification request using the given [subject], [digest] (defaults to

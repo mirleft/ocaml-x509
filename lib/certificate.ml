@@ -204,10 +204,6 @@ let supports_keytype c t =
 
 let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
 
-type host = Extension.host
-
-module Host_set = Extension.Host_set
-
 (* RFC 6125, 6.4.4:
    Therefore, if and only if the presented identifiers do not include a
    DNS-ID, SRV-ID, URI-ID, or any application-specific identifier types
@@ -222,11 +218,11 @@ module Host_set = Extension.Host_set
 let hostnames { asn = cert ; _ } =
   let subj =
     match Distinguished_name.common_name cert.tbs_cert.subject with
-    | None -> Host_set.empty
+    | None -> Host.Set.empty
     | Some x ->
-      match Extension.host x with
-      | Some (wild, d) -> Host_set.singleton (wild, d)
-      | None -> Host_set.empty
+      match Host.host x with
+      | Some (wild, d) -> Host.Set.singleton (wild, d)
+      | None -> Host.Set.empty
   in
   match Extension.hostnames cert.tbs_cert.extensions with
   | Some names -> names
@@ -241,7 +237,7 @@ let supports_hostname cert name =
       | Ok hostname -> Some hostname
       | Error _ -> None
   in
-  Host_set.mem (`Strict, name) names
+  Host.Set.mem (`Strict, name) names
   || (match wc_name_opt with
       | None -> false
-      | Some wc_name -> Host_set.mem (`Wildcard, wc_name) names)
+      | Some wc_name -> Host.Set.mem (`Wildcard, wc_name) names)

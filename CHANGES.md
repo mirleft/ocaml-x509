@@ -2,6 +2,7 @@
 
 * BREAKING use mirage-crypto and mirage-crypto-pk instead of nocrypto
   raise lower OCaml bound to 4.07.0, test 4.10.0 in CI
+* BREAKING Certificate.Host_set is now Host.Set, and has pretty-printers
 
 ## v0.9.0 (2020-01-22)
 
