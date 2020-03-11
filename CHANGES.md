@@ -1,15 +1,16 @@
 ## v0.10.0
 
-* BREAKING use mirage-crypto and mirage-crypto-pk instead of nocrypto
+* BREAKING #131 use mirage-crypto and mirage-crypto-pk instead of nocrypto
   raise lower OCaml bound to 4.07.0, test 4.10.0 in CI
-* BREAKING Certificate.Host_set is now Host.Set, and has pretty-printers
-* BREAKING Authenticator.null was removed (fixes #130, suggested by @emillon)
-* BREAKING Authenticator.t now requires (non-optional) ~host and ~time
-  arguments (to more easily spot the cases where this is not provided). Also,
-  time is (unit -> Ptime.t option) instead of Ptime.t -- thus the timestamp at
-  the time of certificate verification is used instead of the time of
-  Authenticator construction. Similar changes in Validation for verify_chain,
-  verify_chain_of_trust, trust_key_fingerprint, trust_cert_fingerprint.
+* BREAKING #131 Certificate.Host_set is now Host.Set, and has pretty-printers
+* BREAKING #131 Authenticator.null was removed (fixes #130, suggested by @emillon)
+* BREAKING #131 Authenticator.t now requires (non-optional) ~host and ~time
+  arguments which may return an option. This allows to more easily spot the
+  cases where None is provided. Also, time is (unit -> Ptime.t option) instead
+  of Ptime.t -- thus the timestamp at the time of certificate verification is
+  used instead of the time of Authenticator construction. Similar changes in
+  Validation for verify_chain, verify_chain_of_trust, trust_key_fingerprint,
+  trust_cert_fingerprint.
   fixes #130, suggested by @emillon
 
 ## v0.9.0 (2020-01-22)
