@@ -1,6 +1,40 @@
 let sha2 = [ `SHA256 ; `SHA384 ; `SHA512 ]
 let all_hashes = [ `MD5 ; `SHA1 ; `SHA224 ] @ sha2
 
+let src = Logs.Src.create "x509" ~doc:"X509 validation"
+module Log = (val Logs.src_log src : Logs.LOG)
+
+type signature_error = [
+  | `Bad_pkcs1_signature of Distinguished_name.t * Cstruct.t
+  | `Hash_algorithm_mismatch of Distinguished_name.t * Mirage_crypto.Hash.hash * Mirage_crypto.Hash.hash
+  | `Hash_mismatch of Distinguished_name.t * Cstruct.t * Cstruct.t
+  | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
+  | `Bad_pkcs1_digest_info of Distinguished_name.t * Cstruct.t
+  | `Unsupported_keytype of Distinguished_name.t * Public_key.t
+]
+
+let pp_signature_error ppf = function
+  | `Bad_pkcs1_signature (subj, data) ->
+    Fmt.pf ppf "failed to decode PKCS1 signature of %a: %a"
+      Distinguished_name.pp subj Cstruct.hexdump_pp data
+  | `Hash_algorithm_mismatch (subj, tbs, digest_info) ->
+    Fmt.pf ppf "hash algorithm mismatch of %a to-be-signed is %a, digest info is %a"
+      Distinguished_name.pp subj
+      Certificate.pp_hash tbs Certificate.pp_hash digest_info
+  | `Hash_mismatch (subj, hash, computed) ->
+    Fmt.pf ppf "hash mismatch of %a: signature %a, computed %a"
+      Distinguished_name.pp subj
+      Cstruct.hexdump_pp hash Cstruct.hexdump_pp computed
+  | `Hash_not_whitelisted (subj, hash) ->
+    Fmt.pf ppf "hash algorithm %a is not whitelisted, but %a is signed using it"
+      Distinguished_name.pp subj Certificate.pp_hash hash
+  | `Bad_pkcs1_digest_info (subj, data) ->
+    Fmt.pf ppf "bad PKCS1 digest info for %a: %a" Distinguished_name.pp subj
+      Cstruct.hexdump_pp data
+  | `Unsupported_keytype (subj, pk) ->
+    Fmt.pf ppf "unsupported key used to sign %a: %a" Distinguished_name.pp subj
+      Public_key.pp pk
+
 let maybe_validate_hostname cert = function
   | None   -> true
   | Some x -> Certificate.supports_hostname cert x
@@ -11,17 +45,35 @@ let issuer_matches_subject
 
 let is_self_signed cert = issuer_matches_subject cert cert
 
-let validate_raw_signature hash_whitelist raw signature_algo signature_val pk_info =
+let validate_raw_signature subject hash_whitelist raw signature_algo signature_val pk_info =
   match pk_info, Algorithm.to_signature_algorithm signature_algo with
   | `RSA issuing_key, Some (`RSA, siga) ->
-    List.mem siga hash_whitelist &&
-    ( match Mirage_crypto_pk.Rsa.PKCS1.sig_decode ~key:issuing_key signature_val with
-      | None           -> false
+    begin match
+        Mirage_crypto_pk.Rsa.PKCS1.sig_decode ~key:issuing_key signature_val
+      with
+      | None -> Error (`Bad_pkcs1_signature (subject, signature_val))
       | Some signature ->
         match Certificate.decode_pkcs1_digest_info signature with
-        | Ok (a, hash) -> siga = a && Cstruct.equal hash (Mirage_crypto.Hash.digest a raw)
-        | _ -> false )
-  | _ -> false
+        | Ok (a, hash) ->
+          begin
+            let computed_hash = Mirage_crypto.Hash.digest a raw in
+            match
+              siga = a,
+              Cstruct.equal hash computed_hash,
+              List.mem siga hash_whitelist
+            with
+            | true, true, true ->
+              if not (List.mem siga sha2) then
+                Log.warn (fun m -> m "%a signature uses %a, a weak hash algorithm"
+                             Distinguished_name.pp subject Certificate.pp_hash siga);
+              Ok ()
+            | false, _, _ -> Error (`Hash_algorithm_mismatch (subject, siga, a))
+            | _, false, _ -> Error (`Hash_mismatch (subject, hash, computed_hash))
+            | _, _, false -> Error (`Hash_not_whitelisted (subject, siga))
+          end
+        | _ -> Error (`Bad_pkcs1_digest_info (subject, signature))
+    end
+  | _ -> Error (`Unsupported_keytype (subject, pk_info))
 
 (* XXX should return the tbs_cert blob from the parser, this is insane *)
 let raw_cert_hack raw signature =
@@ -31,10 +83,10 @@ let raw_cert_hack raw signature =
   let lenl   = 2 + if 0x80 land snd = 0 then 0 else 0x7F land snd in
   Cstruct.(sub raw lenl (len raw - (siglen + lenl + 19 + off)))
 
-let validate_signature hash_whitelist { Certificate.asn = trusted ; _ } cert =
-  let tbs_raw = raw_cert_hack cert.Certificate.raw cert.asn.signature_val in
-  validate_raw_signature hash_whitelist tbs_raw cert.asn.signature_algo
-    cert.asn.signature_val trusted.tbs_cert.pk_info
+let validate_signature hash_whitelist { Certificate.asn = trusted ; _ } { Certificate.asn ; raw } =
+  let tbs_raw = raw_cert_hack raw asn.signature_val in
+  validate_raw_signature asn.tbs_cert.subject hash_whitelist tbs_raw
+    asn.signature_algo asn.signature_val trusted.tbs_cert.pk_info
 
 let validate_time time { Certificate.asn = cert ; _ } =
   match time with
@@ -153,6 +205,7 @@ let rec build_paths fst rst =
     List.map (fun x -> fst :: x) tails
 
 type ca_error = [
+  | signature_error
   | `CAIssuerSubjectMismatch of Certificate.t
   | `CAInvalidVersion of Certificate.t
   | `CAInvalidSelfSignature of Certificate.t
@@ -161,6 +214,7 @@ type ca_error = [
 ]
 
 let pp_ca_error ppf = function
+  | #signature_error as e -> pp_signature_error ppf e
   | `CAIssuerSubjectMismatch c ->
     Fmt.pf ppf "CA certificate %a: issuer does not match subject" Certificate.pp c
   | `CAInvalidVersion c ->
@@ -236,13 +290,15 @@ let pp_chain_validation_error ppf = function
     Fmt.pf ppf "certificate %a is revoked" Certificate.pp c
 
 type chain_error = [
-  | `Leaf of leaf_validation_error
-  | `Chain of chain_validation_error
+  | signature_error
+  | leaf_validation_error
+  | chain_validation_error
 ]
 
 let pp_chain_error ppf = function
-  | `Leaf l -> pp_leaf_validation_error ppf l
-  | `Chain c -> pp_chain_validation_error ppf c
+  | #signature_error as e -> pp_signature_error ppf e
+  | #leaf_validation_error as l -> pp_leaf_validation_error ppf l
+  | #chain_validation_error as c -> pp_chain_validation_error ppf c
 
 type fingerprint_validation_error = [
   | `ServerNameNotPresent of Certificate.t * [`host] Domain_name.t
@@ -262,18 +318,20 @@ let pp_fingerprint_validation_error ppf = function
       Certificate.pp c Cstruct.hexdump_pp c_fp Cstruct.hexdump_pp fp
 
 type validation_error = [
+  | signature_error
+  | leaf_validation_error
+  | fingerprint_validation_error
   | `EmptyCertificateChain
   | `InvalidChain
-  | `Leaf of leaf_validation_error
-  | `Fingerprint of fingerprint_validation_error
 ]
 
 let pp_validation_error ppf = function
+  | #signature_error as e -> pp_signature_error ppf e
+  | #leaf_validation_error as l -> pp_leaf_validation_error ppf l
+  | #fingerprint_validation_error as f -> pp_fingerprint_validation_error ppf f
   | `EmptyCertificateChain ->
     Fmt.string ppf "provided certificate chain is empty"
   | `InvalidChain -> Fmt.string ppf "invalid certificate chain"
-  | `Leaf l -> pp_leaf_validation_error ppf l
-  | `Fingerprint f -> pp_fingerprint_validation_error ppf f
 
 type r = ((Certificate.t list * Certificate.t) option, validation_error) result
 
@@ -300,10 +358,10 @@ let is_ca_cert_valid hash_whitelist now cert =
     validate_time now cert,
     valid_trust_anchor_extensions cert
   with
-  | (true, true, true, true, true) -> Ok ()
+  | (true, true, Ok (), true, true) -> Ok ()
   | (false, _, _, _, _)            -> Error (`CAIssuerSubjectMismatch cert)
   | (_, false, _, _, _)            -> Error (`CAInvalidVersion cert)
-  | (_, _, false, _, _)            -> Error (`CAInvalidSelfSignature cert)
+  | (_, _, Error e, _, _)          -> Error e
   | (_, _, _, false, _)            -> Error (`CACertificateExpired (cert, now))
   | (_, _, _, _, false)            -> Error (`CAInvalidExtensions cert)
 
@@ -330,10 +388,10 @@ let signs hash pathlen trusted cert =
     validate_signature hash trusted cert,
     validate_path_len pathlen trusted
   with
-  | (true, true, true, true) -> Ok ()
+  | (true, true, Ok (), true) -> Ok ()
   | (false, _, _, _)         -> Error (`ChainIssuerSubjectMismatch (trusted, cert))
   | (_, false, _, _)         -> Error (`ChainAuthorityKeyIdSubjectKeyIdMismatch (trusted, cert))
-  | (_, _, false, _)         -> Error (`ChainInvalidSignature (trusted, cert))
+  | (_, _, Error e, _)       -> Error e
   | (_, _, _, false)         -> Error (`ChainInvalidPathlen (trusted, pathlen))
 
 let issuer trusted cert =
@@ -344,11 +402,6 @@ let rec validate_anchors revoked hash pathlen cert = function
   | x::xs -> match signs hash pathlen x cert with
     | Ok _    -> if revoked ~issuer:x ~cert then Error (`Revoked cert) else Ok x
     | Error _ -> validate_anchors revoked hash pathlen cert xs
-
-let lift_leaf f x =
-  match f x with
-  | Ok () -> Ok ()
-  | Error e -> Error (`Leaf e)
 
 let verify_single_chain now ?(revoked = fun ~issuer:_ ~cert:_ -> false) hash anchors chain =
   let rec climb pathlen = function
@@ -364,18 +417,13 @@ let verify_single_chain now ?(revoked = fun ~issuer:_ ~cert:_ -> false) hash anc
   in
   climb 0 chain
 
-let lift_chain f x =
-  match f x with
-  | Ok x -> Ok x
-  | Error e -> Error (`Chain e)
-
 let verify_chain ~host ~time ?revoked ?(hash_whitelist = sha2) ~anchors = function
-  | [] -> Error (`Chain `EmptyCertificateChain)
+  | [] -> Error `EmptyCertificateChain
   | server :: certs ->
     let now = time () in
     let anchors = List.filter (validate_time now) anchors in
-    lift_leaf (is_server_cert_valid host now) server >>= fun () ->
-    lift_chain (verify_single_chain now ?revoked hash_whitelist anchors) (server :: certs)
+    is_server_cert_valid host now server >>= fun () ->
+    verify_single_chain now ?revoked hash_whitelist anchors (server :: certs)
 
 let rec any_m e f = function
   | [] -> Error e
@@ -388,7 +436,7 @@ let verify_chain_of_trust ~host ~time ?revoked ?(hash_whitelist = sha2) ~anchors
   | server :: certs ->
     let now = time () in
     (* verify server! *)
-    lift_leaf (is_server_cert_valid host now) server >>= fun () ->
+    is_server_cert_valid host now server >>= fun () ->
     (* build all paths *)
     let paths = build_paths server certs
     and anchors = List.filter (validate_time now) anchors
@@ -412,19 +460,19 @@ let fingerprint_verification host now fingerprints fp = function
         if maybe_validate_hostname server (Some name) then
           Ok None
         else
-          Error (`Fingerprint (`ServerNameNotPresent (server, name)))
+          Error (`ServerNameNotPresent (server, name))
       else
         let name_matches (n, _) = Certificate.supports_hostname server n in
         if List.exists name_matches fingerprints then
           let (_, fp) = List.find name_matches fingerprints in
-          Error (`Fingerprint (`InvalidFingerprint (server, fingerprint, fp)))
+          Error (`InvalidFingerprint (server, fingerprint, fp))
         else
-          Error (`Fingerprint (`NameNotInList server))
+          Error (`NameNotInList server)
     in
     match validate_time now server, maybe_validate_hostname server host with
     | true , true  -> verify_fingerprint server fingerprints
-    | false, _     -> Error (`Leaf (`LeafCertificateExpired (server, now)))
-    | _    , false -> Error (`Leaf (`LeafInvalidName (server, host)))
+    | false, _     -> Error (`LeafCertificateExpired (server, now))
+    | _    , false -> Error (`LeafInvalidName (server, host))
 
 let trust_key_fingerprint ~host ~time ~hash ~fingerprints =
   let now = time () in

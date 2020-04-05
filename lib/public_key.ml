@@ -3,6 +3,8 @@ type t = [
   | `EC_pub of Asn.oid
 ]
 
+module Asn_oid = Asn.OID
+
 module Asn = struct
   open Asn_grammars
   open Asn.S
@@ -48,6 +50,10 @@ let id = function
 
 let fingerprint ?(hash = `SHA256) pub =
   Mirage_crypto.Hash.digest hash (Asn.pub_info_to_cstruct pub)
+
+let pp ppf = function
+  | `RSA _ as k -> Fmt.pf ppf "RSA %a" Cstruct.hexdump_pp (fingerprint k)
+  | `EC_pub oid -> Fmt.pf ppf "EC %a" Asn_oid.pp oid
 
 let encode_der = Asn.pub_info_to_cstruct
 

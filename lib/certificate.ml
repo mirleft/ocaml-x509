@@ -163,12 +163,15 @@ let encode_pem_multiple cs =
 let pp_version ppf v =
   Fmt.string ppf (match v with `V1 -> "1" | `V2 -> "2" | `V3 -> "3")
 
+let pp_hash ppf hash =
+  Fmt.string ppf (match hash with
+      | `MD5 -> "MD5" | `SHA1 -> "SHA1" | `SHA224 -> "SHA224"
+      | `SHA256 -> "SHA256" | `SHA384 -> "SHA384" | `SHA512 -> "SHA512")
+
 let pp_sigalg ppf (asym, hash) =
-  Fmt.pf ppf "%s-%s"
+  Fmt.pf ppf "%s-%a"
     (match asym with `RSA -> "RSA" | `ECDSA -> "ECDSA")
-    (match hash with
-     | `MD5 -> "MD5" | `SHA1 -> "SHA1" | `SHA224 -> "SHA224"
-     | `SHA256 -> "SHA256" | `SHA384 -> "SHA384" | `SHA512 -> "SHA512")
+    pp_hash hash
 
 let pp ppf { asn ; _ } =
   let tbs = asn.tbs_cert in

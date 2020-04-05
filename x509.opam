@@ -27,6 +27,7 @@ depends: [
   "mirage-crypto-rng" {with-test}
   "gmap" {>= "0.3.0"}
   "domain-name" {>= "0.3.0"}
+  "logs"
 ]
 build: [
   ["dune" "subst"] {pinned}

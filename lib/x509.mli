@@ -48,12 +48,15 @@ module Host : sig
   (** The polymorphic variant for hostname validation. *)
   type t = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
 
+  (** [pp ppf host] pretty-prints [host] on [ppf]: if it is a wildcard, "*." is
+      prefixed to the domain name. *)
   val pp : t Fmt.t
 
   (** The module for a set of hostnames. *)
   module Set : sig
     include Set.S with type elt = t
 
+    (** [pp ppf host_set] pretty-prints the [host_set]. *)
     val pp : t Fmt.t
   end
 end
@@ -73,12 +76,15 @@ module Public_key : sig
       unused bits) for publicKeyInfo of [public_key].
 
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.2}RFC 5280, 4.2.1.2, variant (1)} *)
-  val id: t -> Cstruct.t
+  val id : t -> Cstruct.t
 
   (** [fingerprint ?hash public_key] is [digest], the hash (by
       default SHA256) of the DER encoded public key (equivalent to
       [openssl x509 -noout -pubkey | openssl pkey -pubin -outform DER | openssl dgst -HASH]).  *)
   val fingerprint : ?hash:Mirage_crypto.Hash.hash -> t -> Cstruct.t
+
+  (** [pp ppf pub] pretty-prints the public key [pub] on [ppf]. *)
+  val pp : t Fmt.t
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
@@ -443,6 +449,196 @@ module Certificate : sig
   val extensions : t -> Extension.t
 end
 
+(** Chain Validation. *)
+module Validation : sig
+  (** A chain of pairwise signed X.509 certificates is sent to the endpoint,
+      which use these to authenticate the other endpoint.  Usually a set of
+      trust anchors is configured on the endpoint, and the chain needs to be
+      rooted in one of the trust anchors.  In reality, chains may be incomplete
+      or reversed, and there can be multiple paths from the leaf certificate to
+      a trust anchor.
+
+      RFC 5280 specifies a {{:https://tools.ietf.org/html/rfc5280#section-6}path
+      validation} algorithm for authenticating chains, but this does not handle
+      multiple possible paths.  {{:https://tools.ietf.org/html/rfc4158}RFC 4158}
+      describes possible path building strategies.
+
+      This module provides path building, chain of trust verification, trust
+      anchor (certificate authority) validation, and validation via a
+      fingerprint list (for a trust on first use implementation).
+  *)
+
+  (** The type of signature verification errors. *)
+  type signature_error = [
+    | `Bad_pkcs1_signature of Distinguished_name.t * Cstruct.t
+    | `Hash_algorithm_mismatch of Distinguished_name.t * Mirage_crypto.Hash.hash * Mirage_crypto.Hash.hash
+    | `Hash_mismatch of Distinguished_name.t * Cstruct.t * Cstruct.t
+    | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
+    | `Bad_pkcs1_digest_info of Distinguished_name.t * Cstruct.t
+    | `Unsupported_keytype of Distinguished_name.t * Public_key.t
+  ]
+
+  (** [pp_signature_error ppf sige] pretty-prints the signature error [sige] on
+      [ppf]. *)
+  val pp_signature_error : signature_error Fmt.t
+
+  (** {1 Certificate Authorities} *)
+
+  (** The polymorphic variant of possible certificate authorities failures. *)
+  type ca_error = [
+    | signature_error
+    | `CAIssuerSubjectMismatch of Certificate.t
+    | `CAInvalidVersion of Certificate.t
+    | `CAInvalidSelfSignature of Certificate.t
+    | `CACertificateExpired of Certificate.t * Ptime.t option
+    | `CAInvalidExtensions of Certificate.t
+  ]
+
+  (** [pp_ca_error ppf ca_error] pretty-prints the CA error [ca_error]. *)
+  val pp_ca_error : ca_error Fmt.t
+
+  (** [valid_ca ~hash_whitelist ~time certificate] is [result], which is [Ok ()]
+      if the given certificate is self-signed with any hash algorithm of
+      [hash_whitelist] (defaults to any hash), it is valid at [time], its
+      extensions are not present (if X.509 version 1 certificate), or are
+      appropriate for a CA (BasicConstraints is present and true, KeyUsage
+      extension contains keyCertSign). *)
+  val valid_ca : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
+    Certificate.t -> (unit, ca_error) result
+
+  (** [valid_cas ~hash_whitelist ~time certificates] is [valid_certificates],
+      only those certificates which pass the {!valid_ca} check. *)
+  val valid_cas : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
+    Certificate.t list -> Certificate.t list
+
+  (** {1 Chain of trust verification} *)
+
+  (** The polymorphic variant of a leaf certificate validation error. *)
+  type leaf_validation_error = [
+    | `LeafCertificateExpired of Certificate.t * Ptime.t option
+    | `LeafInvalidName of Certificate.t * [`host] Domain_name.t option
+    | `LeafInvalidVersion of Certificate.t
+    | `LeafInvalidExtensions of Certificate.t
+  ]
+
+  (** The polymorphic variant of a chain validation error. *)
+  type chain_validation_error = [
+    | `IntermediateInvalidExtensions of Certificate.t
+    | `IntermediateCertificateExpired of Certificate.t * Ptime.t option
+    | `IntermediateInvalidVersion of Certificate.t
+    | `ChainIssuerSubjectMismatch of Certificate.t * Certificate.t
+    | `ChainAuthorityKeyIdSubjectKeyIdMismatch of Certificate.t * Certificate.t
+    | `ChainInvalidSignature of Certificate.t * Certificate.t
+    | `ChainInvalidPathlen of Certificate.t * int
+    | `EmptyCertificateChain
+    | `NoTrustAnchor of Certificate.t
+    | `Revoked of Certificate.t
+  ]
+
+  (** [build_paths server rest] is [paths], which are all possible certificate
+      paths starting with [server].  These chains (C1..Cn) fulfill the predicate
+      that each certificate Cn is issued by the next one in the chain (C(n+1)):
+      the issuer of Cn matches the subject of C(n+1).  This is as described in
+      {{:https://tools.ietf.org/html/rfc4158}RFC 4158}. *)
+  val build_paths : Certificate.t -> Certificate.t list -> Certificate.t list list
+
+  (** The polymorphic variant of a chain validation error: either the leaf
+      certificate is problematic, or the chain itself. *)
+  type chain_error = [
+    | signature_error
+    | leaf_validation_error
+    | chain_validation_error
+  ]
+
+  (** [pp_chain_error ppf chain_error] pretty-prints the [chain_error]. *)
+  val pp_chain_error : chain_error Fmt.t
+
+  (** [verify_chain ~host ~time ~revoked ~hash_whitelist ~anchors chain] is
+      [result], either [Ok] and the trust anchor used to verify the chain, or
+      [Error] and the chain error.  RFC 5280 describes the implemented
+      {{:https://tools.ietf.org/html/rfc5280#section-6.1}path validation}
+      algorithm: The validity period of the given certificates is checked
+      against the [time].  The signature algorithm must be present in
+      [hash_whitelist] (defaults to SHA-2).  The X509v3 extensions of the
+      [chain] are checked, then a chain of trust from [anchors] to the server
+      certificate is validated.  The path length constraints are checked.  The
+      server certificate is checked to contain the given [host], using
+      {!hostnames}.  The returned certificate is the root of the chain, a member
+      of the given list of [anchors]. *)
+  val verify_chain : host:[`host] Domain_name.t option ->
+    time:(unit -> Ptime.t option) ->
+    ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
+    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+    anchors:(Certificate.t list) -> Certificate.t list ->
+    (Certificate.t, chain_error) result
+
+  (** The polymorphic variant of a fingerprint validation error. *)
+  type fingerprint_validation_error = [
+    | `ServerNameNotPresent of Certificate.t * [`host] Domain_name.t
+    | `NameNotInList of Certificate.t
+    | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
+  ]
+
+  (** The polymorphic variant of validation errors. *)
+  type validation_error = [
+    | signature_error
+    | leaf_validation_error
+    | fingerprint_validation_error
+    | `EmptyCertificateChain
+    | `InvalidChain
+  ]
+
+  (** [pp_validation_error ppf validation_error] pretty-prints the
+      [validation_error]. *)
+  val pp_validation_error : validation_error Fmt.t
+
+  type r = ((Certificate.t list * Certificate.t) option, validation_error) result
+
+  (** [verify_chain_of_trust host ~time ~revoked ~hash_whitelist ~anchors certificates]
+      is [result].  First, all possible paths are constructed using the
+      {!build_paths} function, the first certificate of the chain is verified to
+      be a valid leaf certificate (no BasicConstraints extension) and contains
+      the given [host] (using {!hostnames}); if some path is valid, using
+      {!verify_chain}, the result will be [Ok] and contain the actual
+      certificate chain and the trust anchor. *)
+  val verify_chain_of_trust :
+    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
+    ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
+    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+    anchors:(Certificate.t list) -> Certificate.t list -> r
+
+  (** {1 Fingerprint verification} *)
+
+  (** [trust_key_fingerprint host ~time ~hash ~fingerprints certificates] is
+      [result], the first element of [certificates] is verified against the
+      given [fingerprints] list using {!key_fingerprint}.  If [time] is
+      provided, the certificate has to be valid at the given timestamp.  If
+      [host] is provided, the certificate is checked for this name.  The
+      [hostname] of the fingerprint list must match the name in the certificate,
+      using {!hostnames}. *)
+  val trust_key_fingerprint :
+    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
+    fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
+    Certificate.t list -> r
+
+  (** [trust_cert_fingerprint host ~time ~hash ~fingerprints certificates] is
+      [result], the first element of [certificates] is verified to match the
+      given [fingerprints] list using {!fingerprint}.  If [time] is provided,
+      the certificate is checked to be valid in at the given timestamp.  If
+      [host] is provided, the certificate is checked for this name.  The
+      [hostname] of the fingerprint list must match the name in the
+      certificate, using {!hostnames}. Note that
+      {{!trust_key_fingerprint}public key pinning} has
+      {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
+      over certificate pinning. *)
+  val trust_cert_fingerprint :
+    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash ->
+    fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
+    Certificate.t list -> r
+end
+
 (** Certificate Signing request *)
 
 (** A certificate authority (CA) deals with
@@ -533,7 +729,8 @@ module Signing_request : sig
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
     ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     ?digest:Mirage_crypto.Hash.hash -> ?serial:Z.t -> ?extensions:Extension.t ->
-    Private_key.t -> Distinguished_name.t -> (Certificate.t, [> R.msg ]) result
+    Private_key.t -> Distinguished_name.t ->
+    (Certificate.t, Validation.signature_error) result
 end
 
 (** X.509 Certificate Revocation Lists. *)
@@ -603,16 +800,28 @@ module CRL : sig
 
   (** [validate t ~hash_whitelist pk] validates the digital signature of the
       revocation list. The [hash_whitelist] defaults to SHA-2. *)
-  val validate : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list -> Public_key.t ->
-    bool
+  val validate : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+    Public_key.t -> (unit, Validation.signature_error) result
+
+  (** The type of CRL verification errors. *)
+  type verification_error = [
+    | Validation.signature_error
+    | `Issuer_subject_mismatch of Distinguished_name.t * Distinguished_name.t
+    | `Not_yet_valid of Distinguished_name.t * Ptime.t * Ptime.t
+    | `Next_update_scheduled of Distinguished_name.t * Ptime.t * Ptime.t
+  ]
+
+  (** [pp_validation_error ppf vere] pretty-prints the CRL verification error
+      [vere] on [ppf]. *)
+  val pp_verification_error : verification_error Fmt.t
 
   (** [verify t ~hash_whitelist ~time cert] verifies that the issuer of [t]
       matches the subject of [cert], and validates the digital signature of the
       revocation list.  The used hash algorithm must be in the [hash_whitelist]
       (defaults to SHA-2). If [time] is provided, it must be after [this_update]
       and before [next_update] of [t]. *)
-  val verify : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
-    Certificate.t -> bool
+  val verify : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+    ?time:Ptime.t -> Certificate.t -> (unit, verification_error) result
 
   (** [is_revoked crls ~hash_whitelist ~issuer ~cert] is [true] if there exists
       a revocation of [cert] in [crls] which is signed by the [issuer].  The
@@ -642,180 +851,6 @@ module CRL : sig
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificates : revoked_cert list ->
     this_update:Ptime.t -> ?next_update:Ptime.t -> t -> Private_key.t -> t
-end
-
-(** Chain Validation. *)
-module Validation : sig
-  (** A chain of pairwise signed X.509 certificates is sent to the endpoint,
-      which use these to authenticate the other endpoint.  Usually a set of
-      trust anchors is configured on the endpoint, and the chain needs to be
-      rooted in one of the trust anchors.  In reality, chains may be incomplete
-      or reversed, and there can be multiple paths from the leaf certificate to
-      a trust anchor.
-
-      RFC 5280 specifies a {{:https://tools.ietf.org/html/rfc5280#section-6}path
-      validation} algorithm for authenticating chains, but this does not handle
-      multiple possible paths.  {{:https://tools.ietf.org/html/rfc4158}RFC 4158}
-      describes possible path building strategies.
-
-      This module provides path building, chain of trust verification, trust
-      anchor (certificate authority) validation, and validation via a
-      fingerprint list (for a trust on first use implementation).
-  *)
-
-
-  (** {1 Certificate Authorities} *)
-
-  (** The polymorphic variant of possible certificate authorities failures. *)
-  type ca_error = [
-    | `CAIssuerSubjectMismatch of Certificate.t
-    | `CAInvalidVersion of Certificate.t
-    | `CAInvalidSelfSignature of Certificate.t
-    | `CACertificateExpired of Certificate.t * Ptime.t option
-    | `CAInvalidExtensions of Certificate.t
-  ]
-
-  (** [pp_ca_error ppf ca_error] pretty-prints the CA error [ca_error]. *)
-  val pp_ca_error : ca_error Fmt.t
-
-  (** [valid_ca ~hash_whitelist ~time certificate] is [result], which is [Ok ()]
-      if the given certificate is self-signed with any hash algorithm of
-      [hash_whitelist] (defaults to any hash), it is valid at [time], its
-      extensions are not present (if X.509 version 1 certificate), or are
-      appropriate for a CA (BasicConstraints is present and true, KeyUsage
-      extension contains keyCertSign). *)
-  val valid_ca : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
-    Certificate.t -> (unit, ca_error) result
-
-  (** [valid_cas ~hash_whitelist ~time certificates] is [valid_certificates],
-      only those certificates which pass the {!valid_ca} check. *)
-  val valid_cas : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
-    Certificate.t list -> Certificate.t list
-
-  (** {1 Chain of trust verification} *)
-
-  (** The polymorphic variant of a leaf certificate validation error. *)
-  type leaf_validation_error = [
-    | `LeafCertificateExpired of Certificate.t * Ptime.t option
-    | `LeafInvalidName of Certificate.t * [`host] Domain_name.t option
-    | `LeafInvalidVersion of Certificate.t
-    | `LeafInvalidExtensions of Certificate.t
-  ]
-
-  (** The polymorphic variant of a chain validation error. *)
-  type chain_validation_error = [
-    | `IntermediateInvalidExtensions of Certificate.t
-    | `IntermediateCertificateExpired of Certificate.t * Ptime.t option
-    | `IntermediateInvalidVersion of Certificate.t
-    | `ChainIssuerSubjectMismatch of Certificate.t * Certificate.t
-    | `ChainAuthorityKeyIdSubjectKeyIdMismatch of Certificate.t * Certificate.t
-    | `ChainInvalidSignature of Certificate.t * Certificate.t
-    | `ChainInvalidPathlen of Certificate.t * int
-    | `EmptyCertificateChain
-    | `NoTrustAnchor of Certificate.t
-    | `Revoked of Certificate.t
-  ]
-
-  (** [build_paths server rest] is [paths], which are all possible certificate
-      paths starting with [server].  These chains (C1..Cn) fulfill the predicate
-      that each certificate Cn is issued by the next one in the chain (C(n+1)):
-      the issuer of Cn matches the subject of C(n+1).  This is as described in
-      {{:https://tools.ietf.org/html/rfc4158}RFC 4158}. *)
-  val build_paths : Certificate.t -> Certificate.t list -> Certificate.t list list
-
-  (** The polymorphic variant of a chain validation error: either the leaf
-      certificate is problematic, or the chain itself. *)
-  type chain_error = [
-    | `Leaf of leaf_validation_error
-    | `Chain of chain_validation_error
-  ]
-
-  (** [pp_chain_error ppf chain_error] pretty-prints the [chain_error]. *)
-  val pp_chain_error : chain_error Fmt.t
-
-  (** [verify_chain ~host ~time ~revoked ~hash_whitelist ~anchors chain] is
-      [result], either [Ok] and the trust anchor used to verify the chain, or
-      [Error] and the chain error.  RFC 5280 describes the implemented
-      {{:https://tools.ietf.org/html/rfc5280#section-6.1}path validation}
-      algorithm: The validity period of the given certificates is checked
-      against the [time].  The signature algorithm must be present in
-      [hash_whitelist] (defaults to SHA-2).  The X509v3 extensions of the
-      [chain] are checked, then a chain of trust from [anchors] to the server
-      certificate is validated.  The path length constraints are checked.  The
-      server certificate is checked to contain the given [host], using
-      {!hostnames}.  The returned certificate is the root of the chain, a member
-      of the given list of [anchors]. *)
-  val verify_chain : host:[`host] Domain_name.t option ->
-    time:(unit -> Ptime.t option) ->
-    ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
-    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
-    anchors:(Certificate.t list) -> Certificate.t list ->
-    (Certificate.t, chain_error) result
-
-  (** The polymorphic variant of a fingerprint validation error. *)
-  type fingerprint_validation_error = [
-    | `ServerNameNotPresent of Certificate.t * [`host] Domain_name.t
-    | `NameNotInList of Certificate.t
-    | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
-  ]
-
-  (** The polymorphic variant of validation errors. *)
-  type validation_error = [
-    | `EmptyCertificateChain
-    | `InvalidChain
-    | `Leaf of leaf_validation_error
-    | `Fingerprint of fingerprint_validation_error
-  ]
-
-  (** [pp_validation_error ppf validation_error] pretty-prints the
-      [validation_error]. *)
-  val pp_validation_error : validation_error Fmt.t
-
-  type r = ((Certificate.t list * Certificate.t) option, validation_error) result
-
-  (** [verify_chain_of_trust host ~time ~revoked ~hash_whitelist ~anchors certificates]
-      is [result].  First, all possible paths are constructed using the
-      {!build_paths} function, the first certificate of the chain is verified to
-      be a valid leaf certificate (no BasicConstraints extension) and contains
-      the given [host] (using {!hostnames}); if some path is valid, using
-      {!verify_chain}, the result will be [Ok] and contain the actual
-      certificate chain and the trust anchor. *)
-  val verify_chain_of_trust :
-    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
-    ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
-    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
-    anchors:(Certificate.t list) -> Certificate.t list -> r
-
-  (** {1 Fingerprint verification} *)
-
-  (** [trust_key_fingerprint host ~time ~hash ~fingerprints certificates] is
-      [result], the first element of [certificates] is verified against the
-      given [fingerprints] list using {!key_fingerprint}.  If [time] is
-      provided, the certificate has to be valid at the given timestamp.  If
-      [host] is provided, the certificate is checked for this name.  The
-      [hostname] of the fingerprint list must match the name in the certificate,
-      using {!hostnames}. *)
-  val trust_key_fingerprint :
-    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash ->
-    fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
-    Certificate.t list -> r
-
-  (** [trust_cert_fingerprint host ~time ~hash ~fingerprints certificates] is
-      [result], the first element of [certificates] is verified to match the
-      given [fingerprints] list using {!fingerprint}.  If [time] is provided,
-      the certificate is checked to be valid in at the given timestamp.  If
-      [host] is provided, the certificate is checked for this name.  The
-      [hostname] of the fingerprint list must match the name in the
-      certificate, using {!hostnames}. Note that
-      {{!trust_key_fingerprint}public key pinning} has
-      {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
-      over certificate pinning. *)
-  val trust_cert_fingerprint :
-    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash ->
-    fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
-    Certificate.t list -> r
 end
 
 (** Certificate chain authenticators *)

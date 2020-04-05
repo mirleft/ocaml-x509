@@ -73,7 +73,7 @@ let crl () =
   let revoked = CRL.is_revoked [crl] ?hash_whitelist:None in
   match Validation.verify_chain ~host:None ~time ~revoked ~anchors:[ca] [cert] with
   | Ok _ -> Alcotest.fail "expected revocation"
-  | Error (`Chain (`Revoked _)) -> ()
+  | Error (`Revoked _) -> ()
   | Error _ -> Alcotest.fail "expected revoked failure!"
 
 let verify' () =
@@ -100,7 +100,7 @@ let crl' () =
   let revoked = CRL.is_revoked [crl] ?hash_whitelist:None in
   match Validation.verify_chain ~host:None ~time ~revoked ~anchors:[ca] [cert ; ica] with
   | Ok _ -> Alcotest.fail "expected revocation"
-  | Error (`Chain (`Revoked _)) -> ()
+  | Error (`Revoked _) -> ()
   | Error _ -> Alcotest.fail "expected revoked failure!"
 
 let crl'leaf () =
@@ -116,7 +116,7 @@ let crl'leaf () =
   let revoked = CRL.is_revoked [crl] ?hash_whitelist:None in
   match Validation.verify_chain ~host:None ~time ~revoked ~anchors:[ca] [cert ; ica] with
   | Ok _ -> Alcotest.fail "expected revocation"
-  | Error (`Chain (`Revoked _)) -> ()
+  | Error (`Revoked _) -> ()
   | Error _ -> Alcotest.fail "expected revoked failure!"
 
 let crl'leaf'wrong () =
