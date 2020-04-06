@@ -5,32 +5,18 @@ let src = Logs.Src.create "x509" ~doc:"X509 validation"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type signature_error = [
-  | `Bad_pkcs1_signature of Distinguished_name.t * Cstruct.t
-  | `Hash_algorithm_mismatch of Distinguished_name.t * Mirage_crypto.Hash.hash * Mirage_crypto.Hash.hash
-  | `Hash_mismatch of Distinguished_name.t * Cstruct.t * Cstruct.t
+  | `Bad_pkcs1_signature of Distinguished_name.t
   | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
-  | `Bad_pkcs1_digest_info of Distinguished_name.t * Cstruct.t
   | `Unsupported_keytype of Distinguished_name.t * Public_key.t
 ]
 
 let pp_signature_error ppf = function
-  | `Bad_pkcs1_signature (subj, data) ->
-    Fmt.pf ppf "failed to decode PKCS1 signature of %a: %a"
-      Distinguished_name.pp subj Cstruct.hexdump_pp data
-  | `Hash_algorithm_mismatch (subj, tbs, digest_info) ->
-    Fmt.pf ppf "hash algorithm mismatch of %a to-be-signed is %a, digest info is %a"
+  | `Bad_pkcs1_signature subj ->
+    Fmt.pf ppf "failed to verify PKCS1 signature of %a"
       Distinguished_name.pp subj
-      Certificate.pp_hash tbs Certificate.pp_hash digest_info
-  | `Hash_mismatch (subj, hash, computed) ->
-    Fmt.pf ppf "hash mismatch of %a: signature %a, computed %a"
-      Distinguished_name.pp subj
-      Cstruct.hexdump_pp hash Cstruct.hexdump_pp computed
   | `Hash_not_whitelisted (subj, hash) ->
     Fmt.pf ppf "hash algorithm %a is not whitelisted, but %a is signed using it"
       Distinguished_name.pp subj Certificate.pp_hash hash
-  | `Bad_pkcs1_digest_info (subj, data) ->
-    Fmt.pf ppf "bad PKCS1 digest info for %a: %a" Distinguished_name.pp subj
-      Cstruct.hexdump_pp data
   | `Unsupported_keytype (subj, pk) ->
     Fmt.pf ppf "unsupported key used to sign %a: %a" Distinguished_name.pp subj
       Public_key.pp pk
@@ -45,34 +31,24 @@ let issuer_matches_subject
 
 let is_self_signed cert = issuer_matches_subject cert cert
 
-let validate_raw_signature subject hash_whitelist raw signature_algo signature_val pk_info =
+let validate_raw_signature subject hash_whitelist raw signature_algo signature pk_info =
   match pk_info, Algorithm.to_signature_algorithm signature_algo with
   | `RSA issuing_key, Some (`RSA, siga) ->
-    begin match
-        Mirage_crypto_pk.Rsa.PKCS1.sig_decode ~key:issuing_key signature_val
-      with
-      | None -> Error (`Bad_pkcs1_signature (subject, signature_val))
-      | Some signature ->
-        match Certificate.decode_pkcs1_digest_info signature with
-        | Ok (a, hash) ->
-          begin
-            let computed_hash = Mirage_crypto.Hash.digest a raw in
-            match
-              siga = a,
-              Cstruct.equal hash computed_hash,
-              List.mem siga hash_whitelist
-            with
-            | true, true, true ->
-              if not (List.mem siga sha2) then
-                Log.warn (fun m -> m "%a signature uses %a, a weak hash algorithm"
-                             Distinguished_name.pp subject Certificate.pp_hash siga);
-              Ok ()
-            | false, _, _ -> Error (`Hash_algorithm_mismatch (subject, siga, a))
-            | _, false, _ -> Error (`Hash_mismatch (subject, hash, computed_hash))
-            | _, _, false -> Error (`Hash_not_whitelisted (subject, siga))
-          end
-        | _ -> Error (`Bad_pkcs1_digest_info (subject, signature))
-    end
+    (* the inner signature algorithm (siga) must match the one used in the
+       PKCS1 digest_info (this is why we pass [hashp:(fun a -> a = siga)].
+       we also check that siga is a member of hash_whitelist, to ensure not
+       using a weak one. *)
+    if not (List.mem siga hash_whitelist) then
+      Error (`Hash_not_whitelisted (subject, siga))
+    else if Mirage_crypto_pk.Rsa.PKCS1.verify ~hashp:(fun a -> a = siga)
+        ~key:issuing_key ~signature (`Message raw)
+    then begin
+      if not (List.mem siga sha2) then
+        Log.warn (fun m -> m "%a signature uses %a, a weak hash algorithm"
+                     Distinguished_name.pp subject Certificate.pp_hash siga);
+      Ok ()
+    end else
+      Error (`Bad_pkcs1_signature subject)
   | _ -> Error (`Unsupported_keytype (subject, pk_info))
 
 (* XXX should return the tbs_cert blob from the parser, this is insane *)

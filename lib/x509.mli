@@ -470,11 +470,8 @@ module Validation : sig
 
   (** The type of signature verification errors. *)
   type signature_error = [
-    | `Bad_pkcs1_signature of Distinguished_name.t * Cstruct.t
-    | `Hash_algorithm_mismatch of Distinguished_name.t * Mirage_crypto.Hash.hash * Mirage_crypto.Hash.hash
-    | `Hash_mismatch of Distinguished_name.t * Cstruct.t * Cstruct.t
+    | `Bad_pkcs1_signature of Distinguished_name.t
     | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
-    | `Bad_pkcs1_digest_info of Distinguished_name.t * Cstruct.t
     | `Unsupported_keytype of Distinguished_name.t * Public_key.t
   ]
 
