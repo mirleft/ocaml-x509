@@ -111,11 +111,9 @@ module Asn = struct
     projections_of Asn.der signing_request
 end
 
-let raw_sign raw digest key =
-  let hash = Mirage_crypto.Hash.digest digest raw in
-  let sigval = Certificate.encode_pkcs1_digest_info (digest, hash) in
+let raw_sign raw hash key =
   match key with
-    | `RSA priv -> Mirage_crypto_pk.Rsa.PKCS1.sig_encode ~key:priv sigval
+  | `RSA priv -> Mirage_crypto_pk.Rsa.PKCS1.sign ~hash ~key:priv (`Message raw)
 
 let info { asn ; _ } = asn.info
 
