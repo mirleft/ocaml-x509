@@ -1,3 +1,19 @@
+## v0.11.0 (2020-04-07)
+
+* BREAKING Validation.validate_raw_signature results in a
+  `(unit, signature_error) result` and logs (Logs.warn) if a weak (non-SHA2)
+  hash algorithm was used. This function is used for verifying signatures
+  on certificates, signing requests, and certificate revocation lists.
+* The `` `CAInvalidSelfSignature `` constructor (Validation.ca_error) and
+  `` `ChainInvalidSignature `` constructor (Validation.chain_validation_error)
+  have been removed.
+* BREAKING The polymorphic variant `Validation.chain_error` is now flat (the
+  tags `` `Chain `` and `` `Leaf `` have been removed)
+* BREAKING Adapted return type of CRL.validate and CRL.verify
+* The pretty-printer Public_key.pp is now provided
+* All implemented by @hannesm in #132 based on private conversation with @cfcs
+  (who kindly reviewed the changes)
+
 ## v0.10.0 (2020-03-11)
 
 * BREAKING #131 use mirage-crypto and mirage-crypto-pk instead of nocrypto
