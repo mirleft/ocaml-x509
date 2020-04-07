@@ -486,7 +486,6 @@ module Validation : sig
     | signature_error
     | `CAIssuerSubjectMismatch of Certificate.t
     | `CAInvalidVersion of Certificate.t
-    | `CAInvalidSelfSignature of Certificate.t
     | `CACertificateExpired of Certificate.t * Ptime.t option
     | `CAInvalidExtensions of Certificate.t
   ]
@@ -525,7 +524,6 @@ module Validation : sig
     | `IntermediateInvalidVersion of Certificate.t
     | `ChainIssuerSubjectMismatch of Certificate.t * Certificate.t
     | `ChainAuthorityKeyIdSubjectKeyIdMismatch of Certificate.t * Certificate.t
-    | `ChainInvalidSignature of Certificate.t * Certificate.t
     | `ChainInvalidPathlen of Certificate.t * int
     | `EmptyCertificateChain
     | `NoTrustAnchor of Certificate.t

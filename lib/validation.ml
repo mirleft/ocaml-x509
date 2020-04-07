@@ -184,7 +184,6 @@ type ca_error = [
   | signature_error
   | `CAIssuerSubjectMismatch of Certificate.t
   | `CAInvalidVersion of Certificate.t
-  | `CAInvalidSelfSignature of Certificate.t
   | `CACertificateExpired of Certificate.t * Ptime.t option
   | `CAInvalidExtensions of Certificate.t
 ]
@@ -197,8 +196,6 @@ let pp_ca_error ppf = function
     Fmt.pf ppf "CA certificate %a: version 3 is required for extensions" Certificate.pp c
   | `CAInvalidExtensions c ->
     Fmt.pf ppf "CA certificate %a: invalid CA extensions" Certificate.pp c
-  | `CAInvalidSelfSignature c ->
-    Fmt.pf ppf "CA certificate %a: invalid self-signature" Certificate.pp c
   | `CACertificateExpired (c, now) ->
     let pp_pt = Ptime.pp_human ~tz_offset_s:0 () in
     Fmt.pf ppf "CA certificate %a: expired (now %a)" Certificate.pp c
@@ -230,7 +227,6 @@ type chain_validation_error = [
   | `IntermediateInvalidVersion of Certificate.t
   | `ChainIssuerSubjectMismatch of Certificate.t * Certificate.t
   | `ChainAuthorityKeyIdSubjectKeyIdMismatch of Certificate.t * Certificate.t
-  | `ChainInvalidSignature of Certificate.t * Certificate.t
   | `ChainInvalidPathlen of Certificate.t * int
   | `EmptyCertificateChain
   | `NoTrustAnchor of Certificate.t
@@ -252,9 +248,6 @@ let pp_chain_validation_error ppf = function
       Certificate.pp c Certificate.pp parent
   | `ChainAuthorityKeyIdSubjectKeyIdMismatch (c, parent) ->
     Fmt.pf ppf "invalid chain: authority key id extension of %a does not match subject key id extension of %a"
-      Certificate.pp c Certificate.pp parent
-  | `ChainInvalidSignature (c, parent) ->
-    Fmt.pf ppf "invalid chain: the certificate %a is not signed by %a"
       Certificate.pp c Certificate.pp parent
   | `ChainInvalidPathlen (c, pathlen) ->
     Fmt.pf ppf "invalid chain: the path length of %a is smaller than the required path length %d"
