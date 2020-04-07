@@ -6,4 +6,4 @@
                   extension pem signing_request general_name host)
  (flags (:standard -safe-string))
  (libraries asn1-combinators rresult fmt ptime cstruct mirage-crypto
-            mirage-crypto-pk gmap domain-name base64))
+            mirage-crypto-pk gmap domain-name base64 logs))

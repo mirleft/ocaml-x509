@@ -97,6 +97,8 @@ type t = {
   asn : crl ;
 }
 
+let guard p e = if p then Ok () else Error e
+
 let decode_der raw =
   Asn_grammars.err_to_msg (Asn.crl_of_cstruct raw) >>| fun asn ->
   { raw ; asn }
@@ -123,17 +125,47 @@ let signature_algorithm { asn ; _ } =
 
 let validate { raw ; asn } ?(hash_whitelist = Validation.sha2) pub =
   let tbs_raw = Validation.raw_cert_hack raw asn.signature_val in
-  Validation.validate_raw_signature hash_whitelist tbs_raw asn.signature_algo
-    asn.signature_val pub
+  Validation.validate_raw_signature asn.tbs_crl.issuer hash_whitelist
+    tbs_raw asn.signature_algo asn.signature_val pub
+
+type verification_error = [
+  | Validation.signature_error
+  | `Issuer_subject_mismatch of Distinguished_name.t * Distinguished_name.t
+  | `Not_yet_valid of Distinguished_name.t * Ptime.t * Ptime.t
+  | `Next_update_scheduled of Distinguished_name.t * Ptime.t * Ptime.t
+]
+
+let pp_verification_error ppf = function
+  | #Validation.signature_error as e -> Validation.pp_signature_error ppf e
+  | `Issuer_subject_mismatch (issuer, subj) ->
+    Fmt.pf ppf "issuer %a does not match subject %a"
+      Distinguished_name.pp issuer Distinguished_name.pp subj
+  | `Not_yet_valid (issuer, now, created) ->
+    Fmt.pf ppf "CRL %a not yet valid, valid from %a, now %a"
+      Distinguished_name.pp issuer
+      (Ptime.pp_human ~tz_offset_s:0 ()) created
+      (Ptime.pp_human ~tz_offset_s:0 ()) now
+  | `Next_update_scheduled (issuer, now, scheduled) ->
+    Fmt.pf ppf "CRL %a next update already scheduled at %a, now %a"
+      Distinguished_name.pp issuer
+      (Ptime.pp_human ~tz_offset_s:0 ()) scheduled
+      (Ptime.pp_human ~tz_offset_s:0 ()) now
 
 let verify ({ asn ; _ } as crl) ?hash_whitelist ?time cert =
-  Distinguished_name.equal asn.tbs_crl.issuer (Certificate.subject cert) &&
+  let open Rresult.R.Infix in
+  let subj = Certificate.subject cert in
+  guard
+    (Distinguished_name.equal asn.tbs_crl.issuer subj)
+    (`Issuer_subject_mismatch (asn.tbs_crl.issuer, subj)) >>= fun () ->
   (match time with
-   | None -> true
-   | Some x -> Ptime.is_later ~than:asn.tbs_crl.this_update x &&
-               match asn.tbs_crl.next_update with
-               | None -> true
-               | Some y -> Ptime.is_earlier ~than:y x) &&
+   | None -> Ok ()
+   | Some x ->
+     guard (Ptime.is_later ~than:asn.tbs_crl.this_update x)
+       (`Not_yet_valid (subj, x, asn.tbs_crl.this_update)) >>= fun () ->
+     match asn.tbs_crl.next_update with
+     | None -> Ok ()
+     | Some y -> guard (Ptime.is_earlier ~than:y x)
+                   (`Next_update_scheduled (subj, x, y))) >>= fun () ->
   validate ?hash_whitelist crl (Certificate.public_key cert)
 
 let reason (revoked : revoked_cert) =
@@ -144,19 +176,22 @@ let reason (revoked : revoked_cert) =
 let is_revoked (crls : t list) ?hash_whitelist ~issuer:super ~cert =
   List.exists (fun crl ->
       if
-        Distinguished_name.equal (Certificate.subject super) (issuer crl) &&
-        validate ?hash_whitelist crl (Certificate.public_key super)
+        Distinguished_name.equal (Certificate.subject super) (issuer crl)
       then
-        try
-          let entry = List.find
-              (fun r -> Z.equal (Certificate.serial cert) r.serial)
-              (revoked_certificates crl)
-          in
-          match reason entry with
-          | None -> true
-          | Some `Remove_from_CRL -> false
-          | Some _ -> true
-        with Not_found -> false
+        match validate ?hash_whitelist crl (Certificate.public_key super) with
+        | Ok () ->
+          begin try
+              let entry = List.find
+                  (fun r -> Z.equal (Certificate.serial cert) r.serial)
+                  (revoked_certificates crl)
+              in
+              match reason entry with
+              | None -> true
+              | Some `Remove_from_CRL -> false
+              | Some _ -> true
+            with Not_found -> false
+          end
+        | Error _ -> false
       else
         false)
     crls

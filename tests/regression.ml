@@ -149,7 +149,8 @@ let csr file =
   let data = cs_mmap ("./csr/" ^ file ^ ".pem") in
   match Signing_request.decode_pem data with
   | Ok csr -> csr
-  | Error (`Msg m) -> Alcotest.failf "signing request %s decoding error %s" file m
+  | Error (`Msg m) ->
+    Alcotest.failf "signing request %s decoding error %s" file m
 
 let csr_hostnames cert names () =
   Alcotest.check host_set_test __LOC__ (Signing_request.hostnames cert) names

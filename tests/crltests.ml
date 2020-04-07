@@ -26,10 +26,8 @@ let one f () =
       Certificate.decode_pem cert >>= fun cert ->
       let pubkey = Certificate.public_key cert in
       CRL.decode_der crl >>= fun crl ->
-      if not (CRL.validate crl ~hash_whitelist pubkey) then
-        Error (`Msg "couldn't verify cert")
-      else
-        Ok ())
+      Rresult.R.error_to_msg ~pp_error:Validation.pp_signature_error
+        (CRL.validate crl ~hash_whitelist pubkey))
 
 let crl_tests = [
   "CRL 1 is good", `Quick, one "1" ;

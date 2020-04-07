@@ -111,11 +111,9 @@ module Asn = struct
     projections_of Asn.der signing_request
 end
 
-let raw_sign raw digest key =
-  let hash = Mirage_crypto.Hash.digest digest raw in
-  let sigval = Certificate.encode_pkcs1_digest_info (digest, hash) in
+let raw_sign raw hash key =
   match key with
-    | `RSA priv -> Mirage_crypto_pk.Rsa.PKCS1.sig_encode ~key:priv sigval
+  | `RSA priv -> Mirage_crypto_pk.Rsa.PKCS1.sign ~hash ~key:priv (`Message raw)
 
 let info { asn ; _ } = asn.info
 
@@ -138,19 +136,18 @@ let hostnames csr =
     | Some names -> names
     | None -> subj
 
-let validate_signature hash { asn ; raw } =
+let validate_signature hash_whitelist { asn ; raw } =
   let raw_data = Validation.raw_cert_hack raw asn.signature in
-  Validation.validate_raw_signature hash raw_data asn.signature_algorithm
-    asn.signature asn.info.public_key
+  Validation.validate_raw_signature asn.info.subject hash_whitelist raw_data
+    asn.signature_algorithm asn.signature asn.info.public_key
 
 let decode_der ?(hash_whitelist = Validation.sha2) cs =
   let open Rresult.R.Infix in
   Asn_grammars.err_to_msg (Asn.signing_request_of_cs cs) >>= fun csr ->
   let csr = { raw = cs ; asn = csr } in
-  if validate_signature hash_whitelist csr then
-    Ok csr
-  else
-    Error (`Msg "couldn't validate signature")
+  Rresult.R.error_to_msg ~pp_error:Validation.pp_signature_error
+    (validate_signature hash_whitelist csr) >>| fun () ->
+  csr
 
 let encode_der { raw ; _ } = raw
 
@@ -184,31 +181,30 @@ let sign signing_request
     ?(serial = Mirage_crypto_pk.(Z_extra.gen_r Z.one Z.(one lsl 64)))
     ?(extensions = Extension.empty)
     key issuer =
-  if not (validate_signature hash_whitelist signing_request) then
-    Error (`Msg "could not validate signature of signing request")
-  else
-    let signature_algo =
-      Algorithm.of_signature_algorithm (Private_key.keytype key) digest
-    and info = signing_request.asn.info
-    in
-    let tbs_cert : Certificate.tBSCertificate = {
-      version = `V3 ;
-      serial ;
-      signature = signature_algo ;
-      issuer = issuer ;
-      validity = (valid_from, valid_until) ;
-      subject = info.subject ;
-      pk_info = info.public_key ;
-      issuer_id = None ;
-      subject_id = None ;
-      extensions
-    } in
-    let tbs_raw = Certificate.Asn.tbs_certificate_to_cstruct tbs_cert in
-    let signature_val = raw_sign tbs_raw digest key in
-    let asn = {
-      Certificate.tbs_cert ;
-      signature_algo ;
-      signature_val ;
-    } in
-    let raw = Certificate.Asn.certificate_to_cstruct asn in
-    Ok { Certificate.asn ; raw }
+  let open Rresult.R.Infix in
+  validate_signature hash_whitelist signing_request >>= fun () ->
+  let signature_algo =
+    Algorithm.of_signature_algorithm (Private_key.keytype key) digest
+  and info = signing_request.asn.info
+  in
+  let tbs_cert : Certificate.tBSCertificate = {
+    version = `V3 ;
+    serial ;
+    signature = signature_algo ;
+    issuer = issuer ;
+    validity = (valid_from, valid_until) ;
+    subject = info.subject ;
+    pk_info = info.public_key ;
+    issuer_id = None ;
+    subject_id = None ;
+    extensions
+  } in
+  let tbs_raw = Certificate.Asn.tbs_certificate_to_cstruct tbs_cert in
+  let signature_val = raw_sign tbs_raw digest key in
+  let asn = {
+    Certificate.tbs_cert ;
+    signature_algo ;
+    signature_val ;
+  } in
+  let raw = Certificate.Asn.certificate_to_cstruct asn in
+  Ok { Certificate.asn ; raw }
