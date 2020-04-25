@@ -500,7 +500,7 @@ module Validation : sig
       appropriate for a CA (BasicConstraints is present and true, KeyUsage
       extension contains keyCertSign). *)
   val valid_ca : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
-    Certificate.t -> (unit, ca_error) result
+    Certificate.t -> (unit, [> ca_error ]) result
 
   (** [valid_cas ~hash_whitelist ~time certificates] is [valid_certificates],
       only those certificates which pass the {!valid_ca} check. *)
@@ -565,7 +565,7 @@ module Validation : sig
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
     ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list ->
-    (Certificate.t, chain_error) result
+    (Certificate.t, [> chain_error ]) result
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
@@ -725,7 +725,7 @@ module Signing_request : sig
     ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     ?digest:Mirage_crypto.Hash.hash -> ?serial:Z.t -> ?extensions:Extension.t ->
     Private_key.t -> Distinguished_name.t ->
-    (Certificate.t, Validation.signature_error) result
+    (Certificate.t, [> Validation.signature_error ]) result
 end
 
 (** X.509 Certificate Revocation Lists. *)
@@ -796,7 +796,7 @@ module CRL : sig
   (** [validate t ~hash_whitelist pk] validates the digital signature of the
       revocation list. The [hash_whitelist] defaults to SHA-2. *)
   val validate : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list ->
-    Public_key.t -> (unit, Validation.signature_error) result
+    Public_key.t -> (unit, [> Validation.signature_error ]) result
 
   (** The type of CRL verification errors. *)
   type verification_error = [
@@ -816,7 +816,7 @@ module CRL : sig
       (defaults to SHA-2). If [time] is provided, it must be after [this_update]
       and before [next_update] of [t]. *)
   val verify : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list ->
-    ?time:Ptime.t -> Certificate.t -> (unit, verification_error) result
+    ?time:Ptime.t -> Certificate.t -> (unit, [> verification_error ]) result
 
   (** [is_revoked crls ~hash_whitelist ~issuer ~cert] is [true] if there exists
       a revocation of [cert] in [crls] which is signed by the [issuer].  The
