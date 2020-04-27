@@ -1,3 +1,11 @@
+## v0.11.1 (2020-04-27)
+
+* open variant for errors to make the composable (#133 by @dinosaure,
+  review by @hannesm)
+* BUGFIX avoid fractional seconds in generalized_time: truncate on serialising,
+  validate them to be 0 on deseariasing, as required in RFC 5280 4.1.2.5.2
+  (#134 by @hannesm, reported by @ansiwen)
+
 ## v0.11.0 (2020-04-07)
 
 * BREAKING Validation.validate_raw_signature results in a
