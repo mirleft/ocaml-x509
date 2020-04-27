@@ -52,7 +52,7 @@ module Asn = struct
     and g t =
       let (y, _, _) = Ptime.to_date t in
       if y < 2050 then `C1 t else `C2 t in
-    map f g (choice2 utc_time generalized_time)
+    map f g (choice2 utc_time generalized_time_no_frac_s)
 
   let validity =
     sequence2
