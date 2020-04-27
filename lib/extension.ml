@@ -398,8 +398,8 @@ module Asn = struct
       | `Not_after  t2     -> (None   , Some t2) in
     map f g @@
     sequence2
-      (optional ~label:"notBefore" @@ implicit 0 generalized_time)
-      (optional ~label:"notAfter"  @@ implicit 1 generalized_time)
+      (optional ~label:"notBefore" @@ implicit 0 generalized_time_no_frac_s)
+      (optional ~label:"notAfter"  @@ implicit 1 generalized_time_no_frac_s)
 
   let name_constraints =
     let subtree =
@@ -524,7 +524,7 @@ module Asn = struct
   and int_of_cs, int_to_cs                   = project_exn int
   and issuing_dp_of_cs, issuing_dp_to_cs     = project_exn issuing_distribution_point
   and crl_reason_of_cs, crl_reason_to_cs     = project_exn crl_reason
-  and time_of_cs, time_to_cs                 = project_exn generalized_time
+  and time_of_cs, time_to_cs                 = project_exn generalized_time_no_frac_s
 
   (* XXX 4.2.1.4. - cert policies! ( and other x509 extensions ) *)
 

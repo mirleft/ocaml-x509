@@ -116,6 +116,13 @@ let test_distinguished_name_pp () =
 let test_yubico () =
   ignore (cert "yubico")
 
+let test_frac_s () =
+  let file = "until_frac_s" in
+  let data = cs_mmap ("./regression/" ^ file ^ ".pem") in
+  match Certificate.decode_pem data with
+  | Ok _ -> Alcotest.failf "certificate %s, expected decoding error" file
+  | Error (`Msg _) -> ()
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca_fail ;
@@ -127,6 +134,7 @@ let regression_tests = [
   "complex distinguished name", `Quick, test_distinguished_name ;
   "distinguished name pp", `Quick, test_distinguished_name_pp ;
   "algorithm without null", `Quick, test_yubico ;
+  "valid until generalized_time with fractional seconds", `Quick, test_frac_s ;
 ]
 
 let host_set_test =

@@ -41,3 +41,14 @@ let project_exn asn =
   (dec, Asn.encode c)
 
 let err_to_msg f = Rresult.R.reword_error (function `Parse msg -> `Msg msg) f
+
+(* specified in RFC 5280 4.1.2.5.2 - "MUST NOT include fractional seconds" *)
+let generalized_time_no_frac_s =
+  Asn.S.(map
+           (fun x ->
+              if Ptime.Span.(equal zero (Ptime.frac_s x)) then
+                x
+              else
+                parse_error "generalized time has fractional seconds")
+           (fun y -> Ptime.truncate ~frac_s:0 y)
+           generalized_time)
