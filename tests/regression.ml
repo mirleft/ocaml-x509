@@ -3,9 +3,11 @@ open X509
 let cs_mmap file =
   Unix_cstruct.of_fd Unix.(openfile file [O_RDONLY] 0)
 
+let regression file =
+  cs_mmap ("./regression/" ^ file ^ ".pem")
+
 let cert file =
-  let data = cs_mmap ("./regression/" ^ file ^ ".pem") in
-  match Certificate.decode_pem data with
+  match Certificate.decode_pem (regression file) with
   | Ok cert -> cert
   | Error (`Msg m) -> Alcotest.failf "certificate %s decoding error %s" file m
 
@@ -118,10 +120,31 @@ let test_yubico () =
 
 let test_frac_s () =
   let file = "until_frac_s" in
-  let data = cs_mmap ("./regression/" ^ file ^ ".pem") in
-  match Certificate.decode_pem data with
+  match Certificate.decode_pem (regression file) with
   | Ok _ -> Alcotest.failf "certificate %s, expected decoding error" file
   | Error (`Msg _) -> ()
+
+let test_gcloud_key () =
+  (* discussion in https://github.com/mirage/mirage-crypto/issues/62 *)
+  let file = "gcloud" in
+  let data = regression file in
+  (match Private_key.decode_pem data with
+   | Ok _ -> Alcotest.failf "private key %s, expected decoding error" file
+   | Error (`Msg _) -> ());
+  let se = Z.of_string "65537"
+  (* this is the corrected d, not the one in the pem file *)
+  and sd = Z.of_string "14478488456493997022050901254933187283477471093730790501398788655730567398785569687606371375833982881640341621750217365889195783772533872059213352159991519189252958281611111674194879268059270441114992706457776068423799377349279105810697994588771736756653040288343674720701103312293833268317569088656494668685468231474583321288404898183773189583378716851384814309675472367486143664598456832085685494812222081088113517604012395897413142572181545766173226135421363439763543055673991957871436777026724320844849270331575138060361110954859703148073754901925506317313296044480539229720254636858871012875313416588048255023749"
+  and sp = Z.of_string "153903575880038685371306078431309624429262243098160628077155385424784731704538502041682563231842507936315834999272165353754081206847521073697105321898935865522941018859502063500927758809727634595752231111149172755709224739427971151799944749671230555614514021717987321482212474581192462617805386071920647746527"
+  and sq = Z.of_string "147755586168842154977618773600930512327712333912540690382962931855233965897097814139102488669702400832893695675498969512696944576662243412004204531041931249551207758395795244675585651830739018019197553505240463928167645984560980989768623533294470387237934457819888352229242173694504296968786124698140038767907"
+  in
+  (match Private_key.decode_pem ~sloppy:true data with
+   | Ok (`RSA { Mirage_crypto_pk.Rsa.p ; q ; e ; d ; _ }) ->
+     if se = e && sd = d && sp = p && sq = q then
+       ()
+     else
+       Alcotest.failf "private key %s, wrong e, d, p, q" file
+   | Error (`Msg _) ->
+     Alcotest.failf "private key %s, expected sloppy decoding" file)
 
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
@@ -135,6 +158,7 @@ let regression_tests = [
   "distinguished name pp", `Quick, test_distinguished_name_pp ;
   "algorithm without null", `Quick, test_yubico ;
   "valid until generalized_time with fractional seconds", `Quick, test_frac_s ;
+  "sloppy private key parsing", `Quick, test_gcloud_key ;
 ]
 
 let host_set_test =
