@@ -1,3 +1,9 @@
+## v0.11.2 (2020-05-14)
+
+* Private_key.decode_{pem,der} now has a `~sloppy` option to recover from
+  bad keys (where e.g. the private exponent d is wrong).
+  (#135 by @hannesm, reported by @mattjbray in mirage/mirage-crypto#62)
+
 ## v0.11.1 (2020-04-27)
 
 * open variant for errors to make the composable (#133 by @dinosaure,
