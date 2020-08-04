@@ -1,7 +1,11 @@
-type t = [ `RSA of Mirage_crypto_pk.Rsa.priv ]
+type t = [
+  | `RSA of Mirage_crypto_pk.Rsa.priv
+  | `ED25519 of Hacl_ed25519.priv
+]
 
 let keytype = function
   | `RSA _ -> `RSA
+  | `ED25519 _ -> assert false (* used in Signing_request *)
 
 module Asn = struct
   open Asn.S
@@ -47,12 +51,24 @@ module Asn = struct
   let (rsa_priv_of_cs, rsa_priv_to_cs) =
     Asn_grammars.project_exn rsa_private_key
 
-  let reparse_private = function
-    | (0, Algorithm.RSA, cs) -> rsa_priv_of_cs cs
+  let ed25519_of_cs, ed25519_to_cs =
+    Asn_grammars.project_exn octet_string
+
+  let reparse_private pk =
+    match pk with
+    | (0, Algorithm.RSA, cs) -> `RSA (rsa_priv_of_cs cs)
+    | (0, Algorithm.ED25519, cs) ->
+      begin
+        let pk = ed25519_of_cs cs in
+        try `ED25519 (Hacl_ed25519.priv pk) with
+          Invalid_argument x -> parse_error "%s" x
+      end
     | _ -> parse_error "unknown private key info"
 
-  let unparse_private pk =
-    (0, Algorithm.RSA, rsa_priv_to_cs pk)
+  let unparse_private = function
+    | `RSA pk -> (0, Algorithm.RSA, rsa_priv_to_cs pk)
+    | `ED25519 pk ->
+      (0, Algorithm.ED25519, ed25519_to_cs (Hacl_ed25519.encode_priv pk))
 
   let private_key_info =
     map reparse_private unparse_private @@
@@ -72,12 +88,9 @@ end
    - atm decode handles both, encode uses PRIVATE *)
 
 let decode_der cs =
-  let open Rresult.R.Infix in
-  Asn_grammars.err_to_msg (Asn.private_of_cstruct cs) >>| fun key ->
-  `RSA key
+  Asn_grammars.err_to_msg (Asn.private_of_cstruct cs)
 
-let encode_der = function
-  | `RSA k -> Asn.private_to_cstruct k
+let encode_der = Asn.private_to_cstruct
 
 let decode_pem cs =
   let open Rresult.R.Infix in
@@ -89,12 +102,11 @@ let decode_pem cs =
   and p, _ = List.partition pk_p data
   in
   Pem.foldM (fun (_, k) ->
-      Asn_grammars.err_to_msg (Asn.rsa_private_of_cstruct k)) r >>= fun k ->
+      Asn_grammars.err_to_msg (Asn.rsa_private_of_cstruct k) >>| fun k ->
+      `RSA k) r >>= fun k ->
   Pem.foldM (fun (_, k) ->
       Asn_grammars.err_to_msg (Asn.private_of_cstruct k)) p >>= fun k' ->
-  Pem.exactly_one ~what:"private key" (k @ k') >>| fun k ->
-  `RSA k
+  Pem.exactly_one ~what:"private key" (k @ k')
 
-let encode_pem = function
-  | `RSA v ->
-    Pem.unparse ~tag:"PRIVATE KEY" (Asn.private_to_cstruct v)
+let encode_pem p =
+  Pem.unparse ~tag:"PRIVATE KEY" (Asn.private_to_cstruct p)

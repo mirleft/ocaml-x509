@@ -170,7 +170,7 @@ let pp_hash ppf hash =
 
 let pp_sigalg ppf (asym, hash) =
   Fmt.pf ppf "%s-%a"
-    (match asym with `RSA -> "RSA" | `ECDSA -> "ECDSA")
+    (match asym with `RSA -> "RSA" | `ECDSA -> "ECDSA" | `ED25519 -> "ED25519")
     pp_hash hash
 
 let pp ppf { asn ; _ } =

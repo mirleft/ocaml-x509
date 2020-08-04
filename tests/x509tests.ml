@@ -19,6 +19,7 @@ let with_loaded_file file ~f =
 let priv =
   match with_loaded_file "private/cakey" ~f:Private_key.decode_pem with
   | `RSA x -> x
+  | _ -> assert false
 
 let cert name = with_loaded_file name ~f:Certificate.decode_pem
 

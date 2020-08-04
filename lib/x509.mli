@@ -108,7 +108,10 @@ module Private_key : sig
       in PEM format  *)
 
   (** The polymorphic variant of private keys. *)
-  type t = [ `RSA of Mirage_crypto_pk.Rsa.priv ]
+  type t = [
+    | `RSA of Mirage_crypto_pk.Rsa.priv
+    | `ED25519 of Hacl_ed25519.priv
+  ]
 
   (** [decode_der der] is [t], where the private key of [der] is
       extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo structure. *)
@@ -414,7 +417,7 @@ module Certificate : sig
   val public_key : t -> Public_key.t
 
   (** [signature_algorithm certificate] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
+  val signature_algorithm : t -> ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
 
   (** [hostnames certficate] is the set of domain names this
       [certificate] is valid for.  Currently, these are the DNS names of the
@@ -690,7 +693,7 @@ module Signing_request : sig
   val info : t -> request_info
 
   (** [signature_algorithm signing_request] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
+  val signature_algorithm : t -> ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
 
   (** [hostnames signing_request] is the set of domain names this
       [signing_request] is requesting. This is either the content of the DNS
@@ -791,7 +794,7 @@ module CRL : sig
   val crl_number : t -> int option
 
   (** [signature_algorithm t] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
+  val signature_algorithm : t -> ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
 
   (** {1 Validation and verification of CRLs} *)
 
