@@ -72,6 +72,15 @@ module PKCS1 = struct
   and sha224_rsa_encryption    = pkcs1 <| 14
 end
 
+module RFC8410 = struct
+  let thawte = base 1 3 <| 101
+
+  let x25519 = thawte <| 110
+  and x448 = thawte <| 111
+  and ed25519 = thawte <| 112
+  and ed448 = thawte <| 113
+end
+
 module PKCS2 = struct
   let pkcs2 = rsadsi <| 2
 

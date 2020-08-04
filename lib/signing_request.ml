@@ -114,6 +114,7 @@ end
 let raw_sign raw hash key =
   match key with
   | `RSA priv -> Mirage_crypto_pk.Rsa.PKCS1.sign ~hash ~key:priv (`Message raw)
+  | _ -> assert false
 
 let info { asn ; _ } = asn.info
 
@@ -173,6 +174,7 @@ let create subject ?(digest = `SHA256) ?(extensions = Ext.empty) = function
     let asn = { info ; signature_algorithm ; signature } in
     let raw = Asn.signing_request_to_cs asn in
     { asn ; raw }
+  | _ -> assert false
 
 let sign signing_request
     ~valid_from ~valid_until

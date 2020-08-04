@@ -11,7 +11,7 @@ open Asn_grammars
  * that handles unsupported algos anyway.
  *)
 
-type signature  = [ `RSA | `ECDSA ]
+type signature  = [ `RSA | `ECDSA | `ED25519 ]
 
 type t =
 
@@ -35,6 +35,8 @@ type t =
   | ECDSA_SHA256
   | ECDSA_SHA384
   | ECDSA_SHA512
+
+  | ED25519
 
   (* digest algorithms *)
   | MD2
@@ -73,6 +75,7 @@ and to_key_type = function
 and of_key_type = function
   | `RSA    -> RSA
   | `EC oid -> EC_pub oid
+  | `ED25519 -> ED25519
 
 (* XXX: No MD2 / MD4 / RIPEMD160 *)
 and to_signature_algorithm = function
@@ -87,6 +90,7 @@ and to_signature_algorithm = function
   | ECDSA_SHA256  -> Some (`ECDSA, `SHA256)
   | ECDSA_SHA384  -> Some (`ECDSA, `SHA384)
   | ECDSA_SHA512  -> Some (`ECDSA, `SHA512)
+  | ED25519       -> Some (`ED25519, `SHA512)
   | _             -> None
 
 and[@ocaml.warning "-8"] of_signature_algorithm public_key_algorithm digest =
@@ -102,6 +106,7 @@ and[@ocaml.warning "-8"] of_signature_algorithm public_key_algorithm digest =
   | (`ECDSA, `SHA256) -> ECDSA_SHA256
   | (`ECDSA, `SHA384) -> ECDSA_SHA384
   | (`ECDSA, `SHA512) -> ECDSA_SHA512
+  | (`ED25519, _) -> ED25519
 
 (* XXX
  *
@@ -156,6 +161,8 @@ let identifier =
       (ANSI_X9_62.ecdsa_sha384       , none ECDSA_SHA384 ) ;
       (ANSI_X9_62.ecdsa_sha512       , none ECDSA_SHA512 ) ;
 
+      (RFC8410.ed25519               , none ED25519 ) ;
+
       (md2                           , null MD2          ) ;
       (md4                           , null MD4          ) ;
       (md5                           , null MD5          ) ;
@@ -190,6 +197,8 @@ let identifier =
     | ECDSA_SHA256  -> (ANSI_X9_62.ecdsa_sha256        , none)
     | ECDSA_SHA384  -> (ANSI_X9_62.ecdsa_sha384        , none)
     | ECDSA_SHA512  -> (ANSI_X9_62.ecdsa_sha512        , none)
+
+    | ED25519       -> (RFC8410.ed25519                , none)
 
     | MD2           -> (md2                            , null)
     | MD4           -> (md4                            , null)
