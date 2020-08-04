@@ -3,6 +3,10 @@ type t = [
   | `ED25519 of Hacl_ed25519.priv
 ]
 
+let public = function
+  | `RSA priv -> `RSA (Mirage_crypto_pk.Rsa.pub_of_priv priv)
+  | `ED25519 priv -> `ED25519 (Hacl_ed25519.priv_to_public priv)
+
 let keytype = function
   | `RSA _ -> `RSA
   | `ED25519 _ -> assert false (* used in Signing_request *)

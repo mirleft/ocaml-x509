@@ -141,22 +141,42 @@ let test_openssl_2048_key () =
   let file = "openssl_2048" in
   decode_valid_pem file
 
-let ed25519_key () =
+let ed25519_priv =
+  Cstruct.of_hex "D4EE72DBF913584AD5B6D8F1F769F8AD3AFE7C28CBF1D4FBE097A88F44755842"
+
+let ed25519_priv_key () =
   let data =
     {|-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEINTuctv5E1hK1bbY8fdp+K06/nwoy/HU++CXqI9EdVhC
 -----END PRIVATE KEY-----
 |}
-  and key =
-    Cstruct.of_hex "D4EE72DBF913584AD5B6D8F1F769F8AD3AFE7C28CBF1D4FBE097A88F44755842"
   in
   match Private_key.decode_pem (Cstruct.of_string data) with
-  | Ok (`ED25519 k as ke) when Cstruct.equal key (Hacl_ed25519.encode_priv k) ->
+  | Ok (`ED25519 k as ke) when Cstruct.equal ed25519_priv (Hacl_ed25519.encode_priv k) ->
     let encoded = Private_key.encode_pem ke in
     if not (String.equal (Cstruct.to_string encoded) data) then
       Alcotest.failf "ED25519 encoding failed"
   | Ok (`ED25519 _) -> Alcotest.failf "wrong ED25519 private key"
   | Ok _ | Error (`Msg _) -> Alcotest.failf "ED25519 private key decode failure"
+
+let ed25519_pub_key () =
+  let data =
+    {|-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=
+-----END PUBLIC KEY-----
+|}
+  and pub =
+    match X509.Private_key.public (`ED25519 (Hacl_ed25519.priv ed25519_priv)) with
+    | `ED25519 p -> p
+    | _ -> assert false
+  in
+  match Public_key.decode_pem (Cstruct.of_string data) with
+  | Ok (`ED25519 k) when Cstruct.equal pub k ->
+    let encoded = Public_key.encode_pem (`ED25519 k) in
+    if not (String.equal (Cstruct.to_string encoded) data) then
+      Alcotest.failf "ED25519 public key encoding failure"
+  | _ -> Alcotest.failf "bad ED25519 public key"
+
 
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
@@ -172,7 +192,8 @@ let regression_tests = [
   "valid until generalized_time with fractional seconds", `Quick, test_frac_s ;
   "parse valid key where 1 <> d * e mod (p - 1) * (q - 1)", `Quick, test_gcloud_key ;
   "parse valid key where d <> e ^ -1 mod lcm ((p - 1) (q - 1))", `Quick, test_openssl_2048_key ;
-  "ed25519 private key", `Quick, ed25519_key ;
+  "ed25519 private key", `Quick, ed25519_priv_key ;
+  "ed25519 public key", `Quick, ed25519_pub_key ;
 ]
 
 let host_set_test =

@@ -69,7 +69,7 @@ module Public_key : sig
   (** The polymorphic variant of public keys, with
       {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
       {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
-  type t = [ `RSA of Mirage_crypto_pk.Rsa.pub | `EC_pub of Asn.oid ]
+  type t = [ `RSA of Mirage_crypto_pk.Rsa.pub | `ED25519 of Cstruct.t | `EC_pub of Asn.oid ]
 
   (** [id public_key] is [digest], the 160-bit [`SHA1] hash of the BIT
       STRING subjectPublicKey (excluding tag, length, and number of
@@ -113,8 +113,12 @@ module Private_key : sig
     | `ED25519 of Hacl_ed25519.priv
   ]
 
+  (** [public priv] is the corresponding public key of [priv]. *)
+  val public : t -> Public_key.t
+
   (** [decode_der der] is [t], where the private key of [der] is
-      extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo structure. *)
+      extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo
+      structure. *)
   val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_der key] is [der], the encoded private key as PKCS8 (RFC 5208,
