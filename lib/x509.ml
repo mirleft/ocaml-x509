@@ -19,3 +19,5 @@ module Signing_request = Signing_request
 module CRL = Crl
 
 module Authenticator = Authenticator
+
+module Pkcs12 = Pkcs12

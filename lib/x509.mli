@@ -890,3 +890,49 @@ module Authenticator : sig
     hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
 end
+
+(* TODO: *)
+(* module type of Pkcs12 *)
+module Pkcs12 : sig
+  module Attribute :
+    sig
+      type t =
+        Pkcs12.Attribute.t =
+          FriendlyName of string
+        | LocalKeyId of Cstruct.t
+      val attribute : t Asn.t
+    end
+  module SafeBag :
+    sig
+      type bag =
+        Pkcs12.SafeBag.bag =
+          KeyBag of Mirage_crypto_pk.Rsa.priv
+        | CertBag of X509__Certificate.t
+      type t = bag * Attribute.t list
+      val safebag : t Asn.t
+    end
+  module MacData :
+    sig
+      type t =
+        Pkcs12.MacData.t = {
+        algo : Algorithm.t;
+        digest : Cstruct.t;
+        salt : Cstruct.t;
+        iterations : int;
+      }
+      val make :
+        ?algo:Algorithm.t ->
+        ?iterations:int -> ?salt:Cstruct.t -> password:string -> string -> t
+      val mac_data : t Asn.t
+    end
+  module Asn :
+    sig
+      type safe_contents = SafeBag.t list
+      val safecontents : safe_contents Asn.t
+      val safecont_contentinfo : safe_contents Asn.t
+      type authenticated_safe = safe_contents list
+      val authenticated_safe : authenticated_safe Asn.t
+      val authsafe_contentinfo : authenticated_safe Asn.t
+      val pfx : (authenticated_safe * MacData.t option) Asn.t
+    end
+end

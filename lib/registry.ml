@@ -124,6 +124,7 @@ module PKCS9 = struct
   and smime_capabilities   = pkcs9 <| 15
   and smime_oid_registry   = pkcs9 <| 16
   and friendly_name        = pkcs9 <| 20
+  and local_key_id         = pkcs9 <| 21
   and cert_types           = pkcs9 <| 22
 end
 
@@ -266,4 +267,29 @@ module Name_extn = struct
 
   let is_utf8_id oid =
     List.mem oid [ xmpp_addr ; venezuela_1 ; venezuela_2 ]
+end
+
+
+module PKCS12 = struct
+  let pkcs12 = pkcs <| 12
+
+  let pkcs_12PbeIds = pkcs12 <| 1
+  let pbeWithSHAAnd128BitRC4 = pkcs_12PbeIds <| 1
+  let pbeWithSHAAnd40BitRC4 = pkcs_12PbeIds <| 2
+  let pbeWithSHAAnd3_KeyTripleDES_CBC = pkcs_12PbeIds <| 3
+  let pbeWithSHAAnd2_KeyTripleDES_CBC = pkcs_12PbeIds <| 4
+  let pbeWithSHAAnd128BitRC2_CBC = pkcs_12PbeIds <| 5
+  let pbewithSHAAnd40BitRC2_CBC = pkcs_12PbeIds <| 6
+
+  let bagtypes = pkcs12 <| 10 <| 1
+
+  let keyBag = bagtypes <| 1
+  let pkcs8ShroudedKeyBag = bagtypes <| 2
+  let certBag = bagtypes <| 3
+  let crlBag = bagtypes <| 4
+  let secretBag = bagtypes <| 5
+  let safeContentsBag = bagtypes <| 6
+
+  let x509_certificate = PKCS9.cert_types <| 1
+  let sdsi_certificate = PKCS9.cert_types <| 2
 end
