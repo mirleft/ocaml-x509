@@ -710,16 +710,17 @@ module Signing_request : sig
 
   (** {1 Provision a signing request to a certificate} *)
 
-  (** [sign signing_request ~valid_from ~valid_until ~hash_whitelist ~digest ~serial ~extensions private issuer]
+  (** [sign signing_request ~valid_from ~valid_until ~hash_whitelist ~digest ~serial ~extensions ~subject private issuer]
       creates [certificate], a signed certificate.  Signing can fail if the
       signature on the [signing_request] is invalid, or its hash algorithm does
       not occur in [hash_whitelist] (default all SHA-2 algorithms).  Public key
-      and subject are taken from the [signing_request], the [extensions] are
-      added to the X.509 certificate.  The [private] key is used to sign the
-      certificate, the [issuer] is recorded in the certificate.  The digest
-      defaults to [`SHA256].  The [serial] defaults to a random value between 1
-      and 2^64.  Certificate version is always 3.  Please note that the
-      extensions in the [signing_request] are ignored, you can pass them using:
+      and subject are taken from the [signing_request] unless [subject] is
+      passed, the [extensions] are added to the X.509 certificate.  The
+      [private] key is used to sign the certificate, the [issuer] is recorded
+      in the certificate.  The digest defaults to [`SHA256].  The [serial]
+      defaults to a random value between 1 and 2^64.  Certificate version is
+      always 3.  Please note that the extensions in the [signing_request] are
+      ignored, you can pass them using:
 
 {[match Ext.find Extensions (info csr).extensions with
 | Ok ext -> ext
@@ -728,6 +729,7 @@ module Signing_request : sig
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
     ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     ?digest:Mirage_crypto.Hash.hash -> ?serial:Z.t -> ?extensions:Extension.t ->
+    ?subject:Distinguished_name.t ->
     Private_key.t -> Distinguished_name.t ->
     (Certificate.t, [> Validation.signature_error ]) result
 end
