@@ -234,6 +234,143 @@ module SafeBag = struct
 
 end
 
+
+module Mac = struct
+  (* https://tools.ietf.org/html/rfc7292#appendix-A *)
+  (* The following code has been stolen from @hannesm PR *)
+
+
+  (*  In this specification, however, all passwords are created from
+   *  BMPStrings with a NULL terminator.  This means that each character in
+   *  the original BMPString is encoded in 2 bytes in big-endian format
+   *  (most-significant byte first).  There are no Unicode byte order
+   *  marks.  The 2 bytes produced from the last character in the BMPString
+   *  are followed by 2 additional bytes with the value 0x00.
+   * 
+   *  To illustrate with a simple example, if a user enters the 6-character
+   *  password "Beavis", the string that PKCS #12 implementations should
+   *  treat as the password is the following string of 14 bytes:
+   * 
+   *  0x00 0x42 0x00 0x65 0x00 0x61 0x00 0x76 0x00 0x69 0x00 0x73 0x00 0x00 *)
+  (* TODO: this actually should be unicode ucs2 recoding *)
+  let prepare_pw str =
+    let l = String.length str in
+    let cs = Cstruct.create ((succ l) * 2) in
+    for i = 0 to pred l do
+      Cstruct.set_char cs (succ (i * 2)) (String.get str i)
+    done;
+    cs
+
+  (* Construct a string, D (the "diversifier"), by concatenating v/8
+   *      copies of ID. *)
+  let id len purpose =
+    let b = Cstruct.create len in
+    let id = match purpose with
+      | `Encryption -> 1
+      | `Iv -> 2
+      | `Hmac -> 3
+    in
+    Cstruct.memset b id;
+    b
+
+  (* Let H be a hash function built around a compression function f:
+   * 
+   *    Z_2^u x Z_2^v -> Z_2^u
+   * 
+   * (that is, H has a chaining variable and output of length u bits, and
+   * the message input to the compression function of H is v bits).  The
+   * values for u and v are as follows:
+   * 
+   *         HASH FUNCTION     VALUE u        VALUE v
+   *           MD2, MD5          128            512
+   *             SHA-1           160            512
+   *            SHA-224          224            512
+   *            SHA-256          256            512
+   *            SHA-384          384            1024
+   *            SHA-512          512            1024
+   *          SHA-512/224        224            1024
+   *          SHA-512/256        256            1024 *)
+  (* this is the block size, which is not exposed by nocrypto :/ *)
+  (* TODO: I'm pretty sure that at least MD5 operates 4 blocks of
+     32bit length, so what the *** is [v] ? *)
+  let v = function
+    | `MD5 | `SHA1 -> 512 / 8
+    | `SHA224 | `SHA256 | `SHA384 | `SHA512 -> 1024 / 8
+
+  let fill ~data ~out =
+    let len = Cstruct.len out
+    and l = Cstruct.len data
+    in
+    let rec c off =
+      if off < len then begin
+        Cstruct.blit data 0 out off (min (len - off) l);
+        c (off + l)
+      end
+    in
+    c 0
+
+  (* 2.  Concatenate copies of the salt together to create a string S of
+   *     length v(ceiling(s/v)) bits (the final copy of the salt may be
+   *     truncated to create S).  Note that if the salt is the empty
+   *     string, then so is S.
+   * 
+   * 3.  Concatenate copies of the password together to create a string P
+   *     of length v(ceiling(p/v)) bits (the final copy of the password
+   *     may be truncated to create P).  Note that if the password is the
+   *     empty string, then so is P. *)
+  let fill_or_empty size data =
+    let l = Cstruct.len data in
+    if l = 0 then data
+    else
+      let len = size * ((l + size - 1) / size) in
+      let buf = Cstruct.create len in
+      fill ~data ~out:buf;
+      buf
+
+  (* Actually, its not pkcs5 pbes, but pkcs12 mac algorithm *)
+  let pbes algorithm purpose password salt iterations n =
+    let pw = prepare_pw password
+    and v = v algorithm
+    and u = Mirage_crypto.Hash.digest_size algorithm
+    in
+    let diversifier = id v purpose in
+    let salt = fill_or_empty v salt in
+    let pass = fill_or_empty v pw in
+    let out = Cstruct.create n in
+    let rec one off i =
+      let ai = ref (Mirage_crypto.Hash.digest algorithm (Cstruct.append diversifier i)) in
+      for _j = 1 to pred iterations do
+        ai := Mirage_crypto.Hash.digest algorithm !ai;
+      done;
+      Cstruct.blit !ai 0 out off (min (n - off) u);
+      if u >= n - off then () else
+        (* 6B *)
+        (* Concatenate copies of Ai to create a string B of length v
+         * bits (the final copy of Ai may be truncated to create B). *)
+        let b = Cstruct.create v in
+        fill ~data:!ai ~out:b;
+        (* 6C *)
+        (* Treating I as a concatenation I_0, I_1, ..., I_(k-1) of v-bit
+         * blocks, where k=ceiling(s/v)+ceiling(p/v), modify I by
+         * setting I_j=(I_j+B+1) mod 2^v for each j. *)
+        let i' = Cstruct.create (Cstruct.len i) in
+        for j = 0 to pred (Cstruct.len i / v) do
+          let c = ref 1 in
+          for k = pred v downto 0 do
+            let idx = j * v + k in
+            c := (!c + Cstruct.get_uint8 i idx + Cstruct.get_uint8 b k) land 0xFFFF;
+            Cstruct.set_uint8 i' idx (!c land 0xFF);
+            c := !c lsr 8;
+          done;
+        done;
+        one (off + u) i'
+    in
+    let i = Cstruct.append salt pass in
+    one 0 i;
+    out
+
+end
+
 module MacData = struct
   open Asn.S
   (* open Asn_grammars *)
@@ -245,16 +382,18 @@ module MacData = struct
     iterations: int;
   }
 
-  let make ?(algo=Algorithm.SHA1) ?(iterations=2048) ?salt
+  let make ?(algo=`SHA1) ?(iterations=2048) ?salt
       ~password data =
     let salt = match salt with
-      | None -> Cstruct.of_string "123456789" (* TODO *)
+      | None -> Mirage_crypto_rng.generate 8
       | Some x -> x
     in
-    (* TODO *)
-    let digest = Cstruct.of_string (password ^ data) in
+    let key = Mac.pbes algo `Hmac password salt iterations
+        (Mirage_crypto.Hash.digest_size algo) in
+    let digest = Mirage_crypto.Hash.mac `SHA1 ~key data in
+    (* let digest = Cstruct.of_string (password ^ data) in *)
+    let algo = Algorithm.of_hash algo in
     {algo;digest;salt;iterations;}
-    
 
   let mac_data =
     let f ((algo, digest), salt, iterations) =
@@ -271,7 +410,7 @@ module MacData = struct
 end
 
 
-module Asn = struct
+module Asn_ = struct
   open Asn.S
   open Asn_grammars
 
@@ -303,13 +442,12 @@ module Asn = struct
    * the contentType field of authSafe shall be of type data
    * or signedData. *)
   let authsafe_contentinfo =
-    let encode, decode = project_exn authenticated_safe in
     let f = function
-      | `Data x -> encode x
+      | `Data x -> x
       | `SignedData _ -> parse_error "TODO: authsafe_contentinfo"
       | _ -> parse_error "authSafe must contentType be either data or signedData"
     in
-    let g c = `Data (decode c) in
+    let g c = `Data c in
     map f g @@ Pkcs7.Asn.contentinfo
 
   let pfx =
@@ -326,3 +464,17 @@ module Asn = struct
       (optional ~label:"macData" MacData.mac_data)
 
 end
+
+let pfx ?mac_password safecontents =
+  let codec = Asn.codec Asn.ber Asn_.authenticated_safe in
+  let authenticatedsafe = Asn.encode codec safecontents in
+  let mac = match mac_password with
+    | Some password -> Some (MacData.make ~password authenticatedsafe)
+    | None -> None
+  in
+  let codec = Asn.codec Asn.ber Asn_.pfx in
+  let pfx_ber = Asn.encode codec (authenticatedsafe, mac) in
+  pfx_ber
+
+  
+module Asn = Asn_
