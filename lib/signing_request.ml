@@ -180,6 +180,7 @@ let sign signing_request
     ?(digest = `SHA256)
     ?(serial = Mirage_crypto_pk.(Z_extra.gen_r Z.one Z.(one lsl 64)))
     ?(extensions = Extension.empty)
+    ?(subject = signing_request.asn.info.subject)
     key issuer =
   let open Rresult.R.Infix in
   validate_signature hash_whitelist signing_request >>= fun () ->
@@ -193,7 +194,7 @@ let sign signing_request
     signature = signature_algo ;
     issuer = issuer ;
     validity = (valid_from, valid_until) ;
-    subject = info.subject ;
+    subject ;
     pk_info = info.public_key ;
     issuer_id = None ;
     subject_id = None ;
