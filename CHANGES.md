@@ -1,3 +1,8 @@
+## v0.12.0
+
+* BREAKING Remove `~sloppy` from Private_key.decode_{pem,der}. The seemingly
+  bad RSA keys were valid and should have been accepted by mirage-crypto.
+
 ## v0.11.2 (2020-05-14)
 
 * Private_key.decode_{pem,der} now has a `~sloppy` option to recover from
