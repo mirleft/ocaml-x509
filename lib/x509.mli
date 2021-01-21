@@ -110,21 +110,17 @@ module Private_key : sig
   (** The polymorphic variant of private keys. *)
   type t = [ `RSA of Mirage_crypto_pk.Rsa.priv ]
 
-  (** [decode_der ~sloppy der] is [t], where the private key of [der] is
-      extracted. If [sloppy] is provided and [true] (default: false),
-      the key will be reconstructed from its prime numbers and public exponent.
-      It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo structure. *)
-  val decode_der : ?sloppy:bool -> Cstruct.t -> (t, [> R.msg ]) result
+  (** [decode_der der] is [t], where the private key of [der] is
+      extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo structure. *)
+  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_der key] is [der], the encoded private key as PKCS8 (RFC 5208,
       Section 5) PrivateKeyInfo structure. *)
   val encode_der : t -> Cstruct.t
 
-  (** [decode_pem ~sloppy pem] is [t], where the private key of [pem] is
-      extracted. If [sloppy] is provided and [true] (default: false),
-      the key will be reconstructed from its prime numbers and public exponent.
-      Both RSA PRIVATE KEY and PRIVATE KEY stanzas are supported. *)
-  val decode_pem : ?sloppy:bool -> Cstruct.t -> (t, [> R.msg ]) result
+  (** [decode_pem pem] is [t], where the private key of [pem] is
+      extracted. Both RSA PRIVATE KEY and PRIVATE KEY stanzas are supported. *)
+  val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_pem key] is [pem], the encoded private key (using [PRIVATE KEY]). *)
   val encode_pem : t -> Cstruct.t

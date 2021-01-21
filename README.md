@@ -15,8 +15,6 @@ Read [further](https://nqsb.io) and our [Usenix Security 2015 paper](https://use
 
 ## Documentation
 
-[![Build Status](https://travis-ci.org/mirleft/ocaml-x509.svg?branch=master)](https://travis-ci.org/mirleft/ocaml-x509)
-
 [API documentation](https://mirleft.github.io/ocaml-x509/doc)
 
 ## Installation
