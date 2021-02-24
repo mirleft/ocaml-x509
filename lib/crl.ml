@@ -173,7 +173,7 @@ let reason (revoked : revoked_cert) =
   | Some (_, x) -> Some x
   | None -> None
 
-let is_revoked (crls : t list) ?hash_whitelist ~issuer:super ~cert =
+let is_revoked ?hash_whitelist ~issuer:super ~cert (crls : t list) =
   List.exists (fun crl ->
       if
         Distinguished_name.equal (Certificate.subject super) (issuer crl)
