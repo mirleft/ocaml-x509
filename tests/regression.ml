@@ -166,7 +166,7 @@ MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=
 -----END PUBLIC KEY-----
 |}
   and pub =
-    match X509.Private_key.public (`ED25519 (Hacl_ed25519.priv ed25519_priv)) with
+    match Private_key.public (`ED25519 (Hacl_ed25519.priv ed25519_priv)) with
     | `ED25519 p -> p
     | _ -> assert false
   in
@@ -177,6 +177,38 @@ MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=
       Alcotest.failf "ED25519 public key encoding failure"
   | _ -> Alcotest.failf "bad ED25519 public key"
 
+let p384_key () =
+  let priv_data = {|-----BEGIN PRIVATE KEY-----
+MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDDzBTbwp91ON4CNuDE+
+pjKsehNV7I3eTpyKpMlSUqHAguO8hK+t28A/730TP2L0rPyhZANiAATZbEoUICtu
+yXyN4G6DDHaUHwwe2bfcsTvY9LnlLCPvu24JTuGjf7pT2faiuvjGb49jk8C2KJWt
+0DISTEJ945y41DY0cIPl1okaN+E3yJ66kKpJ0XeKoOJ0rTTopazzjzI=
+-----END PRIVATE KEY-----
+|}
+  and pub_data = {|-----BEGIN PUBLIC KEY-----
+MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE2WxKFCArbsl8jeBugwx2lB8MHtm33LE7
+2PS55Swj77tuCU7ho3+6U9n2orr4xm+PY5PAtiiVrdAyEkxCfeOcuNQ2NHCD5daJ
+GjfhN8ieupCqSdF3iqDidK006KWs848y
+-----END PUBLIC KEY-----
+|}
+  in
+  match
+    Private_key.decode_pem (Cstruct.of_string priv_data),
+    Public_key.decode_pem (Cstruct.of_string pub_data)
+  with
+  | Ok (`P384 priv), Ok (`P384 pub) ->
+    let pub' = Mirage_crypto_ec.P384.Dsa.pub_of_priv priv in
+    Alcotest.(check bool __LOC__ true (Mirage_crypto_ec.P384.Dsa.pub_eq pub pub'));
+    let pub_data' = Public_key.encode_pem (`P384 pub) in
+    Alcotest.(check bool __LOC__ true (Cstruct.equal (Cstruct.of_string pub_data) pub_data'));
+    let priv_data' = Private_key.encode_pem (`P384 priv) in
+    begin match Private_key.decode_pem priv_data' with
+      | Ok (`P384 priv) ->
+        let pub' = Mirage_crypto_ec.P384.Dsa.pub_of_priv priv in
+        Alcotest.(check bool __LOC__ true (Mirage_crypto_ec.P384.Dsa.pub_eq pub pub'))
+      | _ -> Alcotest.failf "cannot decode re-encoded P384 private key"
+    end
+  | _ -> Alcotest.failf "bad P384 key"
 
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
@@ -194,6 +226,7 @@ let regression_tests = [
   "parse valid key where d <> e ^ -1 mod lcm ((p - 1) (q - 1))", `Quick, test_openssl_2048_key ;
   "ed25519 private key", `Quick, ed25519_priv_key ;
   "ed25519 public key", `Quick, ed25519_pub_key ;
+  "p384 key", `Quick, p384_key ;
 ]
 
 let host_set_test =

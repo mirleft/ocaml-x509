@@ -53,6 +53,15 @@ module ANSI_X9_62 = struct
   and ecdsa_sha256 = ecdsa_sha2 <| 2
   and ecdsa_sha384 = ecdsa_sha2 <| 3
   and ecdsa_sha512 = ecdsa_sha2 <| 4
+
+  (* from RFC 5480 *)
+  let certicom = base 1 3 <| 132 <| 0
+  let curves = ansi_x9_62 <| 3 <| 1
+
+  let secp224r1 = certicom <| 33
+  let secp256r1 = curves <| 7
+  let secp384r1 = certicom <| 34
+  let secp521r1 = certicom <| 35
 end
 
 module PKCS1 = struct

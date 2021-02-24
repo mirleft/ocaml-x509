@@ -5,4 +5,5 @@
                   public_key private_key crl distinguished_name algorithm
                   extension pem signing_request general_name host)
  (libraries asn1-combinators rresult fmt ptime cstruct mirage-crypto
-            mirage-crypto-pk gmap domain-name base64 logs hacl_x25519))
+            mirage-crypto-pk gmap domain-name base64 logs hacl_x25519
+            mirage-crypto-ec))

@@ -69,7 +69,15 @@ module Public_key : sig
   (** The polymorphic variant of public keys, with
       {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
       {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
-  type t = [ `RSA of Mirage_crypto_pk.Rsa.pub | `ED25519 of Cstruct.t | `EC_pub of Asn.oid ]
+  type t = [
+    | `RSA of Mirage_crypto_pk.Rsa.pub
+    | `ED25519 of Cstruct.t
+    | `P224 of Mirage_crypto_ec.P224.Dsa.pub
+    | `P256 of Mirage_crypto_ec.P256.Dsa.pub
+    | `P384 of Mirage_crypto_ec.P384.Dsa.pub
+    | `P521 of Mirage_crypto_ec.P521.Dsa.pub
+    | `EC_pub of Asn.oid * Cstruct.t
+  ]
 
   (** [id public_key] is [digest], the 160-bit [`SHA1] hash of the BIT
       STRING subjectPublicKey (excluding tag, length, and number of
@@ -111,6 +119,10 @@ module Private_key : sig
   type t = [
     | `RSA of Mirage_crypto_pk.Rsa.priv
     | `ED25519 of Hacl_ed25519.priv
+    | `P224 of Mirage_crypto_ec.P224.Dsa.priv
+    | `P256 of Mirage_crypto_ec.P256.Dsa.priv
+    | `P384 of Mirage_crypto_ec.P384.Dsa.priv
+    | `P521 of Mirage_crypto_ec.P521.Dsa.priv
   ]
 
   (** [public priv] is the corresponding public key of [priv]. *)

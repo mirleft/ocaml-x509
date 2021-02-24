@@ -13,12 +13,15 @@ open Asn_grammars
 
 type signature  = [ `RSA | `ECDSA | `ED25519 ]
 
+type ec_curve =
+  [ `SECP224R1 | `SECP256R1 | `SECP384R1 | `SECP521R1 | `Other of Asn.oid ]
+
 type t =
 
   (* pk algos *)
   (* any more? is the universe big enough? ramsey's theorem for pk cyphers? *)
   | RSA
-  | EC_pub of Asn.oid (* should translate the oid too *)
+  | EC_pub of ec_curve
 
   (* sig algos *)
   | MD2_RSA
@@ -69,12 +72,13 @@ and of_hash = function
 
 and to_key_type = function
   | RSA        -> Some `RSA
-  | EC_pub oid -> Some (`EC oid)
+  | EC_pub curve -> Some (`EC curve)
+  | ED25519    -> Some `ED25519
   | _          -> None
 
 and of_key_type = function
   | `RSA    -> RSA
-  | `EC oid -> EC_pub oid
+  | `EC curve -> EC_pub curve
   | `ED25519 -> ED25519
 
 (* XXX: No MD2 / MD4 / RIPEMD160 *)
@@ -138,11 +142,20 @@ let identifier =
     and oid f = function
       | Some (`C2 id) -> f id
       | _             -> parse_error "Algorithm: expected parameter OID"
-    and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid) in
+    and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid)
+    and curve =
+      let default oid = `Other oid in
+      case_of_oid ~default [
+        (ANSI_X9_62.secp224r1, `SECP224R1) ;
+        (ANSI_X9_62.secp256r1, `SECP256R1) ;
+        (ANSI_X9_62.secp384r1, `SECP384R1) ;
+        (ANSI_X9_62.secp521r1, `SECP521R1) ;
+      ]
+    in
 
     case_of_oid_f ~default [
 
-      (ANSI_X9_62.ec_pub_key, oid (fun id -> EC_pub id)) ;
+      (ANSI_X9_62.ec_pub_key, oid (fun id -> EC_pub (curve id))) ;
 
       (PKCS1.rsa_encryption          , null RSA                  ) ;
       (PKCS1.md2_rsa_encryption      , null_or_none MD2_RSA      ) ;
@@ -177,9 +190,16 @@ let identifier =
   and g =
     let none    = None
     and null    = Some (`C1 ())
-    and oid  id = Some (`C2 id) in
+    and oid  id = Some (`C2 id)
+    and curve = function
+      | `SECP224R1 -> ANSI_X9_62.secp224r1
+      | `SECP256R1 -> ANSI_X9_62.secp256r1
+      | `SECP384R1 -> ANSI_X9_62.secp384r1
+      | `SECP521R1 -> ANSI_X9_62.secp521r1
+      | `Other oid -> oid
+    in
     function
-    | EC_pub id     -> (ANSI_X9_62.ec_pub_key , oid id)
+    | EC_pub id     -> (ANSI_X9_62.ec_pub_key , oid (curve id))
 
     | RSA           -> (PKCS1.rsa_encryption           , null)
     | MD2_RSA       -> (PKCS1.md2_rsa_encryption       , null)
