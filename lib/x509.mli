@@ -820,12 +820,12 @@ module CRL : sig
   val verify : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list ->
     ?time:Ptime.t -> Certificate.t -> (unit, [> verification_error ]) result
 
-  (** [is_revoked crls ~hash_whitelist ~issuer ~cert] is [true] if there exists
+  (** [is_revoked ~hash_whitelist ~issuer ~cert crls] is [true] if there exists
       a revocation of [cert] in [crls] which is signed by the [issuer].  The
       subject of [issuer] must match the issuer of the crl.  The hash algorithm
       used for signing must be in the [hash_whitelist] (defaults to SHA-2).  *)
-  val is_revoked : t list -> ?hash_whitelist:Mirage_crypto.Hash.hash list ->
-    issuer:Certificate.t -> cert:Certificate.t -> bool
+  val is_revoked : ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+    issuer:Certificate.t -> cert:Certificate.t -> t list -> bool
 
   (** {1 Construction and signing of CRLs} *)
 
