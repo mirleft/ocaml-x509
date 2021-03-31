@@ -71,7 +71,7 @@ module Public_key : sig
       {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
   type t = [
     | `RSA of Mirage_crypto_pk.Rsa.pub
-    | `ED25519 of Cstruct.t
+    | `ED25519 of Mirage_crypto_ec.Ed25519.pub
     | `P224 of Mirage_crypto_ec.P224.Dsa.pub
     | `P256 of Mirage_crypto_ec.P256.Dsa.pub
     | `P384 of Mirage_crypto_ec.P384.Dsa.pub
@@ -118,7 +118,7 @@ module Private_key : sig
   (** The polymorphic variant of private keys. *)
   type t = [
     | `RSA of Mirage_crypto_pk.Rsa.priv
-    | `ED25519 of Hacl_ed25519.priv
+    | `ED25519 of Mirage_crypto_ec.Ed25519.priv
     | `P224 of Mirage_crypto_ec.P224.Dsa.priv
     | `P256 of Mirage_crypto_ec.P256.Dsa.priv
     | `P384 of Mirage_crypto_ec.P384.Dsa.priv

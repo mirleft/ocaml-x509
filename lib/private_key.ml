@@ -1,6 +1,6 @@
 type t = [
   | `RSA of Mirage_crypto_pk.Rsa.priv
-  | `ED25519 of Hacl_ed25519.priv
+  | `ED25519 of Mirage_crypto_ec.Ed25519.priv
   | `P224 of Mirage_crypto_ec.P224.Dsa.priv
   | `P256 of Mirage_crypto_ec.P256.Dsa.priv
   | `P384 of Mirage_crypto_ec.P384.Dsa.priv
@@ -9,7 +9,7 @@ type t = [
 
 let public = function
   | `RSA priv -> `RSA (Mirage_crypto_pk.Rsa.pub_of_priv priv)
-  | `ED25519 priv -> `ED25519 (Hacl_ed25519.priv_to_public priv)
+  | `ED25519 priv -> `ED25519 (Mirage_crypto_ec.Ed25519.pub_of_priv priv)
   | `P224 priv -> `P224 (Mirage_crypto_ec.P224.Dsa.pub_of_priv priv)
   | `P256 priv -> `P256 (Mirage_crypto_ec.P256.Dsa.pub_of_priv priv)
   | `P384 priv -> `P384 (Mirage_crypto_ec.P384.Dsa.pub_of_priv priv)
@@ -80,30 +80,26 @@ module Asn = struct
   let ec_to_cs ?curve ?pub key = ec_priv_to_cs (1, key, curve, pub)
 
   let reparse_private pk =
+    let open Mirage_crypto_ec in
+    let ec_to_err = function
+      | Ok x -> x
+      | Error e -> parse_error "%a" Mirage_crypto_ec.pp_error e
+    in
     match pk with
     | (0, Algorithm.RSA, cs) -> `RSA (rsa_priv_of_cs cs)
     | (0, Algorithm.ED25519, cs) ->
-      begin
-        let pk = ed25519_of_cs cs in
-        try `ED25519 (Hacl_ed25519.priv pk) with
-          Invalid_argument x -> parse_error "%s" x
-      end
+      `ED25519 (ec_to_err (Ed25519.priv_of_cstruct (ed25519_of_cs cs)))
     | (0, Algorithm.EC_pub curve, cs) ->
       let (v, priv, _, _pub) = ec_priv_of_cs cs in
       if v <> 1 then
         parse_error "bad version for ec Private key"
       else
         begin
-          let open Mirage_crypto_ec in
-          let to_err = function
-            | Ok x -> x
-            | Error e -> parse_error "%a" Mirage_crypto_ec.pp_error e
-          in
           match curve with
-          | `SECP224R1 -> `P224 (to_err (P224.Dsa.priv_of_cstruct priv))
-          | `SECP256R1 -> `P256 (to_err (P256.Dsa.priv_of_cstruct priv))
-          | `SECP384R1 -> `P384 (to_err (P384.Dsa.priv_of_cstruct priv))
-          | `SECP521R1 -> `P521 (to_err (P521.Dsa.priv_of_cstruct priv))
+          | `SECP224R1 -> `P224 (ec_to_err (P224.Dsa.priv_of_cstruct priv))
+          | `SECP256R1 -> `P256 (ec_to_err (P256.Dsa.priv_of_cstruct priv))
+          | `SECP384R1 -> `P384 (ec_to_err (P384.Dsa.priv_of_cstruct priv))
+          | `SECP521R1 -> `P521 (ec_to_err (P521.Dsa.priv_of_cstruct priv))
           | _ -> parse_error "unsupported EC key"
         end
     | _ -> parse_error "unknown private key info"
@@ -114,7 +110,7 @@ module Asn = struct
     let alg, cs =
       match p with
       | `RSA pk -> RSA, rsa_priv_to_cs pk
-      | `ED25519 pk -> ED25519, ed25519_to_cs (Hacl_ed25519.encode_priv pk)
+      | `ED25519 pk -> ED25519, ed25519_to_cs (Ed25519.priv_to_cstruct pk)
       | `P224 pk -> EC_pub `SECP224R1, ec_to_cs (P224.Dsa.priv_to_cstruct pk)
       | `P256 pk -> EC_pub `SECP256R1, ec_to_cs (P256.Dsa.priv_to_cstruct pk)
       | `P384 pk -> EC_pub `SECP384R1, ec_to_cs (P384.Dsa.priv_to_cstruct pk)

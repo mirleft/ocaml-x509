@@ -152,7 +152,7 @@ MC4CAQAwBQYDK2VwBCIEINTuctv5E1hK1bbY8fdp+K06/nwoy/HU++CXqI9EdVhC
 |}
   in
   match Private_key.decode_pem (Cstruct.of_string data) with
-  | Ok (`ED25519 k as ke) when Cstruct.equal ed25519_priv (Hacl_ed25519.encode_priv k) ->
+  | Ok (`ED25519 k as ke) when Cstruct.equal ed25519_priv (Mirage_crypto_ec.Ed25519.priv_to_cstruct k) ->
     let encoded = Private_key.encode_pem ke in
     if not (String.equal (Cstruct.to_string encoded) data) then
       Alcotest.failf "ED25519 encoding failed"
@@ -166,12 +166,16 @@ MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=
 -----END PUBLIC KEY-----
 |}
   and pub =
-    match Private_key.public (`ED25519 (Hacl_ed25519.priv ed25519_priv)) with
-    | `ED25519 p -> p
-    | _ -> assert false
+    match Mirage_crypto_ec.Ed25519.priv_of_cstruct ed25519_priv with
+    | Error _ -> Alcotest.fail "couldn't decode private Ed25519 key"
+    | Ok p ->
+      match Private_key.public (`ED25519 p) with
+      | `ED25519 p -> p
+      | _ -> Alcotest.fail "couldn't convert private Ed25519 key to public"
   in
+  let to_cs = Mirage_crypto_ec.Ed25519.pub_to_cstruct in
   match Public_key.decode_pem (Cstruct.of_string data) with
-  | Ok (`ED25519 k) when Cstruct.equal pub k ->
+  | Ok (`ED25519 k) when Cstruct.equal (to_cs pub) (to_cs k) ->
     let encoded = Public_key.encode_pem (`ED25519 k) in
     if not (String.equal (Cstruct.to_string encoded) data) then
       Alcotest.failf "ED25519 public key encoding failure"
@@ -197,15 +201,18 @@ GjfhN8ieupCqSdF3iqDidK006KWs848y
     Public_key.decode_pem (Cstruct.of_string pub_data)
   with
   | Ok (`P384 priv), Ok (`P384 pub) ->
+    let to_cs = Mirage_crypto_ec.P384.Dsa.pub_to_cstruct in
     let pub' = Mirage_crypto_ec.P384.Dsa.pub_of_priv priv in
-    Alcotest.(check bool __LOC__ true (Mirage_crypto_ec.P384.Dsa.pub_eq pub pub'));
+    Alcotest.(check bool __LOC__ true (Cstruct.equal (to_cs pub) (to_cs pub')));
     let pub_data' = Public_key.encode_pem (`P384 pub) in
-    Alcotest.(check bool __LOC__ true (Cstruct.equal (Cstruct.of_string pub_data) pub_data'));
+    Alcotest.(check bool __LOC__ true
+                (Cstruct.equal (Cstruct.of_string pub_data) pub_data'));
     let priv_data' = Private_key.encode_pem (`P384 priv) in
     begin match Private_key.decode_pem priv_data' with
       | Ok (`P384 priv) ->
         let pub' = Mirage_crypto_ec.P384.Dsa.pub_of_priv priv in
-        Alcotest.(check bool __LOC__ true (Mirage_crypto_ec.P384.Dsa.pub_eq pub pub'))
+        Alcotest.(check bool __LOC__ true
+                    (Cstruct.equal (to_cs pub) (to_cs pub')))
       | _ -> Alcotest.failf "cannot decode re-encoded P384 private key"
     end
   | _ -> Alcotest.failf "bad P384 key"
