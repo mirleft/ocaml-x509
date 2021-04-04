@@ -1,10 +1,14 @@
-type t = [
-  | `RSA    of Mirage_crypto_pk.Rsa.pub
-  | `ED25519 of Mirage_crypto_ec.Ed25519.pub
+type ecdsa = [
   | `P224 of Mirage_crypto_ec.P224.Dsa.pub
   | `P256 of Mirage_crypto_ec.P256.Dsa.pub
   | `P384 of Mirage_crypto_ec.P384.Dsa.pub
   | `P521 of Mirage_crypto_ec.P521.Dsa.pub
+]
+
+type t = [
+  ecdsa
+  | `RSA    of Mirage_crypto_pk.Rsa.pub
+  | `ED25519 of Mirage_crypto_ec.Ed25519.pub
   | `EC_pub of Asn.oid * Cstruct.t
 ]
 

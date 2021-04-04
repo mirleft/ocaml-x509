@@ -111,10 +111,21 @@ module Asn = struct
     projections_of Asn.der signing_request
 end
 
-let raw_sign raw hash key =
-  match key with
-  | `RSA priv -> Mirage_crypto_pk.Rsa.PKCS1.sign ~hash ~key:priv (`Message raw)
-  | _ -> assert false
+let raw_sign raw hash (priv_key : Private_key.t) =
+  let open Mirage_crypto_ec in
+  match priv_key with
+  | `RSA key -> Mirage_crypto_pk.Rsa.PKCS1.sign ~hash ~key (`Message raw)
+  | `ED25519 key -> Ed25519.sign ~key raw
+  | #Private_key.ecdsa as priv_key ->
+    let data = Mirage_crypto.Hash.digest hash raw in
+    let raw_signature =
+      match priv_key with
+      | `P224 key -> P224.Dsa.sign ~key data
+      | `P256 key -> P256.Dsa.sign ~key data
+      | `P384 key -> P384.Dsa.sign ~key data
+      | `P521 key -> P521.Dsa.sign ~key data
+    in
+    Algorithm.ecdsa_sig_to_cstruct raw_signature
 
 let info { asn ; _ } = asn.info
 
@@ -138,7 +149,7 @@ let hostnames csr =
     | None -> subj
 
 let validate_signature hash_whitelist { asn ; raw } =
-  let raw_data = Validation.raw_cert_hack raw asn.signature in
+  let raw_data = Validation.raw_cert_hack raw in
   Validation.validate_raw_signature asn.info.subject hash_whitelist raw_data
     asn.signature_algorithm asn.signature asn.info.public_key
 
@@ -164,27 +175,40 @@ let decode_pem cs =
 let encode_pem v =
   Pem.unparse ~tag:"CERTIFICATE REQUEST" (encode_der v)
 
-let create subject ?(digest = `SHA256) ?(extensions = Ext.empty) = function
-  | `RSA priv ->
-    let public_key = `RSA (Mirage_crypto_pk.Rsa.pub_of_priv priv) in
-    let info : request_info = { subject ; public_key ; extensions } in
-    let info_cs = Asn.request_info_to_cs info in
-    let signature = raw_sign info_cs digest (`RSA priv) in
-    let signature_algorithm = Algorithm.of_signature_algorithm `RSA digest in
-    let asn = { info ; signature_algorithm ; signature } in
-    let raw = Asn.signing_request_to_cs asn in
-    { asn ; raw }
-  | _ -> assert false
+let digest_of_key = function
+  | `RSA _ -> `SHA256
+  | `ED25519 _ -> `SHA512
+  | `P224 _ -> `SHA224
+  | `P256 _ -> `SHA256
+  | `P384 _ -> `SHA384
+  | `P521 _ -> `SHA512
+
+let default_digest digest key =
+  match digest with None -> digest_of_key key | Some x -> x
+
+let create subject ?digest ?(extensions = Ext.empty) key =
+  let digest = default_digest digest key in
+  let public_key = Private_key.public key in
+  let info : request_info = { subject ; public_key ; extensions } in
+  let info_cs = Asn.request_info_to_cs info in
+  let signature = raw_sign info_cs digest key in
+  let signature_algorithm =
+    Algorithm.of_signature_algorithm (Private_key.keytype key) digest
+  in
+  let asn = { info ; signature_algorithm ; signature } in
+  let raw = Asn.signing_request_to_cs asn in
+  { asn ; raw }
 
 let sign signing_request
     ~valid_from ~valid_until
     ?(hash_whitelist = Validation.sha2)
-    ?(digest = `SHA256)
+    ?digest
     ?(serial = Mirage_crypto_pk.(Z_extra.gen_r Z.one Z.(one lsl 64)))
     ?(extensions = Extension.empty)
     ?(subject = signing_request.asn.info.subject)
     key issuer =
   let open Rresult.R.Infix in
+  let digest = default_digest digest key in
   validate_signature hash_whitelist signing_request >>= fun () ->
   let signature_algo =
     Algorithm.of_signature_algorithm (Private_key.keytype key) digest

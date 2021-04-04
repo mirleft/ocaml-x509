@@ -217,6 +217,36 @@ GjfhN8ieupCqSdF3iqDidK006KWs848y
     end
   | _ -> Alcotest.failf "bad P384 key"
 
+let ed25519_cert () =
+  let file = "example-25519" in
+  match Certificate.decode_pem (regression file) with
+  | Error (`Msg msg) ->
+    Alcotest.failf "ED25519 certificate %s, decoding error %s" file msg
+  | Ok cert ->
+    match Validation.valid_ca cert with
+    | Error e ->
+      Alcotest.failf "verifying 25519 ca certificate failed %a"
+        Validation.pp_ca_error e
+    | Ok () ->
+      match Validation.verify_chain ~host:(host "www.example.com") ~time ~anchors:[cert] [cert] with
+      | Ok _ -> ()
+      | Error e ->
+        Alcotest.failf "verifying 25519 certificate failed %a"
+          Validation.pp_chain_error e
+
+let le_p384_root () =
+  let file = "letsencrypt-root-x2" in
+  match Certificate.decode_pem (regression file) with
+  | Error (`Msg msg) ->
+    Alcotest.failf "let's encrypt P384 certificate %s, decoding error %s"
+      file msg
+  | Ok cert ->
+    match Validation.valid_ca cert with
+    | Error e ->
+      Alcotest.failf "verifying P384 ca certificate failed %a"
+        Validation.pp_ca_error e
+    | Ok () -> ()
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca_fail ;
@@ -234,6 +264,8 @@ let regression_tests = [
   "ed25519 private key", `Quick, ed25519_priv_key ;
   "ed25519 public key", `Quick, ed25519_pub_key ;
   "p384 key", `Quick, p384_key ;
+  "ed25519 certificate", `Quick, ed25519_cert ;
+  "p384 certificate", `Quick, le_p384_root ;
 ]
 
 let host_set_test =

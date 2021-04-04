@@ -124,7 +124,7 @@ let signature_algorithm { asn ; _ } =
   Algorithm.to_signature_algorithm asn.signature_algo
 
 let validate { raw ; asn } ?(hash_whitelist = Validation.sha2) pub =
-  let tbs_raw = Validation.raw_cert_hack raw asn.signature_val in
+  let tbs_raw = Validation.raw_cert_hack raw in
   Validation.validate_raw_signature asn.tbs_crl.issuer hash_whitelist
     tbs_raw asn.signature_algo asn.signature_val pub
 
@@ -208,12 +208,13 @@ let sign_tbs (tbs : tBS_CRL) key =
   { asn ; raw }
 
 let revoke
-    ?(digest = `SHA256)
+    ?digest
     ~issuer
     ~this_update ?next_update
     ?(extensions = Extension.empty)
     revoked_certs
     key =
+  let digest = Signing_request.default_digest digest key in
   let signature =
     Algorithm.of_signature_algorithm (Private_key.keytype key) digest
   in

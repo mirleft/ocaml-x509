@@ -1,10 +1,14 @@
-type t = [
-  | `RSA of Mirage_crypto_pk.Rsa.priv
-  | `ED25519 of Mirage_crypto_ec.Ed25519.priv
+type ecdsa = [
   | `P224 of Mirage_crypto_ec.P224.Dsa.priv
   | `P256 of Mirage_crypto_ec.P256.Dsa.priv
   | `P384 of Mirage_crypto_ec.P384.Dsa.priv
   | `P521 of Mirage_crypto_ec.P521.Dsa.priv
+]
+
+type t = [
+  ecdsa
+  | `RSA of Mirage_crypto_pk.Rsa.priv
+  | `ED25519 of Mirage_crypto_ec.Ed25519.priv
 ]
 
 let public = function
@@ -17,7 +21,8 @@ let public = function
 
 let keytype = function
   | `RSA _ -> `RSA
-  | _ -> assert false (* used in Signing_request *)
+  | `ED25519 _ -> `ED25519
+  | #ecdsa -> `ECDSA
 
 module Asn = struct
   open Asn.S

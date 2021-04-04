@@ -16,6 +16,13 @@ type signature  = [ `RSA | `ECDSA | `ED25519 ]
 type ec_curve =
   [ `SECP224R1 | `SECP256R1 | `SECP384R1 | `SECP521R1 | `Other of Asn.oid ]
 
+let ec_curve_to_string = function
+  | `SECP224R1 -> "SECP224R1"
+  | `SECP256R1 -> "SECP256R1"
+  | `SECP384R1 -> "SECP384R1"
+  | `SECP521R1 -> "SECP521R1"
+  | `Other oid -> "EC OID " ^ Fmt.to_to_string Asn.OID.pp oid
+
 type t =
 
   (* pk algos *)
@@ -52,6 +59,35 @@ type t =
   | SHA224
   | SHA512_224
   | SHA512_256
+
+let to_string = function
+  | RSA -> "RSA"
+  | EC_pub curve -> ec_curve_to_string curve
+  | MD2_RSA -> "RSA MD2"
+  | MD4_RSA -> "RSA MD4"
+  | MD5_RSA -> "RSA MD5"
+  | RIPEMD160_RSA -> "RSA RIPEMD160"
+  | SHA1_RSA -> "RSA SHA1"
+  | SHA256_RSA -> "RSA SHA256"
+  | SHA384_RSA -> "RSA SHA384"
+  | SHA512_RSA -> "RSA SHA512"
+  | SHA224_RSA -> "RSA SHA224"
+  | ECDSA_SHA1 -> "ECDSA SHA1"
+  | ECDSA_SHA224 -> "ECDSA SHA224"
+  | ECDSA_SHA256 -> "ECDSA SHA256"
+  | ECDSA_SHA384 -> "ECDSA SHA384"
+  | ECDSA_SHA512 -> "ECDSA SHA512"
+  | ED25519 -> "Ed25519"
+  | MD2 -> "MD2"
+  | MD4 -> "MD4"
+  | MD5 -> "MD5"
+  | SHA1 -> "SHA1"
+  | SHA256 -> "SHA256"
+  | SHA384 -> "SHA384"
+  | SHA512 -> "SHA512"
+  | SHA224 -> "SHA224"
+  | SHA512_224 -> "SHA512/224"
+  | SHA512_256 -> "SHA512/256"
 
 let to_hash = function
   | MD5    -> Some `MD5
@@ -236,3 +272,24 @@ let identifier =
   sequence2
     (required ~label:"algorithm" oid)
     (optional ~label:"params" (choice2 null oid))
+
+let ecdsa_sig =
+  let f (r, s) =
+    if Z.sign r < 0 then
+      Asn.S.parse_error "ECDSA signature: r < 0"
+    else if Z.sign s < 0 then
+      Asn.S.parse_error "ECDSA signature: s < 0"
+    else
+      Mirage_crypto_pk.Z_extra.to_cstruct_be r,
+      Mirage_crypto_pk.Z_extra.to_cstruct_be s
+  and g (r, s) =
+    Mirage_crypto_pk.Z_extra.of_cstruct_be r,
+    Mirage_crypto_pk.Z_extra.of_cstruct_be s
+  in
+  map f g @@
+  sequence2
+    (required ~label:"r" integer)
+    (required ~label:"s" integer)
+
+let ecdsa_sig_of_cstruct, ecdsa_sig_to_cstruct =
+  projections_of Asn.der ecdsa_sig
