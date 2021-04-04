@@ -1,7 +1,7 @@
 (** X509 encoding, generation, and validation.
 
     [X509] is a module for handling X.509 certificates and supplementary
-   material (such as public and private RSA keys), as described in
+   material (such as public and private RSA or EC keys), as described in
    {{:https://tools.ietf.org/html/rfc5280}RFC 5280}.  X.509 describes a
    hierarchical public key infrastructure, where all trust is delegated to
    certificate authorities (CA).  The task of a CA is to sign certificate
@@ -38,7 +38,7 @@
     Missing is the handling of online certificate status protocol. Some X.509v3
    extensions are not handled, but only parsed, such as name constraints. If any
    extension is marked as critical in a certificate, but not handled, the
-   validation will fail. The only supported key type is RSA.
+   validation will fail.
 
     {e %%VERSION%% - {{:%%PKG_HOMEPAGE%% }homepage}} *)
 
@@ -61,15 +61,23 @@ module Host : sig
   end
 end
 
-(** RSA public key DER and PEM encoding and decoding *)
+(** Public key DER and PEM encoding and decoding *)
 module Public_key : sig
   (** Public keys as specified in {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
-      are supported in this module, mainly RSA. *)
+      are supported in this module. *)
 
   (** The polymorphic variant of public keys, with
       {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
       {{!Encoding.Pem.Public_key}encoding and decoding to PEM}. *)
-  type t = [ `RSA of Mirage_crypto_pk.Rsa.pub | `EC_pub of Asn.oid ]
+  type t = [
+    | `RSA of Mirage_crypto_pk.Rsa.pub
+    | `ED25519 of Mirage_crypto_ec.Ed25519.pub
+    | `P224 of Mirage_crypto_ec.P224.Dsa.pub
+    | `P256 of Mirage_crypto_ec.P256.Dsa.pub
+    | `P384 of Mirage_crypto_ec.P384.Dsa.pub
+    | `P521 of Mirage_crypto_ec.P521.Dsa.pub
+    | `EC_pub of Asn.oid * Cstruct.t
+  ]
 
   (** [id public_key] is [digest], the 160-bit [`SHA1] hash of the BIT
       STRING subjectPublicKey (excluding tag, length, and number of
@@ -101,17 +109,28 @@ module Public_key : sig
   val encode_pem : t -> Cstruct.t
 end
 
-(** RSA private key pem encoding and decoding *)
+(** Private key pem encoding and decoding *)
 module Private_key : sig
-  (** RSA private keys as defined in
+  (** Private keys as defined in
       {{:http://tools.ietf.org/html/rfc5208}PKCS 8}: decoding and encoding
       in PEM format  *)
 
   (** The polymorphic variant of private keys. *)
-  type t = [ `RSA of Mirage_crypto_pk.Rsa.priv ]
+  type t = [
+    | `RSA of Mirage_crypto_pk.Rsa.priv
+    | `ED25519 of Mirage_crypto_ec.Ed25519.priv
+    | `P224 of Mirage_crypto_ec.P224.Dsa.priv
+    | `P256 of Mirage_crypto_ec.P256.Dsa.priv
+    | `P384 of Mirage_crypto_ec.P384.Dsa.priv
+    | `P521 of Mirage_crypto_ec.P521.Dsa.priv
+  ]
+
+  (** [public priv] is the corresponding public key of [priv]. *)
+  val public : t -> Public_key.t
 
   (** [decode_der der] is [t], where the private key of [der] is
-      extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo structure. *)
+      extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo
+      structure. *)
   val decode_der : Cstruct.t -> (t, [> R.msg ]) result
 
   (** [encode_der key] is [der], the encoded private key as PKCS8 (RFC 5208,
@@ -404,7 +423,7 @@ module Certificate : sig
   (** {1 Operations on certificates} *)
 
   (** The polymorphic variant of public key types. *)
-  type key_type = [ `RSA | `EC of Asn.oid ]
+  type key_type = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521  | `EC of Asn.oid ]
 
   (** [supports_keytype certificate key_type] is [result], whether public key of
       the [certificate] matches the given [key_type]. *)
@@ -414,7 +433,7 @@ module Certificate : sig
   val public_key : t -> Public_key.t
 
   (** [signature_algorithm certificate] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
+  val signature_algorithm : t -> ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
 
   (** [hostnames certficate] is the set of domain names this
       [certificate] is valid for.  Currently, these are the DNS names of the
@@ -470,9 +489,11 @@ module Validation : sig
 
   (** The type of signature verification errors. *)
   type signature_error = [
-    | `Bad_pkcs1_signature of Distinguished_name.t
+    | `Bad_signature of Distinguished_name.t
+    | `Bad_encoding of Distinguished_name.t * string * Cstruct.t
     | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
     | `Unsupported_keytype of Distinguished_name.t * Public_key.t
+    | `Unsupported_algorithm of Distinguished_name.t * string
   ]
 
   (** [pp_signature_error ppf sige] pretty-prints the signature error [sige] on
@@ -690,7 +711,7 @@ module Signing_request : sig
   val info : t -> request_info
 
   (** [signature_algorithm signing_request] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
+  val signature_algorithm : t -> ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
 
   (** [hostnames signing_request] is the set of domain names this
       [signing_request] is requesting. This is either the content of the DNS
@@ -791,7 +812,7 @@ module CRL : sig
   val crl_number : t -> int option
 
   (** [signature_algorithm t] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA ] * Mirage_crypto.Hash.hash) option
+  val signature_algorithm : t -> ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
 
   (** {1 Validation and verification of CRLs} *)
 

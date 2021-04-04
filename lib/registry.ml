@@ -53,6 +53,15 @@ module ANSI_X9_62 = struct
   and ecdsa_sha256 = ecdsa_sha2 <| 2
   and ecdsa_sha384 = ecdsa_sha2 <| 3
   and ecdsa_sha512 = ecdsa_sha2 <| 4
+
+  (* from RFC 5480 *)
+  let certicom = base 1 3 <| 132 <| 0
+  let curves = ansi_x9_62 <| 3 <| 1
+
+  let secp224r1 = certicom <| 33
+  let secp256r1 = curves <| 7
+  let secp384r1 = certicom <| 34
+  let secp521r1 = certicom <| 35
 end
 
 module PKCS1 = struct
@@ -70,6 +79,15 @@ module PKCS1 = struct
   and sha384_rsa_encryption    = pkcs1 <| 12
   and sha512_rsa_encryption    = pkcs1 <| 13
   and sha224_rsa_encryption    = pkcs1 <| 14
+end
+
+module RFC8410 = struct
+  let thawte = base 1 3 <| 101
+
+  let x25519 = thawte <| 110
+  and x448 = thawte <| 111
+  and ed25519 = thawte <| 112
+  and ed448 = thawte <| 113
 end
 
 module PKCS2 = struct

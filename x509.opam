@@ -21,6 +21,7 @@ depends: [
   "mirage-crypto"
   "mirage-crypto-pk"
   "mirage-crypto-pk" {with-test & >= "0.8.10"}
+  "mirage-crypto-ec"
   "rresult"
   "fmt" {>= "0.8.7"}
   "alcotest" {with-test}

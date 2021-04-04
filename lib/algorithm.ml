@@ -11,14 +11,24 @@ open Asn_grammars
  * that handles unsupported algos anyway.
  *)
 
-type signature  = [ `RSA | `ECDSA ]
+type signature  = [ `RSA | `ECDSA | `ED25519 ]
+
+type ec_curve =
+  [ `SECP224R1 | `SECP256R1 | `SECP384R1 | `SECP521R1 | `Other of Asn.oid ]
+
+let ec_curve_to_string = function
+  | `SECP224R1 -> "SECP224R1"
+  | `SECP256R1 -> "SECP256R1"
+  | `SECP384R1 -> "SECP384R1"
+  | `SECP521R1 -> "SECP521R1"
+  | `Other oid -> "EC OID " ^ Fmt.to_to_string Asn.OID.pp oid
 
 type t =
 
   (* pk algos *)
   (* any more? is the universe big enough? ramsey's theorem for pk cyphers? *)
   | RSA
-  | EC_pub of Asn.oid (* should translate the oid too *)
+  | EC_pub of ec_curve
 
   (* sig algos *)
   | MD2_RSA
@@ -36,6 +46,8 @@ type t =
   | ECDSA_SHA384
   | ECDSA_SHA512
 
+  | ED25519
+
   (* digest algorithms *)
   | MD2
   | MD4
@@ -47,6 +59,35 @@ type t =
   | SHA224
   | SHA512_224
   | SHA512_256
+
+let to_string = function
+  | RSA -> "RSA"
+  | EC_pub curve -> ec_curve_to_string curve
+  | MD2_RSA -> "RSA MD2"
+  | MD4_RSA -> "RSA MD4"
+  | MD5_RSA -> "RSA MD5"
+  | RIPEMD160_RSA -> "RSA RIPEMD160"
+  | SHA1_RSA -> "RSA SHA1"
+  | SHA256_RSA -> "RSA SHA256"
+  | SHA384_RSA -> "RSA SHA384"
+  | SHA512_RSA -> "RSA SHA512"
+  | SHA224_RSA -> "RSA SHA224"
+  | ECDSA_SHA1 -> "ECDSA SHA1"
+  | ECDSA_SHA224 -> "ECDSA SHA224"
+  | ECDSA_SHA256 -> "ECDSA SHA256"
+  | ECDSA_SHA384 -> "ECDSA SHA384"
+  | ECDSA_SHA512 -> "ECDSA SHA512"
+  | ED25519 -> "Ed25519"
+  | MD2 -> "MD2"
+  | MD4 -> "MD4"
+  | MD5 -> "MD5"
+  | SHA1 -> "SHA1"
+  | SHA256 -> "SHA256"
+  | SHA384 -> "SHA384"
+  | SHA512 -> "SHA512"
+  | SHA224 -> "SHA224"
+  | SHA512_224 -> "SHA512/224"
+  | SHA512_256 -> "SHA512/256"
 
 let to_hash = function
   | MD5    -> Some `MD5
@@ -67,12 +108,14 @@ and of_hash = function
 
 and to_key_type = function
   | RSA        -> Some `RSA
-  | EC_pub oid -> Some (`EC oid)
+  | EC_pub curve -> Some (`EC curve)
+  | ED25519    -> Some `ED25519
   | _          -> None
 
 and of_key_type = function
   | `RSA    -> RSA
-  | `EC oid -> EC_pub oid
+  | `EC curve -> EC_pub curve
+  | `ED25519 -> ED25519
 
 (* XXX: No MD2 / MD4 / RIPEMD160 *)
 and to_signature_algorithm = function
@@ -87,6 +130,7 @@ and to_signature_algorithm = function
   | ECDSA_SHA256  -> Some (`ECDSA, `SHA256)
   | ECDSA_SHA384  -> Some (`ECDSA, `SHA384)
   | ECDSA_SHA512  -> Some (`ECDSA, `SHA512)
+  | ED25519       -> Some (`ED25519, `SHA512)
   | _             -> None
 
 and[@ocaml.warning "-8"] of_signature_algorithm public_key_algorithm digest =
@@ -102,6 +146,7 @@ and[@ocaml.warning "-8"] of_signature_algorithm public_key_algorithm digest =
   | (`ECDSA, `SHA256) -> ECDSA_SHA256
   | (`ECDSA, `SHA384) -> ECDSA_SHA384
   | (`ECDSA, `SHA512) -> ECDSA_SHA512
+  | (`ED25519, _) -> ED25519
 
 (* XXX
  *
@@ -133,11 +178,20 @@ let identifier =
     and oid f = function
       | Some (`C2 id) -> f id
       | _             -> parse_error "Algorithm: expected parameter OID"
-    and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid) in
+    and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid)
+    and curve =
+      let default oid = `Other oid in
+      case_of_oid ~default [
+        (ANSI_X9_62.secp224r1, `SECP224R1) ;
+        (ANSI_X9_62.secp256r1, `SECP256R1) ;
+        (ANSI_X9_62.secp384r1, `SECP384R1) ;
+        (ANSI_X9_62.secp521r1, `SECP521R1) ;
+      ]
+    in
 
     case_of_oid_f ~default [
 
-      (ANSI_X9_62.ec_pub_key, oid (fun id -> EC_pub id)) ;
+      (ANSI_X9_62.ec_pub_key, oid (fun id -> EC_pub (curve id))) ;
 
       (PKCS1.rsa_encryption          , null RSA                  ) ;
       (PKCS1.md2_rsa_encryption      , null_or_none MD2_RSA      ) ;
@@ -156,6 +210,8 @@ let identifier =
       (ANSI_X9_62.ecdsa_sha384       , none ECDSA_SHA384 ) ;
       (ANSI_X9_62.ecdsa_sha512       , none ECDSA_SHA512 ) ;
 
+      (RFC8410.ed25519               , none ED25519 ) ;
+
       (md2                           , null MD2          ) ;
       (md4                           , null MD4          ) ;
       (md5                           , null MD5          ) ;
@@ -170,9 +226,16 @@ let identifier =
   and g =
     let none    = None
     and null    = Some (`C1 ())
-    and oid  id = Some (`C2 id) in
+    and oid  id = Some (`C2 id)
+    and curve = function
+      | `SECP224R1 -> ANSI_X9_62.secp224r1
+      | `SECP256R1 -> ANSI_X9_62.secp256r1
+      | `SECP384R1 -> ANSI_X9_62.secp384r1
+      | `SECP521R1 -> ANSI_X9_62.secp521r1
+      | `Other oid -> oid
+    in
     function
-    | EC_pub id     -> (ANSI_X9_62.ec_pub_key , oid id)
+    | EC_pub id     -> (ANSI_X9_62.ec_pub_key , oid (curve id))
 
     | RSA           -> (PKCS1.rsa_encryption           , null)
     | MD2_RSA       -> (PKCS1.md2_rsa_encryption       , null)
@@ -191,6 +254,8 @@ let identifier =
     | ECDSA_SHA384  -> (ANSI_X9_62.ecdsa_sha384        , none)
     | ECDSA_SHA512  -> (ANSI_X9_62.ecdsa_sha512        , none)
 
+    | ED25519       -> (RFC8410.ed25519                , none)
+
     | MD2           -> (md2                            , null)
     | MD4           -> (md4                            , null)
     | MD5           -> (md5                            , null)
@@ -207,3 +272,24 @@ let identifier =
   sequence2
     (required ~label:"algorithm" oid)
     (optional ~label:"params" (choice2 null oid))
+
+let ecdsa_sig =
+  let f (r, s) =
+    if Z.sign r < 0 then
+      Asn.S.parse_error "ECDSA signature: r < 0"
+    else if Z.sign s < 0 then
+      Asn.S.parse_error "ECDSA signature: s < 0"
+    else
+      Mirage_crypto_pk.Z_extra.to_cstruct_be r,
+      Mirage_crypto_pk.Z_extra.to_cstruct_be s
+  and g (r, s) =
+    Mirage_crypto_pk.Z_extra.of_cstruct_be r,
+    Mirage_crypto_pk.Z_extra.of_cstruct_be s
+  in
+  map f g @@
+  sequence2
+    (required ~label:"r" integer)
+    (required ~label:"s" integer)
+
+let ecdsa_sig_of_cstruct, ecdsa_sig_to_cstruct =
+  projections_of Asn.der ecdsa_sig

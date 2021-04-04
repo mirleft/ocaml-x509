@@ -1,4 +1,4 @@
-type key_type = [ `RSA | `EC of Asn.oid ]
+type key_type = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521  | `EC of Asn.oid ]
 
 (*
  * X509 certs
@@ -170,7 +170,7 @@ let pp_hash ppf hash =
 
 let pp_sigalg ppf (asym, hash) =
   Fmt.pf ppf "%s-%a"
-    (match asym with `RSA -> "RSA" | `ECDSA -> "ECDSA")
+    (match asym with `RSA -> "RSA" | `ECDSA -> "ECDSA" | `ED25519 -> "ED25519")
     pp_hash hash
 
 let pp ppf { asn ; _ } =

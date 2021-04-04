@@ -1,3 +1,5 @@
+open Rresult.R.Infix
+
 let sha2 = [ `SHA256 ; `SHA384 ; `SHA512 ]
 let all_hashes = [ `MD5 ; `SHA1 ; `SHA224 ] @ sha2
 
@@ -5,21 +7,29 @@ let src = Logs.Src.create "x509" ~doc:"X509 validation"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type signature_error = [
-  | `Bad_pkcs1_signature of Distinguished_name.t
+  | `Bad_signature of Distinguished_name.t
+  | `Bad_encoding of Distinguished_name.t * string * Cstruct.t
   | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
   | `Unsupported_keytype of Distinguished_name.t * Public_key.t
+  | `Unsupported_algorithm of Distinguished_name.t * string
 ]
 
 let pp_signature_error ppf = function
-  | `Bad_pkcs1_signature subj ->
-    Fmt.pf ppf "failed to verify PKCS1 signature of %a"
+  | `Bad_signature subj ->
+    Fmt.pf ppf "failed to verify signature of %a"
       Distinguished_name.pp subj
+  | `Bad_encoding (subj, err, sig_) ->
+    Fmt.pf ppf "bad signature encoding of %a, ASN error %s:@.%a"
+      Distinguished_name.pp subj err Cstruct.hexdump_pp sig_
   | `Hash_not_whitelisted (subj, hash) ->
     Fmt.pf ppf "hash algorithm %a is not whitelisted, but %a is signed using it"
       Distinguished_name.pp subj Certificate.pp_hash hash
   | `Unsupported_keytype (subj, pk) ->
     Fmt.pf ppf "unsupported key used to sign %a: %a" Distinguished_name.pp subj
       Public_key.pp pk
+  | `Unsupported_algorithm (subj, alg) ->
+    Fmt.pf ppf "unsupported algorithm used to sign %a: %s"
+      Distinguished_name.pp subj alg
 
 let maybe_validate_hostname cert = function
   | None   -> true
@@ -31,36 +41,79 @@ let issuer_matches_subject
 
 let is_self_signed cert = issuer_matches_subject cert cert
 
-let validate_raw_signature subject hash_whitelist raw signature_algo signature pk_info =
-  match pk_info, Algorithm.to_signature_algorithm signature_algo with
-  | `RSA issuing_key, Some (`RSA, siga) ->
-    (* the inner signature algorithm (siga) must match the one used in the
-       PKCS1 digest_info (this is why we pass [hashp:(fun a -> a = siga)].
-       we also check that siga is a member of hash_whitelist, to ensure not
+let validate_raw_signature subject hash_whitelist msg signature_algo signature pk_info =
+  let valid_signature pk siga =
+    let err_sig p = if p then Ok () else Error (`Bad_signature subject) in
+    let open Mirage_crypto_ec in
+    match pk_info, pk with
+    | `RSA key, `RSA ->
+      (* the inner signature algorithm (siga) must match the one used in the
+         PKCS1 digest_info (this is why we pass [hashp:(fun a -> a = siga)]. *)
+      let hashp a = a = siga
+      and data = `Message msg
+      in
+      err_sig (Mirage_crypto_pk.Rsa.PKCS1.verify ~hashp ~key ~signature data)
+    | `ED25519 key, `ED25519 -> err_sig (Ed25519.verify ~key signature ~msg)
+    | #Public_key.ecdsa as issuing_key, `ECDSA ->
+      Rresult.R.reword_error
+        (function `Parse s -> `Bad_encoding (subject, s, signature))
+        (Algorithm.ecdsa_sig_of_cstruct signature) >>= fun s ->
+      let data = Mirage_crypto.Hash.digest siga msg in
+      (* TODO disallow non-matching hash-curve pairs (e.g. P384 with SHA256)? *)
+      begin
+        match issuing_key with
+        | `P224 key -> err_sig (P224.Dsa.verify ~key s data)
+        | `P256 key -> err_sig (P256.Dsa.verify ~key s data)
+        | `P384 key -> err_sig (P384.Dsa.verify ~key s data)
+        | `P521 key -> err_sig (P521.Dsa.verify ~key s data)
+      end
+    | _ -> Error (`Unsupported_keytype (subject, pk_info))
+  in
+  match Algorithm.to_signature_algorithm signature_algo with
+  | Some (pk, siga) ->
+    (* we check that siga is a member of hash_whitelist, to ensure not
        using a weak one. *)
     if not (List.mem siga hash_whitelist) then
       Error (`Hash_not_whitelisted (subject, siga))
-    else if Mirage_crypto_pk.Rsa.PKCS1.verify ~hashp:(fun a -> a = siga)
-        ~key:issuing_key ~signature (`Message raw)
-    then begin
+    else
+      valid_signature pk siga >>= fun () ->
       if not (List.mem siga sha2) then
         Log.warn (fun m -> m "%a signature uses %a, a weak hash algorithm"
                      Distinguished_name.pp subject Certificate.pp_hash siga);
       Ok ()
-    end else
-      Error (`Bad_pkcs1_signature subject)
-  | _ -> Error (`Unsupported_keytype (subject, pk_info))
+  | None ->
+    Error (`Unsupported_algorithm (subject, Algorithm.to_string signature_algo))
 
 (* XXX should return the tbs_cert blob from the parser, this is insane *)
-let raw_cert_hack raw signature =
-  let siglen = Cstruct.len signature in
-  let off    = if siglen > 128 then 1 else 0 in
-  let snd    = Cstruct.get_uint8 raw 1 in
-  let lenl   = 2 + if 0x80 land snd = 0 then 0 else 0x7F land snd in
-  Cstruct.(sub raw lenl (len raw - (siglen + lenl + 19 + off)))
+let raw_cert_hack raw =
+  (* we only support definite-length *)
+  let loff = 1 in
+  let snd = Cstruct.get_uint8 raw loff in
+  let lenl = 2 + if 0x80 land snd = 0 then 0 else 0x7F land snd in
+  (* cut away the SEQUENCE and LENGTH from outer sequence (tbs, sigalg, sig) *)
+  let cert_buf = Cstruct.shift raw lenl in
+  let rec l acc idx last =
+    if idx = last then
+      acc
+    else
+      l (acc lsl 8 + Cstruct.get_uint8 cert_buf idx) (succ idx) last
+  in
+  let cert_len_byte = Cstruct.get_uint8 cert_buf loff in
+  let cert_len =
+    (* two cases: *)
+    if 0x80 land cert_len_byte = 0 then
+      (* length < 127: highest bit is zero and lower 7 bits encode the length *)
+      2 + (0x7F land cert_len_byte)
+    else
+      (* length > 127: highest bit is 1 and lower 7 bits encode the bytes used
+         to encode the length *)
+      let len_len = 2 + 0x7F land cert_len_byte in
+      len_len + (l 0 2 len_len)
+  in
+  Cstruct.sub cert_buf 0 cert_len
 
 let validate_signature hash_whitelist { Certificate.asn = trusted ; _ } { Certificate.asn ; raw } =
-  let tbs_raw = raw_cert_hack raw asn.signature_val in
+  let tbs_raw = raw_cert_hack raw in
   validate_raw_signature asn.tbs_cert.subject hash_whitelist tbs_raw
     asn.signature_algo asn.signature_val trusted.tbs_cert.pk_info
 
@@ -306,7 +359,6 @@ type r = ((Certificate.t list * Certificate.t) option, validation_error) result
 
 (* TODO RFC 5280: A certificate MUST NOT include more than one
    instance of a particular extension. *)
-open Rresult.R.Infix
 
 let is_cert_valid now cert =
   match
