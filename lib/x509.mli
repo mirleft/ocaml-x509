@@ -909,3 +909,33 @@ module Authenticator : sig
     hash:Mirage_crypto.Hash.hash ->
     fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
 end
+
+(** PKCS12 archive files *)
+module PKCS12 : sig
+
+  (** A PKCS12 encoded archive file, *)
+  type t
+
+  (** [decode_der buffer] is [t], the PKCS12 archive of [buffer]. *)
+  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
+
+  (** [encode_der t] is [buf], the PKCS12 encoded archive of [t]. *)
+  val encode_der : t -> Cstruct.t
+
+  (** [verify password t] verifies and decrypts the PKCS12 archive [t]. The
+      result is the contents of the archive. *)
+  val verify : string -> t ->
+    ([ `Certificate of Certificate.t | `Crl of CRL.t
+     | `Private_key of Private_key.t | `Decrypted_private_key of Private_key.t ]
+       list, [> R.msg ]) result
+
+  (** [create ~mac ~algorithm ~iterations password certificates private_key]
+      constructs a PKCS12 archive with [certificates] and [private_key]. They
+      are encrypted with [algorithm] (using PBES2, PKCS5v2) and integrity
+      protected using [mac]. *)
+  val create : ?mac:[`SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ] ->
+    ?algorithm:[ `AES128_CBC | `AES192_CBC | `AES256_CBC ] ->
+    ?iterations:int ->
+    string -> Certificate.t list -> Private_key.t ->
+    t
+end
