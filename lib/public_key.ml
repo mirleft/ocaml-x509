@@ -9,7 +9,6 @@ type t = [
   ecdsa
   | `RSA    of Mirage_crypto_pk.Rsa.pub
   | `ED25519 of Mirage_crypto_ec.Ed25519.pub
-  | `EC_pub of Asn.oid * Cstruct.t
 ]
 
 module Asn_oid = Asn.OID
@@ -50,7 +49,6 @@ module Asn = struct
     | (EC_pub `SECP256R1, cs) -> `P256 (to_err (P256.Dsa.pub_of_cstruct cs))
     | (EC_pub `SECP384R1, cs) -> `P384 (to_err (P384.Dsa.pub_of_cstruct cs))
     | (EC_pub `SECP521R1, cs) -> `P521 (to_err (P521.Dsa.pub_of_cstruct cs))
-    | (EC_pub (`Other id), cs)  -> `EC_pub (id, cs)
     | _ -> parse_error "unknown public key algorithm"
 
   let unparse_pk =
@@ -63,7 +61,6 @@ module Asn = struct
     | `P256 pk -> (EC_pub `SECP256R1, P256.Dsa.pub_to_cstruct pk)
     | `P384 pk -> (EC_pub `SECP384R1, P384.Dsa.pub_to_cstruct pk)
     | `P521 pk -> (EC_pub `SECP521R1, P521.Dsa.pub_to_cstruct pk)
-    | `EC_pub (id, cs) -> (EC_pub (`Other id), cs)
 
   let pk_info_der =
     map reparse_pk unparse_pk @@
@@ -83,7 +80,6 @@ let id k =
     | `P256 pk -> Mirage_crypto_ec.P256.Dsa.pub_to_cstruct pk
     | `P384 pk -> Mirage_crypto_ec.P384.Dsa.pub_to_cstruct pk
     | `P521 pk -> Mirage_crypto_ec.P521.Dsa.pub_to_cstruct pk
-    | `EC_pub (_, cs) -> cs
   in
   Mirage_crypto.Hash.digest `SHA1 data
 
@@ -91,14 +87,15 @@ let fingerprint ?(hash = `SHA256) pub =
   Mirage_crypto.Hash.digest hash (Asn.pub_info_to_cstruct pub)
 
 let pp ppf k =
-  (match k with
-   | `RSA _ -> Fmt.string ppf "RSA "
-   | `ED25519 _ -> Fmt.string ppf "ED25519 "
-   | `P224 _ -> Fmt.string ppf "P224 "
-   | `P256 _ -> Fmt.string ppf "P256 "
-   | `P384 _ -> Fmt.string ppf "P384 "
-   | `P521 _ -> Fmt.string ppf "P521 "
-   | `EC_pub (oid, _) -> Fmt.pf ppf "EC %a" Asn_oid.pp oid);
+  Fmt.string ppf
+    (match k with
+     | `RSA _ -> "RSA"
+     | `ED25519 _ -> "ED25519"
+     | `P224 _ -> "P224"
+     | `P256 _ -> "P256"
+     | `P384 _ -> "P384"
+     | `P521 _ -> "P521");
+  Fmt.sp ppf ();
   Cstruct.hexdump_pp ppf (fingerprint k)
 
 let encode_der = Asn.pub_info_to_cstruct

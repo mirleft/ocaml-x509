@@ -14,14 +14,13 @@ open Asn_grammars
 type signature  = [ `RSA | `ECDSA | `ED25519 ]
 
 type ec_curve =
-  [ `SECP224R1 | `SECP256R1 | `SECP384R1 | `SECP521R1 | `Other of Asn.oid ]
+  [ `SECP224R1 | `SECP256R1 | `SECP384R1 | `SECP521R1 ]
 
 let ec_curve_to_string = function
   | `SECP224R1 -> "SECP224R1"
   | `SECP256R1 -> "SECP256R1"
   | `SECP384R1 -> "SECP384R1"
   | `SECP521R1 -> "SECP521R1"
-  | `Other oid -> "EC OID " ^ Fmt.to_to_string Asn.OID.pp oid
 
 type t =
 
@@ -245,8 +244,8 @@ let identifier =
       | Some (`C4 salt) -> f salt
       | _               -> parse_error "Algorithm: expected parameter octet_string"
     and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid)
-    and curve =
-      let default oid = `Other oid in
+    in
+    let curve =
       case_of_oid ~default [
         (ANSI_X9_62.secp224r1, `SECP224R1) ;
         (ANSI_X9_62.secp256r1, `SECP256R1) ;
@@ -319,7 +318,6 @@ let identifier =
       | `SECP256R1 -> ANSI_X9_62.secp256r1
       | `SECP384R1 -> ANSI_X9_62.secp384r1
       | `SECP521R1 -> ANSI_X9_62.secp521r1
-      | `Other oid -> oid
     and pbe (s, i) = Some (`C3 (`PBE (s, i)))
     and pbkdf2 (s, i, k, m) = Some (`C3 (`PBKDF2 (s, i, k, m)))
     and pbes2 (oid, oid') = Some (`C3 (`PBES2 (oid, oid')))

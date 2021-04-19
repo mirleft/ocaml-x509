@@ -76,7 +76,6 @@ module Public_key : sig
     | `P256 of Mirage_crypto_ec.P256.Dsa.pub
     | `P384 of Mirage_crypto_ec.P384.Dsa.pub
     | `P521 of Mirage_crypto_ec.P521.Dsa.pub
-    | `EC_pub of Asn.oid * Cstruct.t
   ]
 
   (** [id public_key] is [digest], the 160-bit [`SHA1] hash of the BIT
@@ -423,7 +422,7 @@ module Certificate : sig
   (** {1 Operations on certificates} *)
 
   (** The polymorphic variant of public key types. *)
-  type key_type = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521  | `EC of Asn.oid ]
+  type key_type = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521 ]
 
   (** [supports_keytype certificate key_type] is [result], whether public key of
       the [certificate] matches the given [key_type]. *)

@@ -105,7 +105,6 @@ module Asn = struct
           | `SECP256R1 -> `P256 (ec_to_err (P256.Dsa.priv_of_cstruct priv))
           | `SECP384R1 -> `P384 (ec_to_err (P384.Dsa.priv_of_cstruct priv))
           | `SECP521R1 -> `P521 (ec_to_err (P521.Dsa.priv_of_cstruct priv))
-          | _ -> parse_error "unsupported EC key"
         end
     | _ -> parse_error "unknown private key info"
 
