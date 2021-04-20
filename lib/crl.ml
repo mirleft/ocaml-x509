@@ -197,15 +197,15 @@ let is_revoked ?hash_whitelist ~issuer:super ~cert (crls : t list) =
     crls
 
 let sign_tbs (tbs : tBS_CRL) key =
+  let open Rresult.R.Infix in
   let tbs_raw = Asn.tbs_CRL_to_cstruct tbs in
-  let digest = match Algorithm.to_signature_algorithm tbs.signature with
-    | Some (_, h) -> h
-    | _ -> invalid_arg "couldn't parse signature algorithm"
-  in
-  let signature_val = Signing_request.raw_sign tbs_raw digest key in
-  let asn = { tbs_crl = tbs ; signature_algo = tbs.signature ; signature_val } in
-  let raw = Asn.crl_to_cstruct asn in
-  { asn ; raw }
+  match Algorithm.to_signature_algorithm tbs.signature with
+  | None -> Error (`Msg "couldn't parse signature algorithm")
+  | Some (_, hash) ->
+    Private_key.sign hash ~scheme:`PKCS1 key (`Message tbs_raw) >>| fun signature_val ->
+    let asn = { tbs_crl = tbs ; signature_algo = tbs.signature ; signature_val } in
+    let raw = Asn.crl_to_cstruct asn in
+    { asn ; raw }
 
 let revoke
     ?digest
@@ -216,7 +216,7 @@ let revoke
     key =
   let digest = Signing_request.default_digest digest key in
   let signature =
-    Algorithm.of_signature_algorithm (Private_key.keytype key) digest
+    Algorithm.of_signature_algorithm (Private_key.signature_scheme key) digest
   in
   let tbs_crl = {
     version = `V2 ;

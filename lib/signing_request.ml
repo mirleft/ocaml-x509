@@ -111,22 +111,6 @@ module Asn = struct
     projections_of Asn.der signing_request
 end
 
-let raw_sign raw hash (priv_key : Private_key.t) =
-  let open Mirage_crypto_ec in
-  match priv_key with
-  | `RSA key -> Mirage_crypto_pk.Rsa.PKCS1.sign ~hash ~key (`Message raw)
-  | `ED25519 key -> Ed25519.sign ~key raw
-  | #Private_key.ecdsa as priv_key ->
-    let data = Mirage_crypto.Hash.digest hash raw in
-    let raw_signature =
-      match priv_key with
-      | `P224 key -> P224.Dsa.sign ~key data
-      | `P256 key -> P256.Dsa.sign ~key data
-      | `P384 key -> P384.Dsa.sign ~key data
-      | `P521 key -> P521.Dsa.sign ~key data
-    in
-    Algorithm.ecdsa_sig_to_cstruct raw_signature
-
 let info { asn ; _ } = asn.info
 
 let signature_algorithm { asn ; _ } =
@@ -186,14 +170,15 @@ let digest_of_key = function
 let default_digest digest key =
   match digest with None -> digest_of_key key | Some x -> x
 
-let create subject ?digest ?(extensions = Ext.empty) key =
-  let digest = default_digest digest key in
+let create subject ?digest ?(extensions = Ext.empty) (key : Private_key.t) =
+  let open Rresult.R.Infix in
+  let hash = default_digest digest key in
   let public_key = Private_key.public key in
   let info : request_info = { subject ; public_key ; extensions } in
   let info_cs = Asn.request_info_to_cs info in
-  let signature = raw_sign info_cs digest key in
+  Private_key.sign hash ~scheme:`PKCS1 key (`Message info_cs) >>| fun signature ->
   let signature_algorithm =
-    Algorithm.of_signature_algorithm (Private_key.keytype key) digest
+    Algorithm.of_signature_algorithm (Private_key.signature_scheme key) hash
   in
   let asn = { info ; signature_algorithm ; signature } in
   let raw = Asn.signing_request_to_cs asn in
@@ -208,10 +193,10 @@ let sign signing_request
     ?(subject = signing_request.asn.info.subject)
     key issuer =
   let open Rresult.R.Infix in
-  let digest = default_digest digest key in
+  let hash = default_digest digest key in
   validate_signature hash_whitelist signing_request >>= fun () ->
   let signature_algo =
-    Algorithm.of_signature_algorithm (Private_key.keytype key) digest
+    Algorithm.of_signature_algorithm (Private_key.signature_scheme key) hash
   and info = signing_request.asn.info
   in
   let tbs_cert : Certificate.tBSCertificate = {
@@ -227,11 +212,11 @@ let sign signing_request
     extensions
   } in
   let tbs_raw = Certificate.Asn.tbs_certificate_to_cstruct tbs_cert in
-  let signature_val = raw_sign tbs_raw digest key in
+  Private_key.sign hash ~scheme:`PKCS1 key (`Message tbs_raw) >>| fun signature_val ->
   let asn = {
     Certificate.tbs_cert ;
     signature_algo ;
     signature_val ;
   } in
   let raw = Certificate.Asn.certificate_to_cstruct asn in
-  Ok { Certificate.asn ; raw }
+  { Certificate.asn ; raw }

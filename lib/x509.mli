@@ -61,10 +61,29 @@ module Host : sig
   end
 end
 
+(** Types of keys handled by X.509 *)
+module Key_type : sig
+  (** The polymorphic variant of key types. *)
+  type t = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521 ]
+
+  val strings : (string * t) list
+  (** [strings] is an associative list of string and key_type pairs. Useful for
+      {{:https://erratique.ch/software/cmdliner}cmdliner} (Arg.enum). *)
+
+  val to_string : t -> string
+  (** [to_string kt] is a string representation of [kt]. *)
+
+  val of_string : string -> (t, [> R.msg ]) result
+  (** [of_string s] is [Ok key_type] if the string could be decoded as
+      [key_type], or an [Error _]. *)
+end
+
 (** Public key DER and PEM encoding and decoding *)
 module Public_key : sig
   (** Public keys as specified in {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
       are supported in this module. *)
+
+  (** {1 Public keys and operations} *)
 
   (** The polymorphic variant of public keys, with
       {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
@@ -89,6 +108,17 @@ module Public_key : sig
       default SHA256) of the DER encoded public key (equivalent to
       [openssl x509 -noout -pubkey | openssl pkey -pubin -outform DER | openssl dgst -HASH]).  *)
   val fingerprint : ?hash:Mirage_crypto.Hash.hash -> t -> Cstruct.t
+
+  (** [key_type public_key] is its [key_type]. *)
+  val key_type : t -> Key_type.t
+
+  (** [verify hash ~scheme ~signature key data] verifies whether the [signature]
+      on [data] is valid using the [key], or not. The [signature] must be in
+      ASN.1 DER encoding. *)
+  val verify : Mirage_crypto.Hash.hash -> ?scheme:[ `PSS | `PKCS1 ] ->
+    signature:Cstruct.t -> t ->
+    [ `Message of Cstruct.t | `Digest of Cstruct.t ] ->
+    (unit, [> R.msg ]) result
 
   (** [pp ppf pub] pretty-prints the public key [pub] on [ppf]. *)
   val pp : t Fmt.t
@@ -124,8 +154,28 @@ module Private_key : sig
     | `P521 of Mirage_crypto_ec.P521.Dsa.priv
   ]
 
+  (** [key_type priv] is the key type of [priv]. *)
+  val key_type : t -> Key_type.t
+
+  (** [generate ~seed ~bits type] generates a private key of the given
+      key type. The argument [bits] is only used for the bit length of RSA keys.
+      If [seed] is provided, this is used to seed the random number generator.
+  *)
+  val generate : ?seed:Cstruct.t -> ?bits:int -> Key_type.t -> t
+
+  (** [of_cstruct data] decodes the buffer as private key. Only supported
+      for elliptic curve keys. *)
+  val of_cstruct : Cstruct.t -> Key_type.t -> (t, [> R.msg ]) result
+
   (** [public priv] is the corresponding public key of [priv]. *)
   val public : t -> Public_key.t
+
+  (** [sign ~hash ~scheme key data] signs [data] with [key] using [hash] and
+      [scheme]. If [data] is [`Message _], the [hash] will be applied before
+      the signature. For EC keys, ECDSA will be used, for Ed keys EdDSA. *)
+  val sign : Mirage_crypto.Hash.hash -> ?scheme:[ `PKCS1 | `PSS ] ->
+    t -> [ `Digest of Cstruct.t | `Message of Cstruct.t ] ->
+    (Cstruct.t, [> R.msg ]) result
 
   (** [decode_der der] is [t], where the private key of [der] is
       extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo
@@ -421,18 +471,16 @@ module Certificate : sig
 
   (** {1 Operations on certificates} *)
 
-  (** The polymorphic variant of public key types. *)
-  type key_type = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521 ]
-
   (** [supports_keytype certificate key_type] is [result], whether public key of
       the [certificate] matches the given [key_type]. *)
-  val supports_keytype : t -> key_type -> bool
+  val supports_keytype : t -> Key_type.t -> bool
 
   (** [public_key certificate] is [pk], the public key of the [certificate]. *)
   val public_key : t -> Public_key.t
 
   (** [signature_algorithm certificate] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
+  val signature_algorithm : t ->
+    ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
 
   (** [hostnames certficate] is the set of domain names this
       [certificate] is valid for.  Currently, these are the DNS names of the
@@ -488,7 +536,7 @@ module Validation : sig
 
   (** The type of signature verification errors. *)
   type signature_error = [
-    | `Bad_signature of Distinguished_name.t
+    | `Bad_signature of Distinguished_name.t * string
     | `Bad_encoding of Distinguished_name.t * string * Cstruct.t
     | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
     | `Unsupported_keytype of Distinguished_name.t * Public_key.t
@@ -722,7 +770,7 @@ module Signing_request : sig
       a certification request using the given [subject], [digest] (defaults to
       [`SHA256]) and list of [extensions]. *)
   val create : Distinguished_name.t -> ?digest:Mirage_crypto.Hash.hash ->
-    ?extensions:Ext.t -> Private_key.t -> t
+    ?extensions:Ext.t -> Private_key.t -> (t, [> R.msg ]) result
 
   (** {1 Provision a signing request to a certificate} *)
 
@@ -747,7 +795,7 @@ module Signing_request : sig
     ?digest:Mirage_crypto.Hash.hash -> ?serial:Z.t -> ?extensions:Extension.t ->
     ?subject:Distinguished_name.t ->
     Private_key.t -> Distinguished_name.t ->
-    (Certificate.t, [> Validation.signature_error ]) result
+    (Certificate.t, [> R.msg | Validation.signature_error ]) result
 end
 
 (** X.509 Certificate Revocation Lists. *)
@@ -855,19 +903,21 @@ module CRL : sig
     issuer:Distinguished_name.t ->
     this_update:Ptime.t -> ?next_update:Ptime.t ->
     ?extensions:Extension.t ->
-    revoked_cert list -> Private_key.t -> t
+    revoked_cert list -> Private_key.t -> (t, [> R.msg ]) result
 
   (** [revoke_certificate cert ~this_update ~next_update t priv] adds [cert] to
       the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificate : revoked_cert ->
-    this_update:Ptime.t -> ?next_update:Ptime.t -> t -> Private_key.t -> t
+    this_update:Ptime.t -> ?next_update:Ptime.t -> t -> Private_key.t ->
+    (t, [> R.msg ]) result
 
   (** [revoke_certificates certs ~this_update ~next_update t priv] adds [certs]
       to the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificates : revoked_cert list ->
-    this_update:Ptime.t -> ?next_update:Ptime.t -> t -> Private_key.t -> t
+    this_update:Ptime.t -> ?next_update:Ptime.t -> t -> Private_key.t ->
+    (t, [> R.msg ]) result
 end
 
 (** Certificate chain authenticators *)

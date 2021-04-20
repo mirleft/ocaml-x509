@@ -1,5 +1,7 @@
 module Host = Host
 
+module Key_type = Key_type
+
 module Public_key = Public_key
 
 module Private_key = Private_key

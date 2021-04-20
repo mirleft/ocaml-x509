@@ -1,5 +1,3 @@
-type key_type = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521  ]
-
 (*
  * X509 certs
  *)

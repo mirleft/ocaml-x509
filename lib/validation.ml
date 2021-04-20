@@ -7,7 +7,7 @@ let src = Logs.Src.create "x509" ~doc:"X509 validation"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type signature_error = [
-  | `Bad_signature of Distinguished_name.t
+  | `Bad_signature of Distinguished_name.t * string
   | `Bad_encoding of Distinguished_name.t * string * Cstruct.t
   | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
   | `Unsupported_keytype of Distinguished_name.t * Public_key.t
@@ -15,9 +15,9 @@ type signature_error = [
 ]
 
 let pp_signature_error ppf = function
-  | `Bad_signature subj ->
-    Fmt.pf ppf "failed to verify signature of %a"
-      Distinguished_name.pp subj
+  | `Bad_signature (subj, msg) ->
+    Fmt.pf ppf "failed to verify signature of %a: %s"
+      Distinguished_name.pp subj msg
   | `Bad_encoding (subj, err, sig_) ->
     Fmt.pf ppf "bad signature encoding of %a, ASN error %s:@.%a"
       Distinguished_name.pp subj err Cstruct.hexdump_pp sig_
@@ -41,48 +41,25 @@ let issuer_matches_subject
 
 let is_self_signed cert = issuer_matches_subject cert cert
 
-let validate_raw_signature subject hash_whitelist msg signature_algo signature pk_info =
-  let valid_signature pk siga =
-    let err_sig p = if p then Ok () else Error (`Bad_signature subject) in
-    let open Mirage_crypto_ec in
-    match pk_info, pk with
-    | `RSA key, `RSA ->
-      (* the inner signature algorithm (siga) must match the one used in the
-         PKCS1 digest_info (this is why we pass [hashp:(fun a -> a = siga)]. *)
-      let hashp a = a = siga
-      and data = `Message msg
-      in
-      err_sig (Mirage_crypto_pk.Rsa.PKCS1.verify ~hashp ~key ~signature data)
-    | `ED25519 key, `ED25519 -> err_sig (Ed25519.verify ~key signature ~msg)
-    | #Public_key.ecdsa as issuing_key, `ECDSA ->
-      Rresult.R.reword_error
-        (function `Parse s -> `Bad_encoding (subject, s, signature))
-        (Algorithm.ecdsa_sig_of_cstruct signature) >>= fun s ->
-      let data = Mirage_crypto.Hash.digest siga msg in
-      (* TODO disallow non-matching hash-curve pairs (e.g. P384 with SHA256)? *)
-      begin
-        match issuing_key with
-        | `P224 key -> err_sig (P224.Dsa.verify ~key s data)
-        | `P256 key -> err_sig (P256.Dsa.verify ~key s data)
-        | `P384 key -> err_sig (P384.Dsa.verify ~key s data)
-        | `P521 key -> err_sig (P521.Dsa.verify ~key s data)
-      end
-    | _ -> Error (`Unsupported_keytype (subject, pk_info))
-  in
-  match Algorithm.to_signature_algorithm signature_algo with
-  | Some (pk, siga) ->
+let validate_raw_signature subject hash_whitelist msg sig_alg signature pk =
+  match Algorithm.to_signature_algorithm sig_alg with
+  | Some (pk_typ, siga) ->
     (* we check that siga is a member of hash_whitelist, to ensure not
        using a weak one. *)
     if not (List.mem siga hash_whitelist) then
       Error (`Hash_not_whitelisted (subject, siga))
+    else if not (Public_key.sig_alg pk = pk_typ) then
+      Error (`Unsupported_keytype (subject, pk))
     else
-      valid_signature pk siga >>= fun () ->
+      Rresult.R.reword_error
+        (function `Msg m -> `Bad_signature (subject, m))
+        (Public_key.verify siga ~scheme:`PKCS1 ~signature pk (`Message msg)) >>= fun () ->
       if not (List.mem siga sha2) then
         Log.warn (fun m -> m "%a signature uses %a, a weak hash algorithm"
                      Distinguished_name.pp subject Certificate.pp_hash siga);
       Ok ()
   | None ->
-    Error (`Unsupported_algorithm (subject, Algorithm.to_string signature_algo))
+    Error (`Unsupported_algorithm (subject, Algorithm.to_string sig_alg))
 
 (* XXX should return the tbs_cert blob from the parser, this is insane *)
 let raw_cert_hack raw =

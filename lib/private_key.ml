@@ -11,6 +11,39 @@ type t = [
   | `ED25519 of Mirage_crypto_ec.Ed25519.priv
 ]
 
+let key_type = function
+  | `RSA _ -> `RSA
+  | `ED25519 _ -> `ED25519
+  | `P224 _ -> `P224
+  | `P256 _ -> `P256
+  | `P384 _ -> `P384
+  | `P521 _ -> `P521
+
+let generate ?seed ?(bits = 4096) typ =
+  let g = match seed with
+    | None -> None
+    | Some seed -> Some Mirage_crypto_rng.(create ~seed (module Fortuna))
+  in
+  match typ with
+  | `RSA -> `RSA (Mirage_crypto_pk.Rsa.generate ?g ~bits ())
+  | `ED25519 -> `ED25519 (fst (Mirage_crypto_ec.Ed25519.generate ?g ()))
+  | `P224 -> `P224 (fst (Mirage_crypto_ec.P224.Dsa.generate ?g ()))
+  | `P256 -> `P256 (fst (Mirage_crypto_ec.P256.Dsa.generate ?g ()))
+  | `P384 -> `P384 (fst (Mirage_crypto_ec.P384.Dsa.generate ?g ()))
+  | `P521 -> `P521 (fst (Mirage_crypto_ec.P521.Dsa.generate ?g ()))
+
+let of_cstruct data =
+  let open Rresult.R.Infix in
+  let open Mirage_crypto_ec in
+  let ec_err x = Rresult.R.error_to_msg ~pp_error:Mirage_crypto_ec.pp_error x in
+  function
+  | `RSA -> Error (`Msg "cannot decode an RSA key")
+  | `ED25519 -> ec_err (Ed25519.priv_of_cstruct data) >>| fun k -> `ED25519 k
+  | `P224 -> ec_err (P224.Dsa.priv_of_cstruct data) >>| fun k -> `P224 k
+  | `P256 -> ec_err (P256.Dsa.priv_of_cstruct data) >>| fun k -> `P256 k
+  | `P384 -> ec_err (P384.Dsa.priv_of_cstruct data) >>| fun k -> `P384 k
+  | `P521 -> ec_err (P521.Dsa.priv_of_cstruct data) >>| fun k -> `P521 k
+
 let public = function
   | `RSA priv -> `RSA (Mirage_crypto_pk.Rsa.pub_of_priv priv)
   | `ED25519 priv -> `ED25519 (Mirage_crypto_ec.Ed25519.pub_of_priv priv)
@@ -19,7 +52,39 @@ let public = function
   | `P384 priv -> `P384 (Mirage_crypto_ec.P384.Dsa.pub_of_priv priv)
   | `P521 priv -> `P521 (Mirage_crypto_ec.P521.Dsa.pub_of_priv priv)
 
-let keytype = function
+let sign hash ?(scheme = `PSS) key data =
+  let open Mirage_crypto_ec in
+  let open Rresult.R.Infix in
+  let hashed () = Public_key.hashed hash data
+  and ecdsa_to_cs s = Algorithm.ecdsa_sig_to_cstruct s
+  in
+  try
+    match key with
+    | `RSA key ->
+      let open Mirage_crypto_pk in
+      begin match scheme with
+        | `PSS ->
+          let module H = (val (Mirage_crypto.Hash.module_of hash)) in
+          let module PSS = Rsa.PSS(H) in
+          hashed () >>| fun d -> PSS.sign ~key (`Digest d)
+        | `PKCS1 ->
+          hashed () >>| fun d -> Rsa.PKCS1.sign ~key ~hash (`Digest d)
+      end
+    | `ED25519 key ->
+      begin match data with
+        | `Message m -> Ok (Ed25519.sign ~key m)
+        | `Digest _ -> Error (`Msg "Ed25519 only suitable with raw message")
+      end
+    | `P224 key -> hashed () >>| fun d -> ecdsa_to_cs (P224.Dsa.sign ~key d)
+    | `P256 key -> hashed () >>| fun d -> ecdsa_to_cs (P256.Dsa.sign ~key d)
+    | `P384 key -> hashed () >>| fun d -> ecdsa_to_cs (P384.Dsa.sign ~key d)
+    | `P521 key -> hashed () >>| fun d -> ecdsa_to_cs (P521.Dsa.sign ~key d)
+  with
+  | Mirage_crypto_pk.Rsa.Insufficient_key ->
+    Error (`Msg "RSA key of insufficient length")
+  | Message_too_long -> Error (`Msg "message too long")
+
+let signature_scheme = function
   | `RSA _ -> `RSA
   | `ED25519 _ -> `ED25519
   | #ecdsa -> `ECDSA

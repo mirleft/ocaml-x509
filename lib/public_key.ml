@@ -6,8 +6,8 @@ type ecdsa = [
 ]
 
 type t = [
-  ecdsa
-  | `RSA    of Mirage_crypto_pk.Rsa.pub
+  | ecdsa
+  | `RSA of Mirage_crypto_pk.Rsa.pub
   | `ED25519 of Mirage_crypto_ec.Ed25519.pub
 ]
 
@@ -86,17 +86,74 @@ let id k =
 let fingerprint ?(hash = `SHA256) pub =
   Mirage_crypto.Hash.digest hash (Asn.pub_info_to_cstruct pub)
 
+let key_type = function
+  | `RSA _ -> `RSA
+  | `ED25519 _ -> `ED25519
+  | `P224 _ -> `P224
+  | `P256 _ -> `P256
+  | `P384 _ -> `P384
+  | `P521 _ -> `P521
+
+let sig_alg = function
+  | #ecdsa -> `ECDSA
+  | `RSA _ -> `RSA
+  | `ED25519 _ -> `ED25519
+
 let pp ppf k =
-  Fmt.string ppf
-    (match k with
-     | `RSA _ -> "RSA"
-     | `ED25519 _ -> "ED25519"
-     | `P224 _ -> "P224"
-     | `P256 _ -> "P256"
-     | `P384 _ -> "P384"
-     | `P521 _ -> "P521");
+  Fmt.string ppf (Key_type.to_string (key_type k));
   Fmt.sp ppf ();
   Cstruct.hexdump_pp ppf (fingerprint k)
+
+let hashed hash data =
+  match data with
+  | `Message msg -> Ok (Mirage_crypto.Hash.digest hash msg)
+  | `Digest d ->
+    let n = Cstruct.len d and m = Mirage_crypto.Hash.digest_size hash in
+    if n = m then Ok d else Error (`Msg "digested data of invalid size")
+
+let verify hash ?(scheme = `PSS) ~signature key data =
+  let open Mirage_crypto_ec in
+  let open Rresult.R.Infix in
+  let ok_if_true p = if p then Ok () else Error (`Msg "bad signature") in
+  let ecdsa_of_cs cs =
+    Rresult.R.reword_error (function `Parse s -> `Msg s)
+      (Algorithm.ecdsa_sig_of_cstruct cs)
+  in
+  match key with
+  | `RSA key ->
+    let open Mirage_crypto_pk in
+    begin match scheme with
+      | `PSS ->
+        let module H = (val (Mirage_crypto.Hash.module_of hash)) in
+        let module PSS = Rsa.PSS(H) in
+        hashed hash data >>= fun d ->
+        ok_if_true (PSS.verify ~key ~signature (`Digest d))
+      | `PKCS1 ->
+        let hashp x = x = hash in
+        hashed hash data >>= fun d ->
+        ok_if_true (Rsa.PKCS1.verify ~hashp ~key ~signature (`Digest d))
+    end
+  | `ED25519 key ->
+    begin match data with
+      | `Message msg -> ok_if_true (Ed25519.verify ~key signature ~msg)
+      | `Digest _ -> Error (`Msg "Ed25519 only suitable with raw message")
+    end
+  | `P224 key ->
+    hashed hash data >>= fun d ->
+    ecdsa_of_cs signature >>= fun s ->
+    ok_if_true (P224.Dsa.verify ~key s d)
+  | `P256 key ->
+    hashed hash data >>= fun d ->
+    ecdsa_of_cs signature >>= fun s ->
+    ok_if_true (P256.Dsa.verify ~key s d)
+  | `P384 key ->
+    hashed hash data >>= fun d ->
+    ecdsa_of_cs signature >>= fun s ->
+    ok_if_true (P384.Dsa.verify ~key s d)
+  | `P521 key ->
+    hashed hash data >>= fun d ->
+    ecdsa_of_cs signature >>= fun s ->
+    ok_if_true (P521.Dsa.verify ~key s d)
 
 let encode_der = Asn.pub_info_to_cstruct
 
