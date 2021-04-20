@@ -31,7 +31,7 @@ let test_jc_ca_fail () =
   | _ -> Alcotest.fail "something went wrong with jc_ca"
 
 let test_jc_ca_all_hashes () =
-  match Validation.verify_chain_of_trust ~hash_whitelist:[`SHA1] ~host:(host "jabber.ccc.de") ~time ~anchors:[cacert] [jc ; cacert] with
+  match Validation.verify_chain_of_trust ~allowed_hashes:[`SHA1] ~host:(host "jabber.ccc.de") ~time ~anchors:[cacert] [jc ; cacert] with
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jc_ca"
 

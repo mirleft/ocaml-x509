@@ -76,7 +76,7 @@ let crl () =
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] capriv with
   | Error _ -> Alcotest.fail "couldn't revoke"
   | Ok crl ->
-    let revoked = CRL.is_revoked [crl] ?hash_whitelist:None in
+    let revoked = CRL.is_revoked [crl] ?allowed_hashes:None in
     match Validation.verify_chain ~host:None ~time ~revoked ~anchors:[ca] [cert] with
     | Ok _ -> Alcotest.fail "expected revocation"
     | Error (`Revoked _) -> ()
@@ -105,7 +105,7 @@ let crl' () =
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] capriv with
   | Error _ -> Alcotest.fail "couldn't revoke"
   | Ok crl ->
-    let revoked = CRL.is_revoked [crl] ?hash_whitelist:None in
+    let revoked = CRL.is_revoked [crl] ?allowed_hashes:None in
     match Validation.verify_chain ~host:None ~time ~revoked ~anchors:[ca] [cert ; ica] with
     | Ok _ -> Alcotest.fail "expected revocation"
     | Error (`Revoked _) -> ()
@@ -123,7 +123,7 @@ let crl'leaf () =
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] ipriv with
   | Error _ -> Alcotest.fail "couldn't revoke"
   | Ok crl ->
-    let revoked = CRL.is_revoked [crl] ?hash_whitelist:None in
+    let revoked = CRL.is_revoked [crl] ?allowed_hashes:None in
     match Validation.verify_chain ~host:None ~time ~revoked ~anchors:[ca] [cert ; ica] with
     | Ok _ -> Alcotest.fail "expected revocation"
     | Error (`Revoked _) -> ()
@@ -141,7 +141,7 @@ let crl'leaf'wrong () =
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] ipriv with
   | Error _ -> Alcotest.fail "couldn't revoke"
   | Ok crl ->
-    let revoked = CRL.is_revoked [crl] ?hash_whitelist:None in
+    let revoked = CRL.is_revoked [crl] ?allowed_hashes:None in
     match Validation.verify_chain ~host:None ~time ~revoked ~anchors:[ca] [cert ; ica] with
     | Ok _ -> ()
     | Error _ -> Alcotest.fail "expected success!"
@@ -158,7 +158,7 @@ let verify'' () =
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] capriv with
   | Error _ -> Alcotest.fail "couldn't revoke"
   | Ok crl ->
-    let revoked = CRL.is_revoked [crl] ?hash_whitelist:None in
+    let revoked = CRL.is_revoked [crl] ?allowed_hashes:None in
     match Validation.verify_chain ~host:None ~time ~revoked ~anchors:[ca] [cert ; ica] with
     | Ok _ -> ()
     | Error _ -> Alcotest.fail "expected verify to succeed!"
@@ -176,7 +176,7 @@ let crl'' () =
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] capriv with
   | Error _ -> Alcotest.fail "couldn't revoke"
   | Ok crl ->
-    let revoked = CRL.is_revoked [crl] ?hash_whitelist:None in
+    let revoked = CRL.is_revoked [crl] ?allowed_hashes:None in
     match Validation.verify_chain ~host:None ~time ~revoked ~anchors:[ca] [cert ; ica] with
     | Ok _ -> ()
     | Error _ -> Alcotest.fail "expected proper verification!"

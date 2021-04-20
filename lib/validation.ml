@@ -9,7 +9,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 type signature_error = [
   | `Bad_signature of Distinguished_name.t * string
   | `Bad_encoding of Distinguished_name.t * string * Cstruct.t
-  | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
+  | `Hash_not_allowed of Distinguished_name.t * Mirage_crypto.Hash.hash
   | `Unsupported_keytype of Distinguished_name.t * Public_key.t
   | `Unsupported_algorithm of Distinguished_name.t * string
 ]
@@ -21,8 +21,8 @@ let pp_signature_error ppf = function
   | `Bad_encoding (subj, err, sig_) ->
     Fmt.pf ppf "bad signature encoding of %a, ASN error %s:@.%a"
       Distinguished_name.pp subj err Cstruct.hexdump_pp sig_
-  | `Hash_not_whitelisted (subj, hash) ->
-    Fmt.pf ppf "hash algorithm %a is not whitelisted, but %a is signed using it"
+  | `Hash_not_allowed (subj, hash) ->
+    Fmt.pf ppf "hash algorithm %a is not allowed, but %a is signed using it"
       Distinguished_name.pp subj Certificate.pp_hash hash
   | `Unsupported_keytype (subj, pk) ->
     Fmt.pf ppf "unsupported key used to sign %a: %a" Distinguished_name.pp subj
@@ -41,13 +41,13 @@ let issuer_matches_subject
 
 let is_self_signed cert = issuer_matches_subject cert cert
 
-let validate_raw_signature subject hash_whitelist msg sig_alg signature pk =
+let validate_raw_signature subject allowed_hashes msg sig_alg signature pk =
   match Algorithm.to_signature_algorithm sig_alg with
   | Some (pk_typ, siga) ->
-    (* we check that siga is a member of hash_whitelist, to ensure not
+    (* we check that siga is a member of allowed_hashes, to ensure not
        using a weak one. *)
-    if not (List.mem siga hash_whitelist) then
-      Error (`Hash_not_whitelisted (subject, siga))
+    if not (List.mem siga allowed_hashes) then
+      Error (`Hash_not_allowed (subject, siga))
     else if not (Public_key.sig_alg pk = pk_typ) then
       Error (`Unsupported_keytype (subject, pk))
     else
@@ -89,9 +89,9 @@ let raw_cert_hack raw =
   in
   Cstruct.sub cert_buf 0 cert_len
 
-let validate_signature hash_whitelist { Certificate.asn = trusted ; _ } { Certificate.asn ; raw } =
+let validate_signature allowed_hashes { Certificate.asn = trusted ; _ } { Certificate.asn ; raw } =
   let tbs_raw = raw_cert_hack raw in
-  validate_raw_signature asn.tbs_cert.subject hash_whitelist tbs_raw
+  validate_raw_signature asn.tbs_cert.subject allowed_hashes tbs_raw
     asn.signature_algo asn.signature_val trusted.tbs_cert.pk_info
 
 let validate_time time { Certificate.asn = cert ; _ } =
@@ -348,11 +348,11 @@ let is_cert_valid now cert =
   | (_, false, _)      -> Error (`IntermediateInvalidVersion cert)
   | (_, _, false)      -> Error (`IntermediateInvalidExtensions cert)
 
-let is_ca_cert_valid hash_whitelist now cert =
+let is_ca_cert_valid allowed_hashes now cert =
   match
     is_self_signed cert,
     version_matches_extensions cert,
-    validate_signature hash_whitelist cert cert,
+    validate_signature allowed_hashes cert cert,
     validate_time now cert,
     valid_trust_anchor_extensions cert
   with
@@ -363,8 +363,8 @@ let is_ca_cert_valid hash_whitelist now cert =
   | (_, _, _, false, _)            -> Error (`CACertificateExpired (cert, now))
   | (_, _, _, _, false)            -> Error (`CAInvalidExtensions cert)
 
-let valid_ca ?(hash_whitelist = all_hashes) ?time cacert =
-  is_ca_cert_valid hash_whitelist time cacert
+let valid_ca ?(allowed_hashes = all_hashes) ?time cacert =
+  is_ca_cert_valid allowed_hashes time cacert
 
 let is_server_cert_valid host now cert =
   match
@@ -415,13 +415,13 @@ let verify_single_chain now ?(revoked = fun ~issuer:_ ~cert:_ -> false) hash anc
   in
   climb 0 chain
 
-let verify_chain ~host ~time ?revoked ?(hash_whitelist = sha2) ~anchors = function
+let verify_chain ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = function
   | [] -> Error `EmptyCertificateChain
   | server :: certs ->
     let now = time () in
     let anchors = List.filter (validate_time now) anchors in
     is_server_cert_valid host now server >>= fun () ->
-    verify_single_chain now ?revoked hash_whitelist anchors (server :: certs)
+    verify_single_chain now ?revoked allowed_hashes anchors (server :: certs)
 
 let rec any_m e f = function
   | [] -> Error e
@@ -429,7 +429,7 @@ let rec any_m e f = function
     | Ok ta -> Ok (Some (c, ta))
     | Error _ -> any_m e f cs
 
-let verify_chain_of_trust ~host ~time ?revoked ?(hash_whitelist = sha2) ~anchors = function
+let verify_chain_of_trust ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = function
   | [] -> Error `EmptyCertificateChain
   | server :: certs ->
     let now = time () in
@@ -440,11 +440,11 @@ let verify_chain_of_trust ~host ~time ?revoked ?(hash_whitelist = sha2) ~anchors
     and anchors = List.filter (validate_time now) anchors
     in
     (* exists there one which is good? *)
-    any_m `InvalidChain (verify_single_chain now ?revoked hash_whitelist anchors) paths
+    any_m `InvalidChain (verify_single_chain now ?revoked allowed_hashes anchors) paths
 
-let valid_cas ?(hash_whitelist = all_hashes) ?time cas =
+let valid_cas ?(allowed_hashes = all_hashes) ?time cas =
   List.filter (fun cert ->
-      Rresult.R.is_ok (is_ca_cert_valid hash_whitelist time cert))
+      Rresult.R.is_ok (is_ca_cert_valid allowed_hashes time cert))
     cas
 
 let fingerprint_verification host now fingerprints fp = function

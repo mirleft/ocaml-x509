@@ -132,17 +132,17 @@ let hostnames csr =
     | Some names -> names
     | None -> subj
 
-let validate_signature hash_whitelist { asn ; raw } =
+let validate_signature allowed_hashes { asn ; raw } =
   let raw_data = Validation.raw_cert_hack raw in
-  Validation.validate_raw_signature asn.info.subject hash_whitelist raw_data
+  Validation.validate_raw_signature asn.info.subject allowed_hashes raw_data
     asn.signature_algorithm asn.signature asn.info.public_key
 
-let decode_der ?(hash_whitelist = Validation.sha2) cs =
+let decode_der ?(allowed_hashes = Validation.sha2) cs =
   let open Rresult.R.Infix in
   Asn_grammars.err_to_msg (Asn.signing_request_of_cs cs) >>= fun csr ->
   let csr = { raw = cs ; asn = csr } in
   Rresult.R.error_to_msg ~pp_error:Validation.pp_signature_error
-    (validate_signature hash_whitelist csr) >>| fun () ->
+    (validate_signature allowed_hashes csr) >>| fun () ->
   csr
 
 let encode_der { raw ; _ } = raw
@@ -186,7 +186,7 @@ let create subject ?digest ?(extensions = Ext.empty) (key : Private_key.t) =
 
 let sign signing_request
     ~valid_from ~valid_until
-    ?(hash_whitelist = Validation.sha2)
+    ?(allowed_hashes = Validation.sha2)
     ?digest
     ?(serial = Mirage_crypto_pk.(Z_extra.gen_r Z.one Z.(one lsl 64)))
     ?(extensions = Extension.empty)
@@ -194,7 +194,7 @@ let sign signing_request
     key issuer =
   let open Rresult.R.Infix in
   let hash = default_digest digest key in
-  validate_signature hash_whitelist signing_request >>= fun () ->
+  validate_signature allowed_hashes signing_request >>= fun () ->
   let signature_algo =
     Algorithm.of_signature_algorithm (Private_key.signature_scheme key) hash
   and info = signing_request.asn.info

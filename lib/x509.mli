@@ -10,7 +10,10 @@
 
     An X.509 certificate is an authentication token: a public key, a subject
    (e.g. server name), a validity period, optionally a purpose (usage), and
-   various other optional {{!Extension}Extensions}.
+   various other optional {{!Extension}Extensions}. The overall approach of
+   this package is to support decoding what is present in the real world,
+   including weak ciphers (various validation functions support an allow list
+   to avoid using weak hashes in chains if needed).
 
     The public keys of trusted CAs are distributed with the software, or
    configured manually.  When an endpoint connects, it presents its
@@ -35,6 +38,12 @@
    {{!Authenticator} authenticators}.  Name validation, as defined in
    {{:https://tools.ietf.org/html/rfc6125}RFC 6125}, is also implemented.
 
+    The archive format for certificates and private keys,
+   {{:https://tools.ietf.org/html/rfc7292}PKCS 12, RFC 7292}, is
+   implemented in the {!PKCS12} submodule. While PKCS 12 decryption
+   supports the weak algorithm used by default by widely used software (RC2!),
+   the encryption path only supports AES.
+
     Missing is the handling of online certificate status protocol. Some X.509v3
    extensions are not handled, but only parsed, such as name constraints. If any
    extension is marked as critical in a certificate, but not handled, the
@@ -44,6 +53,7 @@
 
 open Rresult
 
+(** Hostnames (strict, wildcard), used for validation. *)
 module Host : sig
   (** The polymorphic variant for hostname validation. *)
   type t = [ `Strict | `Wildcard ] * [ `host ] Domain_name.t
@@ -61,7 +71,7 @@ module Host : sig
   end
 end
 
-(** Types of keys handled by X.509 *)
+(** Types of keys *)
 module Key_type : sig
   (** The polymorphic variant of key types. *)
   type t = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521 ]
@@ -78,12 +88,12 @@ module Key_type : sig
       [key_type], or an [Error _]. *)
 end
 
-(** Public key DER and PEM encoding and decoding *)
+(** Public keys *)
 module Public_key : sig
   (** Public keys as specified in {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
       are supported in this module. *)
 
-  (** {1 Public keys and operations} *)
+  (** {1 The type for public keys} *)
 
   (** The polymorphic variant of public keys, with
       {{:http://tools.ietf.org/html/rfc5208}PKCS 8}
@@ -96,6 +106,11 @@ module Public_key : sig
     | `P384 of Mirage_crypto_ec.P384.Dsa.pub
     | `P521 of Mirage_crypto_ec.P521.Dsa.pub
   ]
+
+  (** {1 Operations on public keys} *)
+
+  (** [pp ppf pub] pretty-prints the public key [pub] on [ppf]. *)
+  val pp : t Fmt.t
 
   (** [id public_key] is [digest], the 160-bit [`SHA1] hash of the BIT
       STRING subjectPublicKey (excluding tag, length, and number of
@@ -112,16 +127,15 @@ module Public_key : sig
   (** [key_type public_key] is its [key_type]. *)
   val key_type : t -> Key_type.t
 
+  (** {1 Cryptographic verify operation} *)
+
   (** [verify hash ~scheme ~signature key data] verifies whether the [signature]
       on [data] is valid using the [key], or not. The [signature] must be in
-      ASN.1 DER encoding. *)
+      ASN.1 DER encoding. The [scheme] is only used for RSA keys. *)
   val verify : Mirage_crypto.Hash.hash -> ?scheme:[ `PSS | `PKCS1 ] ->
     signature:Cstruct.t -> t ->
     [ `Message of Cstruct.t | `Digest of Cstruct.t ] ->
     (unit, [> R.msg ]) result
-
-  (** [pp ppf pub] pretty-prints the public key [pub] on [ppf]. *)
-  val pp : t Fmt.t
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
@@ -138,11 +152,13 @@ module Public_key : sig
   val encode_pem : t -> Cstruct.t
 end
 
-(** Private key pem encoding and decoding *)
+(** Private keys *)
 module Private_key : sig
   (** Private keys as defined in
       {{:http://tools.ietf.org/html/rfc5208}PKCS 8}: decoding and encoding
       in PEM format  *)
+
+  (** {1 The type for private keys} *)
 
   (** The polymorphic variant of private keys. *)
   type t = [
@@ -154,8 +170,7 @@ module Private_key : sig
     | `P521 of Mirage_crypto_ec.P521.Dsa.priv
   ]
 
-  (** [key_type priv] is the key type of [priv]. *)
-  val key_type : t -> Key_type.t
+  (** {1 Constructing private keys} *)
 
   (** [generate ~seed ~bits type] generates a private key of the given
       key type. The argument [bits] is only used for the bit length of RSA keys.
@@ -167,15 +182,24 @@ module Private_key : sig
       for elliptic curve keys. *)
   val of_cstruct : Cstruct.t -> Key_type.t -> (t, [> R.msg ]) result
 
+  (** {1 Operations on private keys} *)
+
+  (** [key_type priv] is the key type of [priv]. *)
+  val key_type : t -> Key_type.t
+
   (** [public priv] is the corresponding public key of [priv]. *)
   val public : t -> Public_key.t
 
-  (** [sign ~hash ~scheme key data] signs [data] with [key] using [hash] and
+  (** {1 Cryptographic sign operation} *)
+
+  (** [sign hash ~scheme key data] signs [data] with [key] using [hash] and
       [scheme]. If [data] is [`Message _], the [hash] will be applied before
-      the signature. For EC keys, ECDSA will be used, for Ed keys EdDSA. *)
+      the signature. The [scheme] is only used for RSA keys. *)
   val sign : Mirage_crypto.Hash.hash -> ?scheme:[ `PKCS1 | `PSS ] ->
     t -> [ `Digest of Cstruct.t | `Message of Cstruct.t ] ->
     (Cstruct.t, [> R.msg ]) result
+
+  (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
   (** [decode_der der] is [t], where the private key of [der] is
       extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo
@@ -538,7 +562,7 @@ module Validation : sig
   type signature_error = [
     | `Bad_signature of Distinguished_name.t * string
     | `Bad_encoding of Distinguished_name.t * string * Cstruct.t
-    | `Hash_not_whitelisted of Distinguished_name.t * Mirage_crypto.Hash.hash
+    | `Hash_not_allowed of Distinguished_name.t * Mirage_crypto.Hash.hash
     | `Unsupported_keytype of Distinguished_name.t * Public_key.t
     | `Unsupported_algorithm of Distinguished_name.t * string
   ]
@@ -561,18 +585,18 @@ module Validation : sig
   (** [pp_ca_error ppf ca_error] pretty-prints the CA error [ca_error]. *)
   val pp_ca_error : ca_error Fmt.t
 
-  (** [valid_ca ~hash_whitelist ~time certificate] is [result], which is [Ok ()]
+  (** [valid_ca ~allowed_hashes ~time certificate] is [result], which is [Ok ()]
       if the given certificate is self-signed with any hash algorithm of
-      [hash_whitelist] (defaults to any hash), it is valid at [time], its
+      [hash_allowlist] (defaults to any hash), it is valid at [time], its
       extensions are not present (if X.509 version 1 certificate), or are
       appropriate for a CA (BasicConstraints is present and true, KeyUsage
       extension contains keyCertSign). *)
-  val valid_ca : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
+  val valid_ca : ?allowed_hashes:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
     Certificate.t -> (unit, [> ca_error ]) result
 
-  (** [valid_cas ~hash_whitelist ~time certificates] is [valid_certificates],
+  (** [valid_cas ~allowed_hashes ~time certificates] is [valid_certificates],
       only those certificates which pass the {!valid_ca} check. *)
-  val valid_cas : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
+  val valid_cas : ?allowed_hashes:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
     Certificate.t list -> Certificate.t list
 
   (** {1 Chain of trust verification} *)
@@ -616,13 +640,13 @@ module Validation : sig
   (** [pp_chain_error ppf chain_error] pretty-prints the [chain_error]. *)
   val pp_chain_error : chain_error Fmt.t
 
-  (** [verify_chain ~host ~time ~revoked ~hash_whitelist ~anchors chain] is
+  (** [verify_chain ~host ~time ~revoked ~allowed_hashes ~anchors chain] is
       [result], either [Ok] and the trust anchor used to verify the chain, or
       [Error] and the chain error.  RFC 5280 describes the implemented
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}path validation}
       algorithm: The validity period of the given certificates is checked
       against the [time].  The signature algorithm must be present in
-      [hash_whitelist] (defaults to SHA-2).  The X509v3 extensions of the
+      [allowed_hashes] (defaults to SHA-2).  The X509v3 extensions of the
       [chain] are checked, then a chain of trust from [anchors] to the server
       certificate is validated.  The path length constraints are checked.  The
       server certificate is checked to contain the given [host], using
@@ -631,7 +655,7 @@ module Validation : sig
   val verify_chain : host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
-    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+    ?allowed_hashes:Mirage_crypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list ->
     (Certificate.t, [> chain_error ]) result
 
@@ -657,7 +681,7 @@ module Validation : sig
 
   type r = ((Certificate.t list * Certificate.t) option, validation_error) result
 
-  (** [verify_chain_of_trust host ~time ~revoked ~hash_whitelist ~anchors certificates]
+  (** [verify_chain_of_trust host ~time ~revoked ~allowed_hashes ~anchors certificates]
       is [result].  First, all possible paths are constructed using the
       {!build_paths} function, the first certificate of the chain is verified to
       be a valid leaf certificate (no BasicConstraints extension) and contains
@@ -667,7 +691,7 @@ module Validation : sig
   val verify_chain_of_trust :
     host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
-    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+    ?allowed_hashes:Mirage_crypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list -> r
 
   (** {1 Fingerprint verification} *)
@@ -714,11 +738,11 @@ module Signing_request : sig
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
-  (** [decode_der ~hash_whitelist cstruct] is [signing_request], the ASN.1
+  (** [decode_der ~allowed_hashes cstruct] is [signing_request], the ASN.1
       decoded [cstruct] or an error. The signature on the signing request
-      is validated, and its hash algorithm must be in [hash_whitelist] (by
+      is validated, and its hash algorithm must be in [allowed_hashes] (by
       default only SHA-2 is accepted). *)
-  val decode_der : ?hash_whitelist:Mirage_crypto.Hash.hash list -> Cstruct.t ->
+  val decode_der : ?allowed_hashes:Mirage_crypto.Hash.hash list -> Cstruct.t ->
     (t, [> R.msg ]) result
 
   (** [encode_der sr] is [cstruct], the ASN.1 encoded representation of the [sr]. *)
@@ -774,10 +798,10 @@ module Signing_request : sig
 
   (** {1 Provision a signing request to a certificate} *)
 
-  (** [sign signing_request ~valid_from ~valid_until ~hash_whitelist ~digest ~serial ~extensions ~subject private issuer]
+  (** [sign signing_request ~valid_from ~valid_until ~allowed_hashes ~digest ~serial ~extensions ~subject private issuer]
       creates [certificate], a signed certificate.  Signing can fail if the
       signature on the [signing_request] is invalid, or its hash algorithm does
-      not occur in [hash_whitelist] (default all SHA-2 algorithms).  Public key
+      not occur in [allowed_hashes] (default all SHA-2 algorithms).  Public key
       and subject are taken from the [signing_request] unless [subject] is
       passed, the [extensions] are added to the X.509 certificate.  The
       [private] key is used to sign the certificate, the [issuer] is recorded
@@ -791,7 +815,7 @@ module Signing_request : sig
 | Error _ -> Extension.empty
 ]} *)
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
-    ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+    ?allowed_hashes:Mirage_crypto.Hash.hash list ->
     ?digest:Mirage_crypto.Hash.hash -> ?serial:Z.t -> ?extensions:Extension.t ->
     ?subject:Distinguished_name.t ->
     Private_key.t -> Distinguished_name.t ->
@@ -863,9 +887,9 @@ module CRL : sig
 
   (** {1 Validation and verification of CRLs} *)
 
-  (** [validate t ~hash_whitelist pk] validates the digital signature of the
-      revocation list. The [hash_whitelist] defaults to SHA-2. *)
-  val validate : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+  (** [validate t ~allowed_hashes pk] validates the digital signature of the
+      revocation list. The [allowed_hashes] defaults to SHA-2. *)
+  val validate : t -> ?allowed_hashes:Mirage_crypto.Hash.hash list ->
     Public_key.t -> (unit, [> Validation.signature_error ]) result
 
   (** The type of CRL verification errors. *)
@@ -880,19 +904,19 @@ module CRL : sig
       [vere] on [ppf]. *)
   val pp_verification_error : verification_error Fmt.t
 
-  (** [verify t ~hash_whitelist ~time cert] verifies that the issuer of [t]
+  (** [verify t ~allowed_hashes ~time cert] verifies that the issuer of [t]
       matches the subject of [cert], and validates the digital signature of the
-      revocation list.  The used hash algorithm must be in the [hash_whitelist]
+      revocation list.  The used hash algorithm must be in the [allowed_hashes]
       (defaults to SHA-2). If [time] is provided, it must be after [this_update]
       and before [next_update] of [t]. *)
-  val verify : t -> ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+  val verify : t -> ?allowed_hashes:Mirage_crypto.Hash.hash list ->
     ?time:Ptime.t -> Certificate.t -> (unit, [> verification_error ]) result
 
-  (** [is_revoked ~hash_whitelist ~issuer ~cert crls] is [true] if there exists
+  (** [is_revoked ~allowed_hashes ~issuer ~cert crls] is [true] if there exists
       a revocation of [cert] in [crls] which is signed by the [issuer].  The
       subject of [issuer] must match the issuer of the crl.  The hash algorithm
-      used for signing must be in the [hash_whitelist] (defaults to SHA-2).  *)
-  val is_revoked : ?hash_whitelist:Mirage_crypto.Hash.hash list ->
+      used for signing must be in the [allowed_hashes] (defaults to SHA-2).  *)
+  val is_revoked : ?allowed_hashes:Mirage_crypto.Hash.hash list ->
     issuer:Certificate.t -> cert:Certificate.t -> t list -> bool
 
   (** {1 Construction and signing of CRLs} *)
@@ -927,17 +951,17 @@ module Authenticator : sig
       certificate stack to an authentication decision {!Validation.r}. *)
   type t = host:[`host] Domain_name.t option -> Certificate.t list -> Validation.r
 
-  (** [chain_of_trust ~time ~crls ~hash_whitelist trust_anchors] is
+  (** [chain_of_trust ~time ~crls ~allowed_hashes trust_anchors] is
       [authenticator], which uses the given [time] and list of [trust_anchors]
       to verify the certificate chain. All signatures must use a hash algorithm
-      specified in [hash_whitelist], defaults to SHA-2.  Signatures on revocation
-      lists [crls] must also use a hash algorithm in [hash_whitelist]. This is
+      specified in [allowed_hashes], defaults to SHA-2.  Signatures on revocation
+      lists [crls] must also use a hash algorithm in [allowed_hashes]. This is
       an implementation of the algorithm described in
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC 5280}, using
       {!Validation.verify_chain_of_trust}.  The given trust anchors are not
       validated, you can filter them with {!Validation.valid_cas} if desired. *)
   val chain_of_trust : time:(unit -> Ptime.t option) -> ?crls:CRL.t list ->
-    ?hash_whitelist:Mirage_crypto.Hash.hash list -> Certificate.t list -> t
+    ?allowed_hashes:Mirage_crypto.Hash.hash list -> Certificate.t list -> t
 
   (** [server_key_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify that the

@@ -1,3 +1,14 @@
+## v0.12.1 (2021-04-21)
+
+* FEATURE support for RFC 5915 "BEGIN EC PRIVATE KEY" pem encoded private keys
+  (#147 @hannesm, requested by @ulrikstrid)
+* BREAKING remove EC_pub _ from Public_key.t and EC _ from Certificate.key_type
+  (#147 by @hannesm)
+* BREAKING move Certificate.key_type to Key_type.t (#147 @hannesm)
+* FEATURE some private key utilities (of_cstruct, generate, sign), and
+  Public_key.verify (#report #146, fix #147 @hannesm)
+* BREAKING rename hash_whitelist to allowed_hashes (#147 @hannesm)
+
 ## v0.12.0 (2021-04-05)
 
 * FEATURE PKCS12 support (#114 by @hannesm)

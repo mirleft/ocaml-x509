@@ -123,9 +123,9 @@ let crl_number { asn ; _ } =
 let signature_algorithm { asn ; _ } =
   Algorithm.to_signature_algorithm asn.signature_algo
 
-let validate { raw ; asn } ?(hash_whitelist = Validation.sha2) pub =
+let validate { raw ; asn } ?(allowed_hashes = Validation.sha2) pub =
   let tbs_raw = Validation.raw_cert_hack raw in
-  Validation.validate_raw_signature asn.tbs_crl.issuer hash_whitelist
+  Validation.validate_raw_signature asn.tbs_crl.issuer allowed_hashes
     tbs_raw asn.signature_algo asn.signature_val pub
 
 type verification_error = [
@@ -151,7 +151,7 @@ let pp_verification_error ppf = function
       (Ptime.pp_human ~tz_offset_s:0 ()) scheduled
       (Ptime.pp_human ~tz_offset_s:0 ()) now
 
-let verify ({ asn ; _ } as crl) ?hash_whitelist ?time cert =
+let verify ({ asn ; _ } as crl) ?allowed_hashes ?time cert =
   let open Rresult.R.Infix in
   let subj = Certificate.subject cert in
   guard
@@ -166,19 +166,19 @@ let verify ({ asn ; _ } as crl) ?hash_whitelist ?time cert =
      | None -> Ok ()
      | Some y -> guard (Ptime.is_earlier ~than:y x)
                    (`Next_update_scheduled (subj, x, y))) >>= fun () ->
-  validate ?hash_whitelist crl (Certificate.public_key cert)
+  validate ?allowed_hashes crl (Certificate.public_key cert)
 
 let reason (revoked : revoked_cert) =
   match Extension.(find Reason revoked.extensions) with
   | Some (_, x) -> Some x
   | None -> None
 
-let is_revoked ?hash_whitelist ~issuer:super ~cert (crls : t list) =
+let is_revoked ?allowed_hashes ~issuer:super ~cert (crls : t list) =
   List.exists (fun crl ->
       if
         Distinguished_name.equal (Certificate.subject super) (issuer crl)
       then
-        match validate ?hash_whitelist crl (Certificate.public_key super) with
+        match validate ?allowed_hashes crl (Certificate.public_key super) with
         | Ok () ->
           begin try
               let entry = List.find
