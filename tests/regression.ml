@@ -247,6 +247,13 @@ let le_p384_root () =
         Validation.pp_ca_error e
     | Ok () -> ()
 
+let p256_key () =
+  let file = "priv_p256" in
+  match Private_key.decode_pem (regression file) with
+  | Error (`Msg msg) ->
+    Alcotest.failf "private P256 key %s decoding error %s" file msg
+  | Ok _ -> ()
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca_fail ;
@@ -266,6 +273,7 @@ let regression_tests = [
   "p384 key", `Quick, p384_key ;
   "ed25519 certificate", `Quick, ed25519_cert ;
   "p384 certificate", `Quick, le_p384_root ;
+  "p256 key", `Quick, p256_key ;
 ]
 
 let host_set_test =

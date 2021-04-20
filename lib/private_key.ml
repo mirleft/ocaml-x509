@@ -68,10 +68,30 @@ module Asn = struct
   let (rsa_priv_of_cs, rsa_priv_to_cs) =
     Asn_grammars.project_exn rsa_private_key
 
+  let ec_to_err = function
+    | Ok x -> x
+    | Error e -> parse_error "%a" Mirage_crypto_ec.pp_error e
+
   let ed25519_of_cs, ed25519_to_cs =
     Asn_grammars.project_exn octet_string
 
   let ec_private_key =
+    let f (v, pk, nc, pub) =
+      if v <> 1 then
+        parse_error "bad version for ec Private key"
+      else
+        let curve = match nc with
+          | Some c -> Some (Algorithm.curve_of_oid c)
+          | None -> None
+        in
+        pk, curve, pub
+    and g (pk, curve, pub) =
+      let nc = match curve with
+        | None -> None | Some c -> Some (Algorithm.curve_to_oid c)
+      in
+      (1, pk, nc, pub)
+    in
+    Asn.S.map f g @@
     sequence4
       (required ~label:"version" int) (* ecPrivkeyVer1(1) *)
       (required ~label:"privateKey" octet_string)
@@ -79,33 +99,52 @@ module Asn = struct
       (optional ~label:"namedCurve" (explicit 0 oid))
       (optional ~label:"publicKey" (explicit 1 bit_string))
 
-  let ec_priv_of_cs, ec_priv_to_cs =
+  let ec_of_cs, ec_to_cs =
     Asn_grammars.project_exn ec_private_key
 
-  let ec_to_cs ?curve ?pub key = ec_priv_to_cs (1, key, curve, pub)
+  let reparse_ec_private curve priv =
+    let open Mirage_crypto_ec in
+    let open Rresult.R.Infix in
+    match curve with
+    | `SECP224R1 -> P224.Dsa.priv_of_cstruct priv >>| fun p -> `P224 p
+    | `SECP256R1 -> P256.Dsa.priv_of_cstruct priv >>| fun p -> `P256 p
+    | `SECP384R1 -> P384.Dsa.priv_of_cstruct priv >>| fun p -> `P384 p
+    | `SECP521R1 -> P521.Dsa.priv_of_cstruct priv >>| fun p -> `P521 p
+
+  (* external use (result) *)
+  let ec_priv_of_cs =
+    let open Rresult.R.Infix in
+    let dec, _ = Asn_grammars.projections_of Asn.der ec_private_key in
+    fun cs ->
+      dec cs >>= fun (priv, curve, _pub) ->
+      match curve with
+      | None -> Error (`Parse "no curve provided")
+      | Some c ->
+        Rresult.R.(reword_error
+                     (function `Msg e -> `Parse e)
+                     (error_to_msg ~pp_error:Mirage_crypto_ec.pp_error
+                        (reparse_ec_private c priv)))
+
+  let ec_of_cs ?curve cs =
+    let (priv, named_curve, _pub) = ec_of_cs cs in
+    let nc =
+      match curve, named_curve with
+      | Some c, None -> c
+      | None, Some c -> c
+      | Some c, Some c' -> if c = c' then c else parse_error "conflicting curve"
+      | None, None -> parse_error "unknown curve"
+    in
+    ec_to_err (reparse_ec_private nc priv)
+
+  let ec_to_cs ?curve ?pub key = ec_to_cs (key, curve, pub)
 
   let reparse_private pk =
-    let open Mirage_crypto_ec in
-    let ec_to_err = function
-      | Ok x -> x
-      | Error e -> parse_error "%a" Mirage_crypto_ec.pp_error e
-    in
     match pk with
     | (0, Algorithm.RSA, cs) -> `RSA (rsa_priv_of_cs cs)
     | (0, Algorithm.ED25519, cs) ->
-      `ED25519 (ec_to_err (Ed25519.priv_of_cstruct (ed25519_of_cs cs)))
-    | (0, Algorithm.EC_pub curve, cs) ->
-      let (v, priv, _, _pub) = ec_priv_of_cs cs in
-      if v <> 1 then
-        parse_error "bad version for ec Private key"
-      else
-        begin
-          match curve with
-          | `SECP224R1 -> `P224 (ec_to_err (P224.Dsa.priv_of_cstruct priv))
-          | `SECP256R1 -> `P256 (ec_to_err (P256.Dsa.priv_of_cstruct priv))
-          | `SECP384R1 -> `P384 (ec_to_err (P384.Dsa.priv_of_cstruct priv))
-          | `SECP521R1 -> `P521 (ec_to_err (P521.Dsa.priv_of_cstruct priv))
-        end
+      let data = ed25519_of_cs cs in
+      `ED25519 (ec_to_err (Mirage_crypto_ec.Ed25519.priv_of_cstruct data))
+    | (0, Algorithm.EC_pub curve, cs) -> ec_of_cs ~curve cs
     | _ -> parse_error "unknown private key info"
 
   let unparse_private p =
@@ -145,17 +184,21 @@ let decode_pem cs =
   let open Rresult.R.Infix in
   Pem.parse cs >>= fun data ->
   let rsa_p (t, _) = String.equal "RSA PRIVATE KEY" t
+  and ec_p (t, _) = String.equal "EC PRIVATE KEY" t
   and pk_p (t, _) = String.equal "PRIVATE KEY" t
   in
   let r, _ = List.partition rsa_p data
+  and ec, _ = List.partition ec_p data
   and p, _ = List.partition pk_p data
   in
   Pem.foldM (fun (_, k) ->
       Asn_grammars.err_to_msg (Asn.rsa_private_of_cstruct k) >>| fun k ->
       `RSA k) r >>= fun k ->
   Pem.foldM (fun (_, k) ->
-      Asn_grammars.err_to_msg (Asn.private_of_cstruct k)) p >>= fun k' ->
-  Pem.exactly_one ~what:"private key" (k @ k')
+      Asn_grammars.err_to_msg (Asn.ec_priv_of_cs k)) ec >>= fun k' ->
+  Pem.foldM (fun (_, k) ->
+      Asn_grammars.err_to_msg (Asn.private_of_cstruct k)) p >>= fun k'' ->
+  Pem.exactly_one ~what:"private key" (k @ k' @ k'')
 
 let encode_pem p =
   Pem.unparse ~tag:"PRIVATE KEY" (Asn.private_to_cstruct p)

@@ -213,7 +213,22 @@ and[@ocaml.warning "-8"] of_signature_algorithm public_key_algorithm digest =
    Section 2.2.2 specifies DSA to have a null parameter,
    Section 2.2.3 specifies ECDSA to have a null parameter,
    Section 2.3.1 specifies rsaEncryption (for RSA public keys) requires null.
- *)
+*)
+
+let curve_of_oid, curve_to_oid =
+  let open Registry.ANSI_X9_62 in
+  (let default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid) in
+   case_of_oid ~default [
+     (secp224r1, `SECP224R1) ;
+     (secp256r1, `SECP256R1) ;
+     (secp384r1, `SECP384R1) ;
+     (secp521r1, `SECP521R1) ;
+   ]),
+  (function
+    | `SECP224R1 -> secp224r1
+    | `SECP256R1 -> secp256r1
+    | `SECP384R1 -> secp384r1
+    | `SECP521R1 -> secp521r1)
 
 let identifier =
   let open Registry in
@@ -245,18 +260,10 @@ let identifier =
       | _               -> parse_error "Algorithm: expected parameter octet_string"
     and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid)
     in
-    let curve =
-      case_of_oid ~default [
-        (ANSI_X9_62.secp224r1, `SECP224R1) ;
-        (ANSI_X9_62.secp256r1, `SECP256R1) ;
-        (ANSI_X9_62.secp384r1, `SECP384R1) ;
-        (ANSI_X9_62.secp521r1, `SECP521R1) ;
-      ]
-    in
 
     case_of_oid_f ~default [
 
-      (ANSI_X9_62.ec_pub_key, oid (fun id -> EC_pub (curve id))) ;
+      (ANSI_X9_62.ec_pub_key, oid (fun id -> EC_pub (curve_of_oid id))) ;
 
       (PKCS1.rsa_encryption          , null RSA                  ) ;
       (PKCS1.md2_rsa_encryption      , null_or_none MD2_RSA      ) ;
@@ -313,18 +320,13 @@ let identifier =
     let none    = None
     and null    = Some (`C1 ())
     and oid  id = Some (`C2 id)
-    and curve = function
-      | `SECP224R1 -> ANSI_X9_62.secp224r1
-      | `SECP256R1 -> ANSI_X9_62.secp256r1
-      | `SECP384R1 -> ANSI_X9_62.secp384r1
-      | `SECP521R1 -> ANSI_X9_62.secp521r1
     and pbe (s, i) = Some (`C3 (`PBE (s, i)))
     and pbkdf2 (s, i, k, m) = Some (`C3 (`PBKDF2 (s, i, k, m)))
     and pbes2 (oid, oid') = Some (`C3 (`PBES2 (oid, oid')))
     and octets data = Some (`C4 data)
     in
     function
-    | EC_pub id     -> (ANSI_X9_62.ec_pub_key , oid (curve id))
+    | EC_pub id     -> (ANSI_X9_62.ec_pub_key , oid (curve_to_oid id))
 
     | RSA           -> (PKCS1.rsa_encryption           , null)
     | MD2_RSA       -> (PKCS1.md2_rsa_encryption       , null)
