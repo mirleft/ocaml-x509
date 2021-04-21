@@ -11,8 +11,6 @@ open Asn_grammars
  * that handles unsupported algos anyway.
  *)
 
-type signature  = [ `RSA | `ECDSA | `ED25519 ]
-
 type ec_curve =
   [ `SECP224R1 | `SECP256R1 | `SECP384R1 | `SECP521R1 ]
 
@@ -172,34 +170,35 @@ and of_key_type = function
 
 (* XXX: No MD2 / MD4 / RIPEMD160 *)
 and to_signature_algorithm = function
-  | MD5_RSA       -> Some (`RSA  , `MD5)
-  | SHA1_RSA      -> Some (`RSA  , `SHA1)
-  | SHA256_RSA    -> Some (`RSA  , `SHA256)
-  | SHA384_RSA    -> Some (`RSA  , `SHA384)
-  | SHA512_RSA    -> Some (`RSA  , `SHA512)
-  | SHA224_RSA    -> Some (`RSA  , `SHA224)
-  | ECDSA_SHA1    -> Some (`ECDSA, `SHA1)
-  | ECDSA_SHA224  -> Some (`ECDSA, `SHA224)
-  | ECDSA_SHA256  -> Some (`ECDSA, `SHA256)
-  | ECDSA_SHA384  -> Some (`ECDSA, `SHA384)
-  | ECDSA_SHA512  -> Some (`ECDSA, `SHA512)
-  | ED25519       -> Some (`ED25519, `SHA512)
-  | _             -> None
+  | MD5_RSA -> Some (`RSA_PKCS1, `MD5)
+  | SHA1_RSA -> Some (`RSA_PKCS1, `SHA1)
+  | SHA256_RSA -> Some (`RSA_PKCS1, `SHA256)
+  | SHA384_RSA -> Some (`RSA_PKCS1, `SHA384)
+  | SHA512_RSA -> Some (`RSA_PKCS1, `SHA512)
+  | SHA224_RSA -> Some (`RSA_PKCS1, `SHA224)
+  | ECDSA_SHA1 -> Some (`ECDSA, `SHA1)
+  | ECDSA_SHA224 -> Some (`ECDSA, `SHA224)
+  | ECDSA_SHA256 -> Some (`ECDSA, `SHA256)
+  | ECDSA_SHA384 -> Some (`ECDSA, `SHA384)
+  | ECDSA_SHA512 -> Some (`ECDSA, `SHA512)
+  | ED25519 -> Some (`ED25519, `SHA512)
+  | _ -> None
 
-and[@ocaml.warning "-8"] of_signature_algorithm public_key_algorithm digest =
+and of_signature_algorithm public_key_algorithm digest =
   match public_key_algorithm, digest with
-  | (`RSA  , `MD5)    -> MD5_RSA
-  | (`RSA  , `SHA1)   -> SHA1_RSA
-  | (`RSA  , `SHA256) -> SHA256_RSA
-  | (`RSA  , `SHA384) -> SHA384_RSA
-  | (`RSA  , `SHA512) -> SHA512_RSA
-  | (`RSA  , `SHA224) -> SHA224_RSA
+  | (`RSA_PKCS1, `MD5) -> MD5_RSA
+  | (`RSA_PKCS1, `SHA1) -> SHA1_RSA
+  | (`RSA_PKCS1, `SHA256) -> SHA256_RSA
+  | (`RSA_PKCS1, `SHA384) -> SHA384_RSA
+  | (`RSA_PKCS1, `SHA512) -> SHA512_RSA
+  | (`RSA_PKCS1, `SHA224) -> SHA224_RSA
   | (`ECDSA, `SHA1)   -> ECDSA_SHA1
   | (`ECDSA, `SHA224) -> ECDSA_SHA224
   | (`ECDSA, `SHA256) -> ECDSA_SHA256
   | (`ECDSA, `SHA384) -> ECDSA_SHA384
   | (`ECDSA, `SHA512) -> ECDSA_SHA512
   | (`ED25519, _) -> ED25519
+  | _ -> failwith "unsupported signature scheme and hash"
 
 (* XXX
  *

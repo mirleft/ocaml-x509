@@ -86,6 +86,19 @@ module Key_type : sig
   val of_string : string -> (t, [> R.msg ]) result
   (** [of_string s] is [Ok key_type] if the string could be decoded as
       [key_type], or an [Error _]. *)
+
+  val pp : t Fmt.t
+  (** [pp ppf t] is a pretty printer of [t] on [ppf]. *)
+
+  (** The type of signature schemes. *)
+  type signature_scheme = [ `RSA_PSS | `RSA_PKCS1 | `ECDSA | `ED25519 ]
+
+  val pp_signature_scheme : signature_scheme Fmt.t
+  (** [pp_signature_scheme ppf s] is a pretty-printer of [s] on [ppf]. *)
+
+  val supports_signature_scheme : t -> signature_scheme -> bool
+  (** [supports_scheme key_type scheme] is [true] if the signature [scheme]
+      is supported with [key type]. *)
 end
 
 (** Public keys *)
@@ -131,8 +144,10 @@ module Public_key : sig
 
   (** [verify hash ~scheme ~signature key data] verifies whether the [signature]
       on [data] is valid using the [key], or not. The [signature] must be in
-      ASN.1 DER encoding. The [scheme] is only used for RSA keys. *)
-  val verify : Mirage_crypto.Hash.hash -> ?scheme:[ `PSS | `PKCS1 ] ->
+      ASN.1 DER encoding. The [scheme] defaults to [`RSA_PSS] for RSA,
+      [`ED25519] for ED25519, and [`ECDSA] for other EC keys. *)
+  val verify : Mirage_crypto.Hash.hash ->
+    ?scheme:Key_type.signature_scheme ->
     signature:Cstruct.t -> t ->
     [ `Message of Cstruct.t | `Digest of Cstruct.t ] ->
     (unit, [> R.msg ]) result
@@ -194,8 +209,10 @@ module Private_key : sig
 
   (** [sign hash ~scheme key data] signs [data] with [key] using [hash] and
       [scheme]. If [data] is [`Message _], the [hash] will be applied before
-      the signature. The [scheme] is only used for RSA keys. *)
-  val sign : Mirage_crypto.Hash.hash -> ?scheme:[ `PKCS1 | `PSS ] ->
+      the signature. The [scheme] defaults to [`RSA_PSS] for RSA keys,
+      [`ED25519] for ED25519, and [`ECDSA] for other EC keys. *)
+  val sign : Mirage_crypto.Hash.hash ->
+    ?scheme:Key_type.signature_scheme ->
     t -> [ `Digest of Cstruct.t | `Message of Cstruct.t ] ->
     (Cstruct.t, [> R.msg ]) result
 
@@ -504,7 +521,7 @@ module Certificate : sig
 
   (** [signature_algorithm certificate] is the algorithm used for the signature. *)
   val signature_algorithm : t ->
-    ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
+    (Key_type.signature_scheme * Mirage_crypto.Hash.hash) option
 
   (** [hostnames certficate] is the set of domain names this
       [certificate] is valid for.  Currently, these are the DNS names of the
@@ -782,7 +799,8 @@ module Signing_request : sig
   val info : t -> request_info
 
   (** [signature_algorithm signing_request] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
+  val signature_algorithm : t ->
+    (Key_type.signature_scheme * Mirage_crypto.Hash.hash) option
 
   (** [hostnames signing_request] is the set of domain names this
       [signing_request] is requesting. This is either the content of the DNS
@@ -883,7 +901,8 @@ module CRL : sig
   val crl_number : t -> int option
 
   (** [signature_algorithm t] is the algorithm used for the signature. *)
-  val signature_algorithm : t -> ([ `RSA | `ECDSA | `ED25519 ] * Mirage_crypto.Hash.hash) option
+  val signature_algorithm : t ->
+    (Key_type.signature_scheme * Mirage_crypto.Hash.hash) option
 
   (** {1 Validation and verification of CRLs} *)
 

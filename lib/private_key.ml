@@ -52,42 +52,38 @@ let public = function
   | `P384 priv -> `P384 (Mirage_crypto_ec.P384.Dsa.pub_of_priv priv)
   | `P521 priv -> `P521 (Mirage_crypto_ec.P521.Dsa.pub_of_priv priv)
 
-let sign hash ?(scheme = `PSS) key data =
+let sign hash ?scheme key data =
   let open Mirage_crypto_ec in
   let open Rresult.R.Infix in
   let hashed () = Public_key.hashed hash data
   and ecdsa_to_cs s = Algorithm.ecdsa_sig_to_cstruct s
   in
+  let scheme = Key_type.opt_signature_scheme ?scheme (key_type key) in
   try
-    match key with
-    | `RSA key ->
-      let open Mirage_crypto_pk in
-      begin match scheme with
-        | `PSS ->
-          let module H = (val (Mirage_crypto.Hash.module_of hash)) in
-          let module PSS = Rsa.PSS(H) in
-          hashed () >>| fun d -> PSS.sign ~key (`Digest d)
-        | `PKCS1 ->
-          hashed () >>| fun d -> Rsa.PKCS1.sign ~key ~hash (`Digest d)
-      end
-    | `ED25519 key ->
+    match key, scheme with
+    | `RSA key, `RSA_PSS ->
+      let module H = (val (Mirage_crypto.Hash.module_of hash)) in
+      let module PSS = Mirage_crypto_pk.Rsa.PSS(H) in
+      hashed () >>| fun d -> PSS.sign ~key (`Digest d)
+    | `RSA key, `RSA_PKCS1 ->
+      hashed () >>| fun d -> Mirage_crypto_pk.Rsa.PKCS1.sign ~key ~hash (`Digest d)
+    | `ED25519 key, `ED25519 ->
       begin match data with
         | `Message m -> Ok (Ed25519.sign ~key m)
         | `Digest _ -> Error (`Msg "Ed25519 only suitable with raw message")
       end
-    | `P224 key -> hashed () >>| fun d -> ecdsa_to_cs (P224.Dsa.sign ~key d)
-    | `P256 key -> hashed () >>| fun d -> ecdsa_to_cs (P256.Dsa.sign ~key d)
-    | `P384 key -> hashed () >>| fun d -> ecdsa_to_cs (P384.Dsa.sign ~key d)
-    | `P521 key -> hashed () >>| fun d -> ecdsa_to_cs (P521.Dsa.sign ~key d)
+    | #ecdsa as key, `ECDSA ->
+      hashed () >>| fun d ->
+      ecdsa_to_cs (match key with
+          | `P224 key -> P224.Dsa.sign ~key d
+          | `P256 key -> P256.Dsa.sign ~key d
+          | `P384 key -> P384.Dsa.sign ~key d
+          | `P521 key -> P521.Dsa.sign ~key d)
+    | _ -> Error (`Msg "invalid key and signature scheme combination")
   with
   | Mirage_crypto_pk.Rsa.Insufficient_key ->
     Error (`Msg "RSA key of insufficient length")
   | Message_too_long -> Error (`Msg "message too long")
-
-let signature_scheme = function
-  | `RSA _ -> `RSA
-  | `ED25519 _ -> `ED25519
-  | #ecdsa -> `ECDSA
 
 module Asn = struct
   open Asn.S

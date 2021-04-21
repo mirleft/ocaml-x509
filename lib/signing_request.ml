@@ -176,9 +176,11 @@ let create subject ?digest ?(extensions = Ext.empty) (key : Private_key.t) =
   let public_key = Private_key.public key in
   let info : request_info = { subject ; public_key ; extensions } in
   let info_cs = Asn.request_info_to_cs info in
-  Private_key.sign hash ~scheme:`PKCS1 key (`Message info_cs) >>| fun signature ->
+  let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+  Private_key.sign hash ~scheme key (`Message info_cs) >>| fun signature ->
   let signature_algorithm =
-    Algorithm.of_signature_algorithm (Private_key.signature_scheme key) hash
+    let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+    Algorithm.of_signature_algorithm scheme hash
   in
   let asn = { info ; signature_algorithm ; signature } in
   let raw = Asn.signing_request_to_cs asn in
@@ -196,7 +198,8 @@ let sign signing_request
   let hash = default_digest digest key in
   validate_signature allowed_hashes signing_request >>= fun () ->
   let signature_algo =
-    Algorithm.of_signature_algorithm (Private_key.signature_scheme key) hash
+    let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+    Algorithm.of_signature_algorithm scheme hash
   and info = signing_request.asn.info
   in
   let tbs_cert : Certificate.tBSCertificate = {
@@ -212,7 +215,8 @@ let sign signing_request
     extensions
   } in
   let tbs_raw = Certificate.Asn.tbs_certificate_to_cstruct tbs_cert in
-  Private_key.sign hash ~scheme:`PKCS1 key (`Message tbs_raw) >>| fun signature_val ->
+  let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+  Private_key.sign hash ~scheme key (`Message tbs_raw) >>| fun signature_val ->
   let asn = {
     Certificate.tbs_cert ;
     signature_algo ;

@@ -43,17 +43,17 @@ let is_self_signed cert = issuer_matches_subject cert cert
 
 let validate_raw_signature subject allowed_hashes msg sig_alg signature pk =
   match Algorithm.to_signature_algorithm sig_alg with
-  | Some (pk_typ, siga) ->
+  | Some (scheme, siga) ->
     (* we check that siga is a member of allowed_hashes, to ensure not
        using a weak one. *)
     if not (List.mem siga allowed_hashes) then
       Error (`Hash_not_allowed (subject, siga))
-    else if not (Public_key.sig_alg pk = pk_typ) then
+    else if not (Key_type.supports_signature_scheme (Public_key.key_type pk) scheme) then
       Error (`Unsupported_keytype (subject, pk))
     else
       Rresult.R.reword_error
         (function `Msg m -> `Bad_signature (subject, m))
-        (Public_key.verify siga ~scheme:`PKCS1 ~signature pk (`Message msg)) >>= fun () ->
+        (Public_key.verify siga ~scheme ~signature pk (`Message msg)) >>= fun () ->
       if not (List.mem siga sha2) then
         Log.warn (fun m -> m "%a signature uses %a, a weak hash algorithm"
                      Distinguished_name.pp subject Certificate.pp_hash siga);

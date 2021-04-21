@@ -111,7 +111,7 @@ let hashed hash data =
     let n = Cstruct.len d and m = Mirage_crypto.Hash.digest_size hash in
     if n = m then Ok d else Error (`Msg "digested data of invalid size")
 
-let verify hash ?(scheme = `PSS) ~signature key data =
+let verify hash ?scheme ~signature key data =
   let open Mirage_crypto_ec in
   let open Rresult.R.Infix in
   let ok_if_true p = if p then Ok () else Error (`Msg "bad signature") in
@@ -119,41 +119,32 @@ let verify hash ?(scheme = `PSS) ~signature key data =
     Rresult.R.reword_error (function `Parse s -> `Msg s)
       (Algorithm.ecdsa_sig_of_cstruct cs)
   in
-  match key with
-  | `RSA key ->
-    let open Mirage_crypto_pk in
-    begin match scheme with
-      | `PSS ->
-        let module H = (val (Mirage_crypto.Hash.module_of hash)) in
-        let module PSS = Rsa.PSS(H) in
-        hashed hash data >>= fun d ->
-        ok_if_true (PSS.verify ~key ~signature (`Digest d))
-      | `PKCS1 ->
-        let hashp x = x = hash in
-        hashed hash data >>= fun d ->
-        ok_if_true (Rsa.PKCS1.verify ~hashp ~key ~signature (`Digest d))
-    end
-  | `ED25519 key ->
+  let scheme = Key_type.opt_signature_scheme ?scheme (key_type key) in
+  match key, scheme with
+  | `RSA key, `RSA_PSS ->
+    let module H = (val (Mirage_crypto.Hash.module_of hash)) in
+    let module PSS = Mirage_crypto_pk.Rsa.PSS(H) in
+    hashed hash data >>= fun d ->
+    ok_if_true (PSS.verify ~key ~signature (`Digest d))
+  | `RSA key, `RSA_PKCS1 ->
+    let hashp x = x = hash in
+    hashed hash data >>= fun d ->
+    ok_if_true (Mirage_crypto_pk.Rsa.PKCS1.verify ~hashp ~key ~signature (`Digest d))
+  | `ED25519 key, `ED25519 ->
     begin match data with
       | `Message msg -> ok_if_true (Ed25519.verify ~key signature ~msg)
       | `Digest _ -> Error (`Msg "Ed25519 only suitable with raw message")
     end
-  | `P224 key ->
+  | #ecdsa as key, `ECDSA ->
     hashed hash data >>= fun d ->
     ecdsa_of_cs signature >>= fun s ->
-    ok_if_true (P224.Dsa.verify ~key s d)
-  | `P256 key ->
-    hashed hash data >>= fun d ->
-    ecdsa_of_cs signature >>= fun s ->
-    ok_if_true (P256.Dsa.verify ~key s d)
-  | `P384 key ->
-    hashed hash data >>= fun d ->
-    ecdsa_of_cs signature >>= fun s ->
-    ok_if_true (P384.Dsa.verify ~key s d)
-  | `P521 key ->
-    hashed hash data >>= fun d ->
-    ecdsa_of_cs signature >>= fun s ->
-    ok_if_true (P521.Dsa.verify ~key s d)
+    ok_if_true
+      (match key with
+       | `P224 key -> P224.Dsa.verify ~key s d
+       | `P256 key -> P256.Dsa.verify ~key s d
+       | `P384 key -> P384.Dsa.verify ~key s d
+       | `P521 key -> P521.Dsa.verify ~key s d)
+  | _ -> Error (`Msg "invalid key and signature scheme combination")
 
 let encode_der = Asn.pub_info_to_cstruct
 

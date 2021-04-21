@@ -8,6 +8,8 @@
 * FEATURE some private key utilities (of_cstruct, generate, sign), and
   Public_key.verify (#report #146, fix #147 @hannesm)
 * BREAKING rename hash_whitelist to allowed_hashes (#147 @hannesm)
+* BREAKING provide Key_type.signature_scheme and use across the API
+  (#147 @hannesm)
 
 ## v0.12.0 (2021-04-05)
 

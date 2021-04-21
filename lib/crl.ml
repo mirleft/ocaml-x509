@@ -202,7 +202,8 @@ let sign_tbs (tbs : tBS_CRL) key =
   match Algorithm.to_signature_algorithm tbs.signature with
   | None -> Error (`Msg "couldn't parse signature algorithm")
   | Some (_, hash) ->
-    Private_key.sign hash ~scheme:`PKCS1 key (`Message tbs_raw) >>| fun signature_val ->
+    let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+    Private_key.sign hash ~scheme key (`Message tbs_raw) >>| fun signature_val ->
     let asn = { tbs_crl = tbs ; signature_algo = tbs.signature ; signature_val } in
     let raw = Asn.crl_to_cstruct asn in
     { asn ; raw }
@@ -216,7 +217,8 @@ let revoke
     key =
   let digest = Signing_request.default_digest digest key in
   let signature =
-    Algorithm.of_signature_algorithm (Private_key.signature_scheme key) digest
+    let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+    Algorithm.of_signature_algorithm scheme digest
   in
   let tbs_crl = {
     version = `V2 ;
