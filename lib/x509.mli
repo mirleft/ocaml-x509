@@ -582,6 +582,7 @@ module Validation : sig
     | `Hash_not_allowed of Distinguished_name.t * Mirage_crypto.Hash.hash
     | `Unsupported_keytype of Distinguished_name.t * Public_key.t
     | `Unsupported_algorithm of Distinguished_name.t * string
+    | `Msg of string
   ]
 
   (** [pp_signature_error ppf sige] pretty-prints the signature error [sige] on
@@ -837,7 +838,7 @@ module Signing_request : sig
     ?digest:Mirage_crypto.Hash.hash -> ?serial:Z.t -> ?extensions:Extension.t ->
     ?subject:Distinguished_name.t ->
     Private_key.t -> Distinguished_name.t ->
-    (Certificate.t, [> R.msg | Validation.signature_error ]) result
+    (Certificate.t, Validation.signature_error) result
 end
 
 (** X.509 Certificate Revocation Lists. *)

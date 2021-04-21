@@ -12,6 +12,7 @@ type signature_error = [
   | `Hash_not_allowed of Distinguished_name.t * Mirage_crypto.Hash.hash
   | `Unsupported_keytype of Distinguished_name.t * Public_key.t
   | `Unsupported_algorithm of Distinguished_name.t * string
+  | `Msg of string
 ]
 
 let pp_signature_error ppf = function
@@ -30,6 +31,7 @@ let pp_signature_error ppf = function
   | `Unsupported_algorithm (subj, alg) ->
     Fmt.pf ppf "unsupported algorithm used to sign %a: %s"
       Distinguished_name.pp subj alg
+  | `Msg msg -> Fmt.string ppf msg
 
 let maybe_validate_hostname cert = function
   | None   -> true
