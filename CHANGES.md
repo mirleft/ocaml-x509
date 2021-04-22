@@ -1,4 +1,4 @@
-## v0.12.1 (2021-04-21)
+## v0.13.0 (2021-04-22)
 
 * FEATURE support for RFC 5915 "BEGIN EC PRIVATE KEY" pem encoded private keys
   (#147 @hannesm, requested by @ulrikstrid)
