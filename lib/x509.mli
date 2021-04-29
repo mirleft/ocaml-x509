@@ -1032,3 +1032,55 @@ module PKCS12 : sig
     string -> Certificate.t list -> Private_key.t ->
     t
 end
+
+
+module OCSP : sig
+  module Request : sig
+    type cert_id = {
+      hashAlgorithm : Algorithm.t;
+      issuerNameHash : Cstruct.t;
+      issuerKeyHash : Cstruct.t;
+      serialNumber : Z.t;
+    }
+    val pp_cert_id : Format.formatter -> cert_id -> unit
+
+    type request = {
+      reqCert : cert_id;
+      singleRequestExtensions : Extension.t option;
+    }
+    val pp_request : Format.formatter -> request -> unit
+    
+    type tbs_request = {
+      version : int;
+      requestorName : General_name.b option;
+      requestList : request list;
+      requestExtensions : Extension.t option;
+    }
+    val pp_tbs_request : Format.formatter -> tbs_request -> unit
+    
+    val version_v1 : int
+
+    type signature = {
+      signatureAlgorithm : Algorithm.t;
+      signature : Cstruct.t;
+      certs : Certificate.t list option;
+    }
+    val pp_signature : Format.formatter -> signature -> unit
+
+    type t = {
+      tbsRequest : tbs_request;
+      optionalSignature : signature option;
+    }
+    val pp : Format.formatter -> t -> unit
+
+    module Asn : sig
+      val cert_id : cert_id Asn.t
+      val request : request Asn.t
+      val tbs_request : tbs_request Asn.t
+      val signature : signature Asn.t
+      val ocsp_request : t Asn.t
+      val ocsp_request_of_cstruct : Cstruct.t -> (t, Asn.error) result
+      val ocsp_request_to_cstruct : t -> Cstruct.t
+    end
+  end
+end
