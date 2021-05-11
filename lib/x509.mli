@@ -1035,20 +1035,27 @@ end
 
 
 module OCSP : sig
+  val version_v1 : int
+
+  type cert_id = {
+    hashAlgorithm : Algorithm.t;
+    issuerNameHash : Cstruct.t;
+    issuerKeyHash : Cstruct.t;
+    serialNumber : Z.t;
+  }
+  val pp_cert_id : cert_id Fmt.t
+
+  module Asn_common : sig
+    val cert_id : cert_id Asn.t
+  end
+
   module Request : sig
-    type cert_id = {
-      hashAlgorithm : Algorithm.t;
-      issuerNameHash : Cstruct.t;
-      issuerKeyHash : Cstruct.t;
-      serialNumber : Z.t;
-    }
-    val pp_cert_id : Format.formatter -> cert_id -> unit
 
     type request = {
       reqCert : cert_id;
       singleRequestExtensions : Extension.t option;
     }
-    val pp_request : Format.formatter -> request -> unit
+    val pp_request : request Fmt.t
     
     type tbs_request = {
       version : int;
@@ -1056,31 +1063,121 @@ module OCSP : sig
       requestList : request list;
       requestExtensions : Extension.t option;
     }
-    val pp_tbs_request : Format.formatter -> tbs_request -> unit
+    val pp_tbs_request : tbs_request Fmt.t
     
-    val version_v1 : int
-
     type signature = {
       signatureAlgorithm : Algorithm.t;
       signature : Cstruct.t;
       certs : Certificate.t list option;
     }
-    val pp_signature : Format.formatter -> signature -> unit
+    val pp_signature : signature Fmt.t
 
     type t = {
       tbsRequest : tbs_request;
       optionalSignature : signature option;
     }
-    val pp : Format.formatter -> t -> unit
+    val pp : t Fmt.t
 
     module Asn : sig
-      val cert_id : cert_id Asn.t
       val request : request Asn.t
       val tbs_request : tbs_request Asn.t
       val signature : signature Asn.t
       val ocsp_request : t Asn.t
       val ocsp_request_of_cstruct : Cstruct.t -> (t, Asn.error) result
       val ocsp_request_to_cstruct : t -> Cstruct.t
+    end
+  end
+
+  module Response : sig
+    type status =
+      [ `InternalError
+      | `MalformedRequest
+      | `SigRequired
+      | `Successful
+      | `TryLater
+      | `Unauthorized ]
+
+    val status_to_int : status -> int
+    val status_of_int : int -> status
+    val pp_status : status Fmt.t
+
+    type revoked_info = {
+      revocationTime : Ptime.t;
+      revocationReason : Extension.reason option;
+    }
+
+    val pp_revoked_info : revoked_info Fmt.t
+
+    type cert_status = [ `Good | `Revoked of revoked_info | `Unknown ]
+
+    val pp_cert_status : cert_status Fmt.t
+
+    type single_response = {
+      certID : cert_id;
+      certStatus : cert_status;
+      thisUpdate : Ptime.t;
+      nextUpdate : Ptime.t option;
+      singleExtensions : Extension.t option;
+    }
+
+    val pp_single_response : single_response Fmt.t
+
+    type responder_id =
+      [ `ByKey of Cstruct.t | `ByName of Distinguished_name.t ]
+
+    val pp_responder_id : responder_id Fmt.t
+
+    type response_data = {
+      version : int;
+      responderID : responder_id;
+      producedAt : Ptime.t;
+      responses : single_response list;
+      responseExtensions : Extension.t option;
+    }
+
+    val pp_response_data : response_data Fmt.t
+
+    type basic_ocsp_response = {
+      tbsResponseData : response_data;
+      signatureAlgorithm : Algorithm.t;
+      signature : Cstruct.t;
+      certs : Certificate.t list option;
+    }
+
+    val pp_basic_ocsp_response : basic_ocsp_response Fmt.t
+
+    val make_basic_ocsp_response :
+      ?digest:Mirage_crypto.Hash.hash ->
+      ?certs:Certificate.t list ->
+      private_key:Private_key.t ->
+      response_data -> basic_ocsp_response
+
+    type t = {
+      responseStatus : status;
+      responseBytes : (Asn.oid * Cstruct.t) option;
+    }
+
+    val make_ocsp_response_success : basic_ocsp_response -> t
+
+    val pp : t Fmt.t
+
+
+    module Asn :
+    sig
+      val status : status Asn.t
+      val ocsp_response : t Asn.t
+      val ocsp_response_of_cs : Cstruct.t -> (t, Asn.error) Result.result
+      val ocsp_response_to_cs : t -> Cstruct.t
+      val revoked_info : revoked_info Asn.t
+      val cert_status : cert_status Asn.t
+      val single_response : single_response Asn.t
+      val responder_id : responder_id Asn.t
+      val response_data : response_data Asn.t
+      val response_data_of_cs : Cstruct.t -> (response_data, Asn.error) Result.result
+      val response_data_to_cs : response_data -> Cstruct.t
+      val basic_ocsp_response : basic_ocsp_response Asn.t
+      val basic_ocsp_response_of_cs : Cstruct.t -> (basic_ocsp_response, Asn.error) result
+      val basic_ocsp_response_to_cs : basic_ocsp_response -> Cstruct.t
     end
   end
 end

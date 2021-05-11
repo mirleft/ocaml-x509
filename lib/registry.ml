@@ -278,7 +278,8 @@ module Cert_extn = struct
     let authority_info_access = pe <| 1
     let ad = pkix <| 48
     let ad_ca_issuer = ad <| 2
-    and ad_ocsp = ad <| 1
+    let ad_ocsp = ad <| 1
+    let ad_ocsp_basic = ad_ocsp <| 1
   end
 
   module Extended_usage = struct
