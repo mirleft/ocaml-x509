@@ -1108,6 +1108,8 @@ module OCSP : sig
 
     val pp_revoked_info : revoked_info Fmt.t
 
+    val make_revoked_info : ?reason:Extension.reason -> Ptime.t -> revoked_info
+
     type cert_status = [ `Good | `Revoked of revoked_info | `Unknown ]
 
     val pp_cert_status : cert_status Fmt.t

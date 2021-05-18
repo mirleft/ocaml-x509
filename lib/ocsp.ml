@@ -294,6 +294,10 @@ module Response = struct
       (Fmt.option ~none:(Fmt.any "None") @@ Extension.pp_reason)
       revocationReason
 
+  let make_revoked_info ?reason revocationTime =
+    let revocationReason = reason in
+    {revocationTime;revocationReason}
+
    (* CertStatus ::= CHOICE {
     *     good        [0]     IMPLICIT NULL,
     *     revoked     [1]     IMPLICIT RevokedInfo,
@@ -465,15 +469,16 @@ module Response = struct
 
     let responder_id : responder_id Asn.t =
       let f = function
-        | `C1 dn -> `ByName dn
-        | `C2 hash -> `ByKey hash
+        | `C1 _ -> Asn.S.parse_error "wtf"
+        | `C2 dn -> `ByName dn
+        | `C3 hash -> `ByKey hash
       in
       let g = function
-        | `ByName dn -> `C1 dn
-        | `ByKey hash -> `C2 hash
+        | `ByName dn -> `C2 dn
+        | `ByKey hash -> `C3 hash
       in
       map f g @@
-      choice2 Distinguished_name.Asn.name octet_string
+      choice3 int Distinguished_name.Asn.name octet_string
 
     let response_data =
       let f (version,responderID,producedAt,responses,responseExtensions) =
@@ -484,13 +489,19 @@ module Response = struct
         {version;responderID;producedAt;responses;responseExtensions;}
       in
       let g {version;responderID;producedAt;responses;responseExtensions;} =
-        let version = Some version in
+        let version =
+          if version = version_v1 then
+            None
+          else
+            Some version
+        in
         (version,responderID,producedAt,responses,responseExtensions)
       in
       map f g @@
       sequence5
         (optional ~label:"version" @@ explicit 0 @@ int)
-        (required ~label:"responderID" responder_id)
+        (* there must not be [explicit 1], but openssl do so:( *)
+        (required ~label:"responderID" @@ explicit 1 @@ responder_id)
         (required ~label:"producedAt" generalized_time_no_frac_s)
         (required ~label:"responses" @@ sequence_of single_response)
         (optional ~label:"responseExtensions" @@ explicit 1 @@
@@ -525,7 +536,8 @@ module Response = struct
         (required ~label:"tbsResponseData" response_data)
         (required ~label:"signatureAlgorithm" Algorithm.identifier)
         (required ~label:"signature" bit_string_cs)
-        (optional ~label:"certs" @@ sequence_of Certificate.Asn.certificate)
+        (optional ~label:"certs" @@ explicit 0 @@
+         sequence_of Certificate.Asn.certificate)
 
     let basic_ocsp_response_of_cs,basic_ocsp_response_to_cs =
       projections_of Asn.der basic_ocsp_response
