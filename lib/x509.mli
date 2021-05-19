@@ -1152,7 +1152,7 @@ module OCSP : sig
       ?digest:Mirage_crypto.Hash.hash ->
       ?certs:Certificate.t list ->
       private_key:Private_key.t ->
-      response_data -> basic_ocsp_response
+      response_data -> (basic_ocsp_response, R.msg) result
 
     type t = {
       responseStatus : status;

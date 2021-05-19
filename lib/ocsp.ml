@@ -546,15 +546,13 @@ module Response = struct
 
   let make_basic_ocsp_response ?(digest=`SHA256) ?certs ~private_key tbsResponseData =
     let signatureAlgorithm = Algorithm.of_signature_algorithm
-        (Private_key.keytype private_key)
+        (Private_key.key_type private_key)
         digest
     in
     let response_data_der = Asn.response_data_to_cs tbsResponseData in
-    let signature = match private_key with
-      | `RSA priv ->
-        Mirage_crypto_pk.Rsa.PKCS1.sign ~hash:digest ~key:priv
-          (`Message response_data_der)
-    in
+    let open Rresult.R.Infix in
+    Private_key.sign digest ~scheme:`RSA_PKCS1
+      private_key (`Message response_data_der) >>| fun signature ->
     {tbsResponseData;signatureAlgorithm;signature;certs;}
 
   let make_ocsp_response_success basic_ocsp_response =
