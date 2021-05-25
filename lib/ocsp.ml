@@ -16,6 +16,18 @@ type cert_id = {
   serialNumber: Z.t;
 }
 
+let create_cert_id ?(hash=`SHA1) issuer serialNumber =
+  let hashAlgorithm = Algorithm.of_hash hash in
+  let issuerNameHash =
+    Certificate.subject issuer
+    |> Distinguished_name.encode_der
+    |> Mirage_crypto.Hash.digest hash
+  in
+  let issuerKeyHash = Public_key.fingerprint ~hash (Certificate.public_key issuer) in
+  {hashAlgorithm;issuerNameHash;issuerKeyHash;serialNumber}
+
+let cert_id_serial {serialNumber;_} = serialNumber
+
 let pp_cert_id ppf {hashAlgorithm;issuerNameHash;issuerKeyHash;serialNumber} =
   Fmt.pf ppf "CertID @[<1>{@ algo=%a;@ issuerNameHash=%a;@ issuerKeyHash=%a;@ serialNumber=%a@ }@]"
     Algorithm.pp hashAlgorithm
@@ -58,6 +70,9 @@ module Request = struct
     singleRequestExtensions: Extension.t option;
   }
 
+  let create_request ?singleRequestExtensions reqCert =
+    {reqCert;singleRequestExtensions}
+
   let pp_request ppf {reqCert;singleRequestExtensions;} =
     Fmt.pf ppf "Request @[<1>{@ reqCert=%a;@ singleRequestExtensions=%a;@ }@]"
       pp_cert_id reqCert
@@ -77,6 +92,10 @@ module Request = struct
     requestList: request list;
     requestExtensions: Extension.t option;
   }
+
+  let create_tbs_request ?requestorName ?requestExtensions requests =
+    {version=version_v1;requestorName;
+     requestList=requests;requestExtensions}
 
   let pp_tbs_request ppf {version;requestorName;requestList;requestExtensions;} =
     let pp_general_name ppf x =
@@ -127,6 +146,13 @@ module Request = struct
       pp_tbs_request tbsRequest
       (Fmt.option ~none:(Fmt.any "None") pp_signature) optionalSignature
 
+  let cert_ids {tbsRequest={requestList;_};_} =
+    let cert_ids = List.map (fun {reqCert;_} -> reqCert) requestList in
+    cert_ids
+
+  let requestor_name {tbsRequest={requestorName;_};_} =
+    requestorName
+
   module Asn_ = Asn
 
   module Asn = struct
@@ -166,6 +192,9 @@ module Request = struct
          explicit 1 General_name.Asn.general_name)
         (required ~label:"requestList" @@ sequence_of request)
         (optional ~label:"requestExtensions" @@ Extension.Asn.extensions_der)
+
+    let tbs_request_of_cs,tbs_request_to_cs =
+      projections_of Asn.der tbs_request
 
     let signature =
       let f (signatureAlgorithm,signature,certs) =
@@ -211,6 +240,32 @@ module Request = struct
 
   end
 
+  let decode_der = Asn.ocsp_request_of_cstruct
+  let encode_der = Asn.ocsp_request_to_cstruct
+
+
+  let create ?certs ?(digest=`SHA256) ?requestorName private_key cert_ids =
+    let requestList = List.map create_request cert_ids in
+    let tbsRequest = {
+      version=version_v1;
+      requestorName;
+      requestList;
+      requestExtensions=None;
+    } in
+    let signatureAlgorithm = Algorithm.of_signature_algorithm
+        (Private_key.key_type private_key)
+        digest
+    in
+    let tbs_request_der = Asn.tbs_request_to_cs tbsRequest in
+    let open Rresult.R.Infix in
+    Private_key.sign digest ~scheme:`RSA_PKCS1
+      private_key (`Message tbs_request_der) >>| fun signature ->
+    let optionalSignature = Some {
+        signature;
+        signatureAlgorithm;
+        certs;
+    } in
+    {tbsRequest;optionalSignature;}
 end
 
 
@@ -260,43 +315,16 @@ module Response = struct
     | `SigRequired -> Fmt.string ppf "SigRequired"
     | `Unauthorized -> Fmt.string ppf "Unauthorized"
 
-   (* ResponseBytes ::=       SEQUENCE {
-    *     responseType   OBJECT IDENTIFIER,
-    *     response       OCTET STRING } *)
-
-  (* OCSPResponse ::= SEQUENCE {
-   *     responseStatus         OCSPResponseStatus,
-   *     responseBytes          [0] EXPLICIT ResponseBytes OPTIONAL } *)
-
-  type t = {
-    responseStatus: status;
-    responseBytes: (Asn.oid * Cstruct.t) option;
-  }
-
-  let pp ppf {responseStatus;responseBytes;} =
-    Fmt.pf ppf "OCSPResponse @[<1>{@ responseStatus=%a;@ responseBytes=%a@ }@]"
-      pp_status responseStatus
-      (Fmt.option ~none:(Fmt.any "None") @@
-       Fmt.pair ~sep:Fmt.comma Asn.OID.pp Cstruct.hexdump_pp)
-      responseBytes
-
   (* RevokedInfo ::= SEQUENCE {
    *   revocationTime              GeneralizedTime,
    *   revocationReason    [0]     EXPLICIT CRLReason OPTIONAL } *)
-  type revoked_info = {
-    revocationTime: Ptime.t;
-    revocationReason: Extension.reason option;
-  }
+  type revoked_info = Ptime.t * Extension.reason option
 
-  let pp_revoked_info ppf {revocationTime;revocationReason;} =
+  let pp_revoked_info ppf (revocationTime,revocationReason) =
     Fmt.pf ppf "RevokedInfo @[<1>{@ revocationTime=%a;@ revocationReason=%a;@ }@]"
       Ptime.pp revocationTime
       (Fmt.option ~none:(Fmt.any "None") @@ Extension.pp_reason)
       revocationReason
-
-  let make_revoked_info ?reason revocationTime =
-    let revocationReason = reason in
-    {revocationTime;revocationReason}
 
    (* CertStatus ::= CHOICE {
     *     good        [0]     IMPLICIT NULL,
@@ -329,6 +357,11 @@ module Response = struct
     singleExtensions: Extension.t option;
   }
 
+  let create_single_response ?nextUpdate ?singleExtensions
+      certID certStatus thisUpdate =
+    {certID;certStatus;thisUpdate;nextUpdate;singleExtensions;}
+
+
   let pp_single_response ppf {certID;certStatus;thisUpdate;nextUpdate;singleExtensions;} =
     Fmt.pf ppf "SingleResponse @[<1>{@ certID=%a;@ certStatus=%a;@ thisUpdate=%a;@ nextUpdate=%a;@ singleExtensions=%a;@ }@]"
       pp_cert_id certID
@@ -337,6 +370,9 @@ module Response = struct
       (Fmt.option ~none:(Fmt.any "None") @@ Ptime.pp) nextUpdate
       (Fmt.option ~none:(Fmt.any "None") @@ Extension.pp) singleExtensions
 
+  let single_response_cert_id {certID;_} = certID
+
+  let single_response_status {certStatus;_} = certStatus
  
  (* ResponderID ::= CHOICE {
   *    byName               [1] Name,
@@ -348,6 +384,10 @@ module Response = struct
     | `ByName of Distinguished_name.t
     | `ByKey of Cstruct.t
   ]
+
+  let create_responder_id pubkey =
+    let pubkey_fp = Public_key.fingerprint ~hash:`SHA1 pubkey in
+    `ByKey pubkey_fp
 
   let pp_responder_id ppf = function
     | `ByName dn -> Fmt.pf ppf "ByName %a" Distinguished_name.pp dn
@@ -374,7 +414,7 @@ module Response = struct
       Ptime.pp producedAt
       (Fmt.list ~sep:Fmt.semi @@ pp_single_response) responses
       (Fmt.option ~none:(Fmt.any "None") @@ Extension.pp) responseExtensions
-  
+
    (* BasicOCSPResponse       ::= SEQUENCE {
     *    tbsResponseData      ResponseData,
     *    signatureAlgorithm   AlgorithmIdentifier,
@@ -395,41 +435,47 @@ module Response = struct
       (Fmt.option ~none:(Fmt.any "None") @@
        Fmt.list ~sep:Fmt.semi @@ Certificate.pp) certs
 
+  (* ResponseBytes ::=       SEQUENCE {
+   *     responseType   OBJECT IDENTIFIER,
+   *     response       OCTET STRING } *)
+
+  (* OCSPResponse ::= SEQUENCE {
+   *     responseStatus         OCSPResponseStatus,
+   *     responseBytes          [0] EXPLICIT ResponseBytes OPTIONAL } *)
+
+  type t = {
+    responseStatus: status;
+    responseBytes: (Asn.oid * basic_ocsp_response) option;
+  }
+
+  let pp ppf {responseStatus;responseBytes;} =
+    Fmt.pf ppf "OCSPResponse @[<1>{@ responseStatus=%a;@ responseBytes=%a@ }@]"
+      pp_status responseStatus
+      (Fmt.option ~none:(Fmt.any "None") @@
+       Fmt.pair ~sep:Fmt.comma Asn.OID.pp pp_basic_ocsp_response)
+      responseBytes
+
+  let status {responseStatus;_} = responseStatus
+
+  let responder_id = function
+    | {responseBytes=Some (_, {tbsResponseData={responderID;_};_});_} ->
+      Ok responderID
+    | _ -> Error (`Msg "this response has no responseBytes")
+
+  let responses = function
+    | {responseBytes=Some (_, {tbsResponseData={responses;_};_});_} ->
+      Ok responses
+    | _ -> Error (`Msg "this response has no responseBytes")
 
   module Asn = struct
     open Asn_grammars
     open Asn.S
-      (* open Registry *)
+    open Registry
 
     let status : status Asn.t =
       enumerated status_of_int status_to_int
 
-    let ocsp_response =
-      let f (responseStatus,responseBytes) =
-        {responseStatus;responseBytes}
-      in
-      let g {responseStatus;responseBytes} =
-        (responseStatus,responseBytes)
-      in
-      map f g @@
-      sequence2
-        (required ~label:"responseStatus" status)
-        (optional ~label:"responseBytes" @@ explicit 0 @@
-         sequence2
-           (required ~label:"responseType" oid)
-           (required ~label:"response" octet_string))
-
-    let ocsp_response_of_cs, ocsp_response_to_cs =
-      projections_of Asn.der ocsp_response
-
     let revoked_info =
-      let f (revocationTime,revocationReason) =
-        {revocationTime;revocationReason}
-      in
-      let g {revocationTime;revocationReason} =
-        (revocationTime,revocationReason)
-      in
-      map f g @@
       sequence2
         (required ~label:"revocationTime" generalized_time_no_frac_s)
         (optional ~label:"revocationReason" @@ explicit 0 @@ Extension.Asn.reason_enumerated)
@@ -542,23 +588,96 @@ module Response = struct
     let basic_ocsp_response_of_cs,basic_ocsp_response_to_cs =
       projections_of Asn.der basic_ocsp_response
 
+    let ocsp_basic_oid = Cert_extn.Private_internet_extensions.ad_ocsp_basic
+
+    let ocsp_response =
+      let f = function
+        | `Successful, None ->
+          parse_error "Successful status requires responseBytes"
+        | `Successful, Some (oid, response) ->
+          if Asn.OID.equal ocsp_basic_oid oid then
+            match basic_ocsp_response_of_cs response with
+            | Error e -> error e
+            | Ok basic_response ->
+              {responseStatus=`Successful;
+               responseBytes=Some (oid, basic_response)}
+          else
+            parse_error "expected OID ad_ocsp_basic"
+        | (`InternalError
+          | `MalformedRequest
+          | `SigRequired
+          | `TryLater
+          |`Unauthorized) as s, None ->
+          {responseStatus=s;responseBytes=None}
+        | _, Some _ -> parse_error "Only Successful status supports non empty responseBytes"
+      in
+      let g {responseStatus;responseBytes} =
+        let responseBytes = match responseBytes with
+          | Some (oid, basic_response) ->
+            let response = basic_ocsp_response_to_cs basic_response in
+            Some (oid, response)
+          | None -> None
+        in
+        (responseStatus,responseBytes)
+      in
+      map f g @@
+      sequence2
+        (required ~label:"responseStatus" status)
+        (optional ~label:"responseBytes" @@ explicit 0 @@
+         sequence2
+           (required ~label:"responseType" oid)
+           (required ~label:"response" octet_string))
+
+    let ocsp_response_of_cs, ocsp_response_to_cs =
+      projections_of Asn.der ocsp_response
+
   end
 
-  let make_basic_ocsp_response ?(digest=`SHA256) ?certs ~private_key tbsResponseData =
-    let signatureAlgorithm = Algorithm.of_signature_algorithm
-        (Private_key.key_type private_key)
-        digest
+  let decode_der = Asn.ocsp_response_of_cs
+  let encode_der = Asn.ocsp_response_to_cs
+
+  let create_basic_ocsp_response ?(digest=`SHA256) ?certs
+      ?responseExtensions
+      private_key responderID producedAt responses =
+    (* let producedAt = match producedAt with
+     *   | None -> Ptime_clock.now ()
+     *   | Some x -> x
+     * in *)
+    let scheme = Key_type.x509_default_scheme (Private_key.key_type private_key) in
+    let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest
     in
+    let tbsResponseData = {
+      version=version_v1;
+      responderID;
+      producedAt;
+      responses;
+      responseExtensions;
+    } in
     let response_data_der = Asn.response_data_to_cs tbsResponseData in
     let open Rresult.R.Infix in
-    Private_key.sign digest ~scheme:`RSA_PKCS1
+    Private_key.sign digest ~scheme
       private_key (`Message response_data_der) >>| fun signature ->
     {tbsResponseData;signatureAlgorithm;signature;certs;}
 
-  let make_ocsp_response_success basic_ocsp_response =
-    let oid = Registry.Cert_extn.Private_internet_extensions.ad_ocsp_basic in
-    let response = Asn.basic_ocsp_response_to_cs basic_ocsp_response in
+  let create_success ?digest ?certs
+      ?responseExtensions
+      private_key responderID producedAt responses =
+    let open Rresult.R.Infix in
+    create_basic_ocsp_response
+      ?digest ?certs ?responseExtensions private_key
+      responderID producedAt responses >>| fun response ->
+    let responseBytes = Some (Asn.ocsp_basic_oid, response) in
     {responseStatus=`Successful;
-     responseBytes=Some (oid, response);}
+     responseBytes}
+
+  let create status =
+    let status = match status with
+      | `MalformedRequest -> `MalformedRequest
+      | `InternalError -> `InternalError
+      | `TryLater -> `TryLater
+      | `SigRequired -> `SigRequired
+      | `Unauthorized -> `Unauthorized
+    in
+    {responseStatus=status;responseBytes=None}
 
 end
