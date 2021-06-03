@@ -1034,14 +1034,16 @@ module PKCS12 : sig
 end
 
 
-(** OCSP (Online Certificate Status Protocol) as described in rfc6960. *)
+(** OCSP (Online Certificate Status Protocol) as described in
+    {{:https://tools.ietf.org/html/rfc6960}RFC 6960}. *)
 module OCSP : sig
 
   (** type for CertID to distinguish requested certs *)
   type cert_id
 
   (** [create_cert_id issuer serial] creates cert_id for this serial *)
-  val create_cert_id : ?hash:Mirage_crypto.Hash.hash -> Certificate.t -> Z.t -> cert_id
+  val create_cert_id : ?hash:Mirage_crypto.Hash.hash -> Certificate.t -> Z.t ->
+    cert_id
 
   (** [cert_id_serial certid] is serial number of this certid *)
   val cert_id_serial : cert_id -> Z.t
@@ -1058,8 +1060,13 @@ module OCSP : sig
     (** [pp ppf request] pretty prints request *)
     val pp : t Fmt.t
 
-    (** [create ?certs ?digest ?requestorName privkey certids] creates request for given [certids] and signs it with [privkey] using [digest]. [requestorName] may be used by responder to distinguish requesters. [certs] may be used by responder to check requestor authority. *)
-    val create : ?certs:Certificate.t list -> ?digest:Mirage_crypto.Hash.hash -> ?requestorName:General_name.b -> Private_key.t -> cert_id list -> (t, R.msg) result
+    (** [create ~certs ~digest ~requestor_name privkey certids] creates request
+        for given [certids] and signs it with [privkey] using [digest].
+        [requestorName] may be used by responder to distinguish requesters.
+        [certs] may be used by responder to check requestor authority. *)
+    val create : ?certs:Certificate.t list -> ?digest:Mirage_crypto.Hash.hash ->
+      ?requestor_name:General_name.b -> Private_key.t -> cert_id list ->
+      (t, [> R.msg ]) result
 
     (** [requestor_name request] is requestorName from this request *)
     val requestor_name : t -> General_name.b option
@@ -1078,13 +1085,14 @@ module OCSP : sig
   module Response : sig
 
     (** type for OCSPResponseStatus *)
-    type status =
-      [ `InternalError
+    type status = [
+      | `InternalError
       | `MalformedRequest
       | `SigRequired
       | `Successful
       | `TryLater
-      | `Unauthorized ]
+      | `Unauthorized
+    ]
 
     (** [pp_status ppf status] pretty prints status *)
     val pp_status : status Fmt.t
@@ -1102,16 +1110,21 @@ module OCSP : sig
     (** type for SingleResponse *)
     type single_response
 
-    (** [create_single_response cert_id cert_status thisUpdate] creates response info for one cert, [thisUpdate] should be current time. *)
-    val create_single_response : ?nextUpdate:Ptime.t -> ?singleExtensions:Extension.t -> cert_id -> cert_status -> Ptime.t -> single_response
+    (** [create_single_response ~next_update ~single_extension cert_id
+        cert_status this_update] creates response info for one cert,
+        [this_update] should be current time. *)
+    val create_single_response : ?next_update:Ptime.t ->
+      ?single_extensions:Extension.t -> cert_id -> cert_status -> Ptime.t ->
+      single_response
 
-    (** [pp_single_response ppf single_response] pretty prints single response *)
+    (** [pp_single_response ppf response] pretty prints single [response] *)
     val pp_single_response : single_response Fmt.t
 
-    (** [single_response_cert_id single_response] is cert_id in this single response *)
+    (** [single_response_cert_id response] is cert_id in this single [response] *)
     val single_response_cert_id : single_response -> cert_id
 
-    (** [single_response_cert_id single_response] is cert_status in this single response *)
+    (** [single_response_cert_id response] is cert_status in this single
+        [response] *)
     val single_response_status : single_response -> cert_status
 
     (** type for ResponderID *)
@@ -1120,26 +1133,30 @@ module OCSP : sig
       | `ByName of Distinguished_name.t
     ]
 
-    (** [create_responder_id pubkey] creates responderID identified by this key. Note: Cstruct here contains SHA1 hash of public key, not itself. *)
-    val create_responder_id: Public_key.t -> responder_id
+    (** [create_responder_id pubkey] creates responderID identified by this key.
+        Note: Cstruct here contains SHA1 hash of public key, not itself. *)
+    val create_responder_id : Public_key.t -> responder_id
 
-    (** [pp_responder_id ppf responderID] pretty prints responderID *)
+    (** [pp_responder_id ppf responderID] pretty prints [responderID] *)
     val pp_responder_id : responder_id Fmt.t
 
     (** type for OCSPResponse *)
     type t
 
-    (** [create_success priv_key responderID producedAt responses] creates response and signs it with [priv_key]. [producedAt] should be current timestamp.*)
+    (** [create_success ~digest ~certs ~response_extensions priv_key
+        responderID producedAt responses] creates response and signs it with
+        [priv_key]. [producedAt] should be current timestamp. *)
     val create_success :
       ?digest:Mirage_crypto.Hash.hash ->
       ?certs:Certificate.t list ->
-      ?responseExtensions:Extension.t ->
+      ?response_extensions:Extension.t ->
       Private_key.t ->
       responder_id ->
       Ptime.t ->
-      single_response list -> (t, R.msg) result
+      single_response list -> (t, [> R.msg ]) result
 
-    (** [create status] creates error response. Successful status is not allowed here becasuse it requires responseBytes. *)
+    (** [create status] creates error response. Successful status is not
+        allowed here becasuse it requires responseBytes. *)
     val create : [
         | `MalformedRequest
         | `InternalError
@@ -1155,10 +1172,10 @@ module OCSP : sig
     val status : t -> status
 
     (** [responder_id request] is responder id from response *)
-    val responder_id : t -> (responder_id, R.msg) result
+    val responder_id : t -> (responder_id, [> R.msg ]) result
 
     (** [responses response] is a list of responses (status per certificate). *)
-    val responses : t -> (single_response list, R.msg) result
+    val responses : t -> (single_response list, [> R.msg ]) result
 
     (** [decode_der buffer] decodes response in buffer *)
     val decode_der : Cstruct.t -> (t, Asn.error) result

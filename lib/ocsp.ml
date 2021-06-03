@@ -2,7 +2,7 @@
 
 let version_v1 = 0
 
-(* 
+(*
  CertID          ::=     SEQUENCE {
       hashAlgorithm       AlgorithmIdentifier,
       issuerNameHash      OCTET STRING, -- Hash of issuer's DN
@@ -244,22 +244,21 @@ module Request = struct
   let encode_der = Asn.ocsp_request_to_cstruct
 
 
-  let create ?certs ?(digest=`SHA256) ?requestorName private_key cert_ids =
+  let create ?certs ?digest ?requestor_name:requestorName key cert_ids =
     let requestList = List.map create_request cert_ids in
     let tbsRequest = {
       version=version_v1;
       requestorName;
       requestList;
       requestExtensions=None;
-    } in
-    let signatureAlgorithm = Algorithm.of_signature_algorithm
-        (Private_key.key_type private_key)
-        digest
+    }
     in
-    let tbs_request_der = Asn.tbs_request_to_cs tbsRequest in
+    let digest = Signing_request.default_digest digest key in
+    let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+    let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest in
+    let tbs_der = Asn.tbs_request_to_cs tbsRequest in
     let open Rresult.R.Infix in
-    Private_key.sign digest ~scheme:`RSA_PKCS1
-      private_key (`Message tbs_request_der) >>| fun signature ->
+    Private_key.sign digest ~scheme key (`Message tbs_der) >>| fun signature ->
     let optionalSignature = Some {
         signature;
         signatureAlgorithm;
@@ -357,7 +356,8 @@ module Response = struct
     singleExtensions: Extension.t option;
   }
 
-  let create_single_response ?nextUpdate ?singleExtensions
+  let create_single_response ?next_update:nextUpdate
+      ?single_extensions:singleExtensions
       certID certStatus thisUpdate =
     {certID;certStatus;thisUpdate;nextUpdate;singleExtensions;}
 
@@ -373,7 +373,7 @@ module Response = struct
   let single_response_cert_id {certID;_} = certID
 
   let single_response_status {certStatus;_} = certStatus
- 
+
  (* ResponderID ::= CHOICE {
   *    byName               [1] Name,
   *    byKey                [2] KeyHash }
@@ -636,16 +636,12 @@ module Response = struct
   let decode_der = Asn.ocsp_response_of_cs
   let encode_der = Asn.ocsp_response_to_cs
 
-  let create_basic_ocsp_response ?(digest=`SHA256) ?certs
-      ?responseExtensions
-      private_key responderID producedAt responses =
-    (* let producedAt = match producedAt with
-     *   | None -> Ptime_clock.now ()
-     *   | Some x -> x
-     * in *)
-    let scheme = Key_type.x509_default_scheme (Private_key.key_type private_key) in
-    let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest
-    in
+  let create_basic_ocsp_response ?digest ?certs
+      ?response_extensions:responseExtensions key responderID producedAt
+      responses =
+    let digest = Signing_request.default_digest digest key in
+    let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+    let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest in
     let tbsResponseData = {
       version=version_v1;
       responderID;
@@ -653,18 +649,16 @@ module Response = struct
       responses;
       responseExtensions;
     } in
-    let response_data_der = Asn.response_data_to_cs tbsResponseData in
+    let resp_der = Asn.response_data_to_cs tbsResponseData in
     let open Rresult.R.Infix in
-    Private_key.sign digest ~scheme
-      private_key (`Message response_data_der) >>| fun signature ->
+    Private_key.sign digest ~scheme key (`Message resp_der) >>| fun signature ->
     {tbsResponseData;signatureAlgorithm;signature;certs;}
 
-  let create_success ?digest ?certs
-      ?responseExtensions
+  let create_success ?digest ?certs ?response_extensions
       private_key responderID producedAt responses =
     let open Rresult.R.Infix in
     create_basic_ocsp_response
-      ?digest ?certs ?responseExtensions private_key
+      ?digest ?certs ?response_extensions private_key
       responderID producedAt responses >>| fun response ->
     let responseBytes = Some (Asn.ocsp_basic_oid, response) in
     {responseStatus=`Successful;

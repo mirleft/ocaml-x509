@@ -1,6 +1,6 @@
 open X509
 
-(* 
+(*
 How files for test1 were generated:
 key.pem:
 openssl genpkey -algorithm RSA -out key.pem -outform PEM
@@ -10,7 +10,7 @@ openssl req -new -x509 -days 3650 -key key.pem -out certificate.pem -subj '/CN=e
 
 test1.pem:
 openssl req -new -key key.pem -nodes -out test1.csr \
-    -subj '/CN=test1.example.com/' 
+    -subj '/CN=test1.example.com/'
 openssl x509 -req -days 3650 -in test1.csr -CA certificate.pem \
     -CAkey key.pem -set_serial 10000 -out test1.pem
 openssl x509 -in test1.pem -noout -text
