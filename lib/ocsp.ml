@@ -515,7 +515,7 @@ module Response = struct
 
     let responder_id : responder_id Asn.t =
       let f = function
-        | `C1 _ -> Asn.S.parse_error "wtf"
+        | `C1 _ -> Asn.S.parse_error "unexpected responder ID (int)"
         | `C2 dn -> `ByName dn
         | `C3 hash -> `ByKey hash
       in
