@@ -87,25 +87,22 @@ module Request = struct
 
   *)
   type tbs_request = {
-    version: int;
     requestorName: General_name.b option;
     requestList: request list;
     requestExtensions: Extension.t option;
   }
 
   let create_tbs_request ?requestorName ?requestExtensions requests =
-    {version=version_v1;requestorName;
-     requestList=requests;requestExtensions}
+    { requestorName ; requestList=requests ; requestExtensions }
 
-  let pp_tbs_request ppf {version;requestorName;requestList;requestExtensions;} =
+  let pp_tbs_request ppf { requestorName ; requestList ; requestExtensions } =
     let pp_general_name ppf x =
       let open General_name in
       match x with
       | B (k, v) ->
         General_name.pp_k k ppf v
     in
-    Fmt.pf ppf "TBSRequest @[<1>{@ version=%d;@ requestorName=%a;@ requestList=[@ %a@ ];@ requestExtensions=%a@ }@]"
-      version
+    Fmt.pf ppf "TBSRequest @[<1>{@ requestorName=%a;@ requestList=[@ %a@ ];@ requestExtensions=%a@ }@]"
       (Fmt.option ~none:(Fmt.any "None") pp_general_name) requestorName
       (Fmt.list ~sep:Fmt.semi pp_request) requestList
       (Fmt.option ~none:(Fmt.any "None") Extension.pp) requestExtensions
@@ -174,16 +171,15 @@ module Request = struct
          explicit 0 Extension.Asn.extensions_der)
 
     let tbs_request =
-      let f (version,requestorName,requestList,requestExtensions) =
-        let version = match version with
-          | Some v -> v
-          | None -> version_v1
-        in
-        {version;requestorName;requestList;requestExtensions;}
+      let f (version, requestorName, requestList, requestExtensions) =
+        match version with
+        | Some v when v <> version_v1 ->
+          Asn.S.parse_error "unsupported version %d" v
+        | _ ->
+          { requestorName ; requestList ; requestExtensions }
       in
-      let g {version;requestorName;requestList;requestExtensions;} =
-        let version = Some version in
-        (version,requestorName,requestList,requestExtensions)
+      let g { requestorName ; requestList ; requestExtensions } =
+        (None, requestorName, requestList, requestExtensions)
       in
       map f g @@
       sequence4
@@ -247,7 +243,6 @@ module Request = struct
   let create ?certs ?digest ?requestor_name:requestorName key cert_ids =
     let requestList = List.map create_request cert_ids in
     let tbsRequest = {
-      version=version_v1;
       requestorName;
       requestList;
       requestExtensions=None;
@@ -400,16 +395,14 @@ module Response = struct
    *  responses                SEQUENCE OF SingleResponse,
    *  responseExtensions   [1] EXPLICIT Extensions OPTIONAL } *)
   type response_data = {
-    version: int;
     responderID: responder_id;
     producedAt: Ptime.t;
     responses: single_response list;
     responseExtensions: Extension.t option;
   }
 
-  let pp_response_data ppf {version;responderID;producedAt;responses;responseExtensions;} =
-    Fmt.pf ppf "ResponseData @[<1>{@ version=%d;@ responderID=%a;@ producedAt=%a;@ responses=%a;@ responseExtensions=%a@ }@]"
-      version
+  let pp_response_data ppf { responderID ; producedAt ; responses ; responseExtensions } =
+    Fmt.pf ppf "ResponseData @[<1>{@ responderID=%a;@ producedAt=%a;@ responses=%a;@ responseExtensions=%a@ }@]"
       pp_responder_id responderID
       Ptime.pp producedAt
       (Fmt.list ~sep:Fmt.semi @@ pp_single_response) responses
@@ -515,7 +508,7 @@ module Response = struct
 
     let responder_id : responder_id Asn.t =
       let f = function
-        | `C1 _ -> Asn.S.parse_error "unexpected responder ID (int)"
+        | `C1 _ -> Asn.S.parse_error "unexpected responder ID (integer value)"
         | `C2 dn -> `ByName dn
         | `C3 hash -> `ByKey hash
       in
@@ -527,21 +520,14 @@ module Response = struct
       choice3 int Distinguished_name.Asn.name octet_string
 
     let response_data =
-      let f (version,responderID,producedAt,responses,responseExtensions) =
-        let version = match version with
-          | Some v -> v
-          | None -> version_v1
-        in
-        {version;responderID;producedAt;responses;responseExtensions;}
+      let f (version, responderID, producedAt, responses, responseExtensions) =
+        match version with
+        | Some v when v <> version_v1 ->
+          Asn.S.parse_error "unsupported version %d" v
+        | _ -> { responderID ; producedAt ; responses ; responseExtensions }
       in
-      let g {version;responderID;producedAt;responses;responseExtensions;} =
-        let version =
-          if version = version_v1 then
-            None
-          else
-            Some version
-        in
-        (version,responderID,producedAt,responses,responseExtensions)
+      let g { responderID ; producedAt ; responses ; responseExtensions } =
+        (None, responderID, producedAt, responses, responseExtensions)
       in
       map f g @@
       sequence5
@@ -643,7 +629,6 @@ module Response = struct
     let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
     let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest in
     let tbsResponseData = {
-      version=version_v1;
       responderID;
       producedAt;
       responses;
