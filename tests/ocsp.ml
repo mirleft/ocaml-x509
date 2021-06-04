@@ -64,7 +64,8 @@ let test_request () =
 let test_response () =
   let open OCSP.Response in
   match decode_der (data "response.der") with
-  | Error _ -> Alcotest.fail "could not decode OCSP response"
+  | Error e ->
+    Alcotest.failf "could not decode OCSP response: %a" Asn.pp_error e
   | Ok response ->
     (* Fmt.pr "response=%a" pp response; *)
     let responder = match responder_id response with

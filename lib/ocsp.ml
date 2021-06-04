@@ -23,7 +23,9 @@ let create_cert_id ?(hash=`SHA1) issuer serialNumber =
     |> Distinguished_name.encode_der
     |> Mirage_crypto.Hash.digest hash
   in
-  let issuerKeyHash = Public_key.fingerprint ~hash (Certificate.public_key issuer) in
+  let issuerKeyHash =
+    Public_key.fingerprint ~hash (Certificate.public_key issuer)
+  in
   {hashAlgorithm;issuerNameHash;issuerKeyHash;serialNumber}
 
 let cert_id_serial {serialNumber;_} = serialNumber
@@ -36,7 +38,6 @@ let pp_cert_id ppf {hashAlgorithm;issuerNameHash;issuerKeyHash;serialNumber} =
     Z.pp_print serialNumber
 
 module Asn_common = struct
-  (* open Asn_grammars *)
   open Asn.S
 
   let cert_id =
@@ -155,7 +156,6 @@ module Request = struct
   module Asn = struct
     open Asn_grammars
     open Asn.S
-    (* open Registry *)
 
     let request =
       let f (reqCert, singleRequestExtensions) =
@@ -167,8 +167,8 @@ module Request = struct
       map f g @@
       sequence2
         (required ~label:"reqCert" Asn_common.cert_id)
-        (optional ~label:"singleRequestExtensions" @@
-         explicit 0 Extension.Asn.extensions_der)
+        (optional ~label:"singleRequestExtensions" @@ explicit 0
+           Extension.Asn.extensions_der)
 
     let tbs_request =
       let f (version, requestorName, requestList, requestExtensions) =
@@ -217,7 +217,8 @@ module Request = struct
       sequence3
         (required ~label:"signatureAlgorithm" Algorithm.identifier)
         (required ~label:"signature" bit_string_cs)
-        (optional ~label:"certs" @@ sequence_of Certificate.Asn.certificate)
+        (optional ~label:"certs" @@ explicit 0 @@
+         sequence_of Certificate.Asn.certificate)
 
     let ocsp_request =
       let f (tbsRequest,optionalSignature) =
@@ -238,7 +239,6 @@ module Request = struct
 
   let decode_der = Asn.ocsp_request_of_cstruct
   let encode_der = Asn.ocsp_request_to_cstruct
-
 
   let create ?certs ?digest ?requestor_name:requestorName key cert_ids =
     let requestList = List.map create_request cert_ids in
@@ -471,7 +471,8 @@ module Response = struct
     let revoked_info =
       sequence2
         (required ~label:"revocationTime" generalized_time_no_frac_s)
-        (optional ~label:"revocationReason" @@ explicit 0 @@ Extension.Asn.reason_enumerated)
+        (optional ~label:"revocationReason" @@ explicit 0 @@
+         Extension.Asn.reason_enumerated)
 
     let cert_status : cert_status Asn.t =
       let f = function
@@ -502,22 +503,22 @@ module Response = struct
         (required ~label:"certID" @@ Asn_common.cert_id)
         (required ~label:"certStatus" @@ cert_status)
         (required ~label:"thisUpdate" @@ generalized_time_no_frac_s)
-        (optional ~label:"nextUpdate" @@ explicit 0 @@ generalized_time_no_frac_s)
+        (optional ~label:"nextUpdate" @@ explicit 0 @@
+         generalized_time_no_frac_s)
         (optional ~label:"singleExtensions" @@ explicit 1 @@
          Extension.Asn.extensions_der)
 
     let responder_id : responder_id Asn.t =
       let f = function
-        | `C1 _ -> Asn.S.parse_error "unexpected responder ID (integer value)"
-        | `C2 dn -> `ByName dn
-        | `C3 hash -> `ByKey hash
+        | `C1 dn -> `ByName dn
+        | `C2 hash -> `ByKey hash
       in
       let g = function
-        | `ByName dn -> `C2 dn
-        | `ByKey hash -> `C3 hash
+        | `ByName dn -> `C1 dn
+        | `ByKey hash -> `C2 hash
       in
       map f g @@
-      choice3 int Distinguished_name.Asn.name octet_string
+      choice2 (explicit 1 Distinguished_name.Asn.name) (explicit 2 octet_string)
 
     let response_data =
       let f (version, responderID, producedAt, responses, responseExtensions) =
@@ -532,8 +533,7 @@ module Response = struct
       map f g @@
       sequence5
         (optional ~label:"version" @@ explicit 0 @@ int)
-        (* there must not be [explicit 1], but openssl do so:( *)
-        (required ~label:"responderID" @@ explicit 1 @@ responder_id)
+        (required ~label:"responderID" responder_id)
         (required ~label:"producedAt" generalized_time_no_frac_s)
         (required ~label:"responses" @@ sequence_of single_response)
         (optional ~label:"responseExtensions" @@ explicit 1 @@
