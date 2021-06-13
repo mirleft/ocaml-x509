@@ -920,7 +920,7 @@ module CRL : sig
     | `Next_update_scheduled of Distinguished_name.t * Ptime.t * Ptime.t
   ]
 
-  (** [pp_validation_error ppf vere] pretty-prints the CRL verification error
+  (** [pp_verification_error ppf vere] pretty-prints the CRL verification error
       [vere] on [ppf]. *)
   val pp_verification_error : verification_error Fmt.t
 
@@ -1060,13 +1060,19 @@ module OCSP : sig
     (** [pp ppf request] pretty prints request *)
     val pp : t Fmt.t
 
-    (** [create ~certs ~digest ~requestor_name privkey certids] creates request
-        for given [certids] and signs it with [privkey] using [digest].
+    (** [create ~certs ~digest ~requestor_name ~key certids] creates request
+        for given [certids] and, if [key] is provided, signs it using [digest].
         [requestorName] may be used by responder to distinguish requesters.
         [certs] may be used by responder to check requestor authority. *)
     val create : ?certs:Certificate.t list -> ?digest:Mirage_crypto.Hash.hash ->
-      ?requestor_name:General_name.b -> Private_key.t -> cert_id list ->
+      ?requestor_name:General_name.b -> ?key:Private_key.t -> cert_id list ->
       (t, [> R.msg ]) result
+
+    (** [validate request key] validates the signature of [request]
+        with the pulic [key]. *)
+    val validate : t -> ?allowed_hashes:Mirage_crypto.Hash.hash list ->
+      Public_key.t ->
+      (unit, [> Validation.signature_error | `No_signature ]) result
 
     (** [requestor_name request] is requestorName from this request *)
     val requestor_name : t -> General_name.b option
@@ -1156,7 +1162,7 @@ module OCSP : sig
       single_response list -> (t, [> R.msg ]) result
 
     (** [create status] creates error response. Successful status is not
-        allowed here becasuse it requires responseBytes. *)
+        allowed here because it requires responseBytes. *)
     val create : [
         | `MalformedRequest
         | `InternalError
@@ -1183,5 +1189,10 @@ module OCSP : sig
     (** [encode_der request] encodes response into buffer *)
     val encode_der : t -> Cstruct.t
 
+    (** [validate response key] validates the signature of [response]
+        with the pulic [key]. *)
+    val validate : t -> ?allowed_hashes:Mirage_crypto.Hash.hash list ->
+      Public_key.t ->
+      (unit, [> Validation.signature_error | `No_signature ]) result
   end
 end

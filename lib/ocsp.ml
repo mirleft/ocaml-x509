@@ -100,8 +100,7 @@ module Request = struct
     let pp_general_name ppf x =
       let open General_name in
       match x with
-      | B (k, v) ->
-        General_name.pp_k k ppf v
+      | B (k, v) -> General_name.pp_k k ppf v
     in
     Fmt.pf ppf "TBSRequest @[<1>{@ requestorName=%a;@ requestList=[@ %a@ ];@ requestExtensions=%a@ }@]"
       (Fmt.option ~none:(Fmt.any "None") pp_general_name) requestorName
@@ -134,21 +133,26 @@ module Request = struct
          tbsRequest                  TBSRequest,
          optionalSignature   [0]     EXPLICIT Signature OPTIONAL }
   *)
-  type t = {
+  type req = {
     tbsRequest: tbs_request;
     optionalSignature: signature option;
   }
 
-  let pp ppf {tbsRequest;optionalSignature} =
+  type t = {
+    raw : Cstruct.t ;
+    asn : req ;
+  }
+
+  let pp ppf { asn = { tbsRequest ; optionalSignature } ; _ } =
     Fmt.pf ppf "OCSPRequest @[<1>{@ tbsRequest=%a;@ optionalSignature=%a@ }@]"
       pp_tbs_request tbsRequest
       (Fmt.option ~none:(Fmt.any "None") pp_signature) optionalSignature
 
-  let cert_ids {tbsRequest={requestList;_};_} =
+  let cert_ids { asn = { tbsRequest = { requestList ; _ } ; _ } ; _ } =
     let cert_ids = List.map (fun {reqCert;_} -> reqCert) requestList in
     cert_ids
 
-  let requestor_name {tbsRequest={requestorName;_};_} =
+  let requestor_name { asn = { tbsRequest = { requestorName ; _ } ; _ } ; _ } =
     requestorName
 
   module Asn_ = Asn
@@ -237,10 +241,14 @@ module Request = struct
 
   end
 
-  let decode_der = Asn.ocsp_request_of_cstruct
-  let encode_der = Asn.ocsp_request_to_cstruct
+  let decode_der raw =
+    let open Rresult.R.Infix in
+    Asn.ocsp_request_of_cstruct raw >>| fun asn ->
+    { asn ; raw }
 
-  let create ?certs ?digest ?requestor_name:requestorName key cert_ids =
+  let encode_der { raw ; _ } = raw
+
+  let create ?certs ?digest ?requestor_name:requestorName ?key cert_ids =
     let requestList = List.map create_request cert_ids in
     let tbsRequest = {
       requestorName;
@@ -248,20 +256,32 @@ module Request = struct
       requestExtensions=None;
     }
     in
-    let digest = Signing_request.default_digest digest key in
-    let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
-    let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest in
-    let tbs_der = Asn.tbs_request_to_cs tbsRequest in
     let open Rresult.R.Infix in
-    Private_key.sign digest ~scheme key (`Message tbs_der) >>| fun signature ->
-    let optionalSignature = Some {
-        signature;
-        signatureAlgorithm;
-        certs;
-    } in
-    {tbsRequest;optionalSignature;}
-end
+    (match key with
+     | None -> Ok None
+     | Some key ->
+       let digest = Signing_request.default_digest digest key in
+       let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+       let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest in
+       let tbs_der = Asn.tbs_request_to_cs tbsRequest in
+       Private_key.sign digest ~scheme key (`Message tbs_der) >>| fun signature ->
+       Some { signature ; signatureAlgorithm ; certs; }) >>| fun optionalSignature ->
+    let asn = { tbsRequest ; optionalSignature } in
+    let raw = Asn.ocsp_request_to_cstruct asn in
+    { raw ; asn }
 
+  let validate { asn ; raw } ?(allowed_hashes = Validation.sha2) pub =
+    match asn.optionalSignature with
+    | None -> Error `No_signature
+    | Some sign ->
+      let tbs_raw = Validation.raw_cert_hack raw in
+      let dn =
+        let cn = "OCSP" in
+        [ Distinguished_name.(Relative_distinguished_name.singleton (CN cn)) ]
+      in
+      Validation.validate_raw_signature dn allowed_hashes tbs_raw
+        sign.signatureAlgorithm sign.signature pub
+end
 
 module Response = struct
 
@@ -355,7 +375,6 @@ module Response = struct
       ?single_extensions:singleExtensions
       certID certStatus thisUpdate =
     {certID;certStatus;thisUpdate;nextUpdate;singleExtensions;}
-
 
   let pp_single_response ppf {certID;certStatus;thisUpdate;nextUpdate;singleExtensions;} =
     Fmt.pf ppf "SingleResponse @[<1>{@ certID=%a;@ certStatus=%a;@ thisUpdate=%a;@ nextUpdate=%a;@ singleExtensions=%a;@ }@]"
@@ -646,8 +665,7 @@ module Response = struct
       ?digest ?certs ?response_extensions private_key
       responderID producedAt responses >>| fun response ->
     let responseBytes = Some (Asn.ocsp_basic_oid, response) in
-    {responseStatus=`Successful;
-     responseBytes}
+    {responseStatus=`Successful; responseBytes}
 
   let create status =
     let status = match status with
@@ -659,4 +677,15 @@ module Response = struct
     in
     {responseStatus=status;responseBytes=None}
 
+  let validate t ?(allowed_hashes = Validation.sha2) pub =
+    match t.responseBytes with
+    | None -> Error `No_signature
+    | Some (_oid, response) ->
+      let resp_der = Asn.response_data_to_cs response.tbsResponseData in
+      let dn =
+        let cn = "OCSP" in
+        [ Distinguished_name.(Relative_distinguished_name.singleton (CN cn)) ]
+      in
+      Validation.validate_raw_signature dn allowed_hashes resp_der
+        response.signatureAlgorithm response.signature pub
 end

@@ -68,6 +68,9 @@ let test_response () =
     Alcotest.failf "could not decode OCSP response: %a" Asn.pp_error e
   | Ok response ->
     (* Fmt.pr "response=%a" pp response; *)
+    (match validate response (Private_key.public responder_key) with
+     | Ok () -> ()
+     | Error _ -> Alcotest.fail "cannot verify the signature of OCSP response");
     let responder = match responder_id response with
       | Ok (`ByName r) -> r
       | Ok _ -> Alcotest.fail "expected responder identifyed by name"
@@ -103,8 +106,11 @@ let test_simple_responder () =
     let responder_id = `ByName responder_dn in
     Fmt.epr "keytype = %a" Key_type.pp (Private_key.key_type responder_key);
     match OCSP.Response.create_success ~certs:[responder_cert] responder_key responder_id now responses with
-    | Ok _ -> ()
     | Error (`Msg e) -> Alcotest.fail e
+    | Ok resp ->
+      match OCSP.Response.validate resp (Private_key.public responder_key) with
+      | Ok () -> ()
+      | Error _ -> Alcotest.fail "cannot verify the signature of OCSP response"
 
 let tests = [
   "OpenSSL request", `Quick, test_request ;
