@@ -1192,7 +1192,7 @@ module OCSP : sig
     (** [validate response key] validates the signature of [response]
         with the pulic [key]. *)
     val validate : t -> ?allowed_hashes:Mirage_crypto.Hash.hash list ->
-      Public_key.t ->
-      (unit, [> Validation.signature_error | `No_signature ]) result
+      ?now:Ptime.t -> Public_key.t ->
+      (unit, [> Validation.signature_error | `No_signature | `Time_invalid ]) result
   end
 end

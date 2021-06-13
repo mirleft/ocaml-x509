@@ -457,7 +457,7 @@ module Response = struct
 
   type t = {
     responseStatus: status;
-    responseBytes: (Asn.oid * basic_ocsp_response) option;
+    responseBytes: (Asn.oid * basic_ocsp_response * Cstruct.t) option;
   }
 
   let pp ppf {responseStatus;responseBytes;} =
@@ -465,17 +465,17 @@ module Response = struct
       pp_status responseStatus
       (Fmt.option ~none:(Fmt.any "None") @@
        Fmt.pair ~sep:Fmt.comma Asn.OID.pp pp_basic_ocsp_response)
-      responseBytes
+      (match responseBytes with None -> None | Some (a, b, _) -> Some (a, b))
 
   let status {responseStatus;_} = responseStatus
 
   let responder_id = function
-    | {responseBytes=Some (_, {tbsResponseData={responderID;_};_});_} ->
+    | {responseBytes=Some (_, {tbsResponseData={responderID;_};_}, _);_} ->
       Ok responderID
     | _ -> Error (`Msg "this response has no responseBytes")
 
   let responses = function
-    | {responseBytes=Some (_, {tbsResponseData={responses;_};_});_} ->
+    | {responseBytes=Some (_, {tbsResponseData={responses;_};_}, _);_} ->
       Ok responses
     | _ -> Error (`Msg "this response has no responseBytes")
 
@@ -558,7 +558,7 @@ module Response = struct
         (optional ~label:"responseExtensions" @@ explicit 1 @@
          Extension.Asn.extensions_der)
 
-    let response_data_of_cs,response_data_to_cs =
+    let response_data_of_cs, response_data_to_cs =
       projections_of Asn.der response_data
 
     let basic_ocsp_response =
@@ -605,7 +605,7 @@ module Response = struct
             | Error e -> error e
             | Ok basic_response ->
               {responseStatus=`Successful;
-               responseBytes=Some (oid, basic_response)}
+               responseBytes=Some (oid, basic_response, response)}
           else
             parse_error "expected OID ad_ocsp_basic"
         | (`InternalError
@@ -618,9 +618,7 @@ module Response = struct
       in
       let g {responseStatus;responseBytes} =
         let responseBytes = match responseBytes with
-          | Some (oid, basic_response) ->
-            let response = basic_ocsp_response_to_cs basic_response in
-            Some (oid, response)
+          | Some (oid, _basic_response, response) -> Some (oid, response)
           | None -> None
         in
         (responseStatus,responseBytes)
@@ -664,7 +662,8 @@ module Response = struct
     create_basic_ocsp_response
       ?digest ?certs ?response_extensions private_key
       responderID producedAt responses >>| fun response ->
-    let responseBytes = Some (Asn.ocsp_basic_oid, response) in
+    let raw_resp = Asn.basic_ocsp_response_to_cs response in
+    let responseBytes = Some (Asn.ocsp_basic_oid, response, raw_resp) in
     {responseStatus=`Successful; responseBytes}
 
   let create status =
@@ -677,15 +676,30 @@ module Response = struct
     in
     {responseStatus=status;responseBytes=None}
 
-  let validate t ?(allowed_hashes = Validation.sha2) pub =
+  let validate t ?(allowed_hashes = Validation.sha2) ?now pub =
     match t.responseBytes with
     | None -> Error `No_signature
-    | Some (_oid, response) ->
-      let resp_der = Asn.response_data_to_cs response.tbsResponseData in
+    | Some (_oid, response, raw_resp) ->
+      let resp_der = Validation.raw_cert_hack raw_resp in
       let dn =
         let cn = "OCSP" in
         [ Distinguished_name.(Relative_distinguished_name.singleton (CN cn)) ]
       in
+      let open Rresult.R.Infix in
       Validation.validate_raw_signature dn allowed_hashes resp_der
-        response.signatureAlgorithm response.signature pub
+        response.signatureAlgorithm response.signature pub >>= fun () ->
+      match now with
+      | None -> Ok ()
+      | Some now ->
+        if
+          List.for_all (fun single_resp ->
+              Ptime.is_later ~than:single_resp.thisUpdate now &&
+              match single_resp.nextUpdate with
+              | None -> true
+              | Some until -> Ptime.is_earlier ~than:until now)
+            response.tbsResponseData.responses
+        then
+          Ok ()
+        else
+          Error `Time_invalid
 end
