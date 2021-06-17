@@ -100,8 +100,7 @@ module Request = struct
     let pp_general_name ppf x =
       let open General_name in
       match x with
-      | B (k, v) ->
-        General_name.pp_k k ppf v
+      | B (k, v) -> General_name.pp_k k ppf v
     in
     Fmt.pf ppf "TBSRequest @[<1>{@ requestorName=%a;@ requestList=[@ %a@ ];@ requestExtensions=%a@ }@]"
       (Fmt.option ~none:(Fmt.any "None") pp_general_name) requestorName
@@ -134,21 +133,26 @@ module Request = struct
          tbsRequest                  TBSRequest,
          optionalSignature   [0]     EXPLICIT Signature OPTIONAL }
   *)
-  type t = {
+  type req = {
     tbsRequest: tbs_request;
     optionalSignature: signature option;
   }
 
-  let pp ppf {tbsRequest;optionalSignature} =
+  type t = {
+    raw : Cstruct.t ;
+    asn : req ;
+  }
+
+  let pp ppf { asn = { tbsRequest ; optionalSignature } ; _ } =
     Fmt.pf ppf "OCSPRequest @[<1>{@ tbsRequest=%a;@ optionalSignature=%a@ }@]"
       pp_tbs_request tbsRequest
       (Fmt.option ~none:(Fmt.any "None") pp_signature) optionalSignature
 
-  let cert_ids {tbsRequest={requestList;_};_} =
+  let cert_ids { asn = { tbsRequest = { requestList ; _ } ; _ } ; _ } =
     let cert_ids = List.map (fun {reqCert;_} -> reqCert) requestList in
     cert_ids
 
-  let requestor_name {tbsRequest={requestorName;_};_} =
+  let requestor_name { asn = { tbsRequest = { requestorName ; _ } ; _ } ; _ } =
     requestorName
 
   module Asn_ = Asn
@@ -237,10 +241,14 @@ module Request = struct
 
   end
 
-  let decode_der = Asn.ocsp_request_of_cstruct
-  let encode_der = Asn.ocsp_request_to_cstruct
+  let decode_der raw =
+    let open Rresult.R.Infix in
+    Asn.ocsp_request_of_cstruct raw >>| fun asn ->
+    { asn ; raw }
 
-  let create ?certs ?digest ?requestor_name:requestorName key cert_ids =
+  let encode_der { raw ; _ } = raw
+
+  let create ?certs ?digest ?requestor_name:requestorName ?key cert_ids =
     let requestList = List.map create_request cert_ids in
     let tbsRequest = {
       requestorName;
@@ -248,20 +256,32 @@ module Request = struct
       requestExtensions=None;
     }
     in
-    let digest = Signing_request.default_digest digest key in
-    let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
-    let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest in
-    let tbs_der = Asn.tbs_request_to_cs tbsRequest in
     let open Rresult.R.Infix in
-    Private_key.sign digest ~scheme key (`Message tbs_der) >>| fun signature ->
-    let optionalSignature = Some {
-        signature;
-        signatureAlgorithm;
-        certs;
-    } in
-    {tbsRequest;optionalSignature;}
-end
+    (match key with
+     | None -> Ok None
+     | Some key ->
+       let digest = Signing_request.default_digest digest key in
+       let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
+       let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest in
+       let tbs_der = Asn.tbs_request_to_cs tbsRequest in
+       Private_key.sign digest ~scheme key (`Message tbs_der) >>| fun signature ->
+       Some { signature ; signatureAlgorithm ; certs; }) >>| fun optionalSignature ->
+    let asn = { tbsRequest ; optionalSignature } in
+    let raw = Asn.ocsp_request_to_cstruct asn in
+    { raw ; asn }
 
+  let validate { asn ; raw } ?(allowed_hashes = Validation.sha2) pub =
+    match asn.optionalSignature with
+    | None -> Error `No_signature
+    | Some sign ->
+      let tbs_raw = Validation.raw_cert_hack raw in
+      let dn =
+        let cn = "OCSP" in
+        [ Distinguished_name.(Relative_distinguished_name.singleton (CN cn)) ]
+      in
+      Validation.validate_raw_signature dn allowed_hashes tbs_raw
+        sign.signatureAlgorithm sign.signature pub
+end
 
 module Response = struct
 
@@ -356,7 +376,6 @@ module Response = struct
       certID certStatus thisUpdate =
     {certID;certStatus;thisUpdate;nextUpdate;singleExtensions;}
 
-
   let pp_single_response ppf {certID;certStatus;thisUpdate;nextUpdate;singleExtensions;} =
     Fmt.pf ppf "SingleResponse @[<1>{@ certID=%a;@ certStatus=%a;@ thisUpdate=%a;@ nextUpdate=%a;@ singleExtensions=%a;@ }@]"
       pp_cert_id certID
@@ -438,7 +457,7 @@ module Response = struct
 
   type t = {
     responseStatus: status;
-    responseBytes: (Asn.oid * basic_ocsp_response) option;
+    responseBytes: (Asn.oid * basic_ocsp_response * Cstruct.t) option;
   }
 
   let pp ppf {responseStatus;responseBytes;} =
@@ -446,17 +465,17 @@ module Response = struct
       pp_status responseStatus
       (Fmt.option ~none:(Fmt.any "None") @@
        Fmt.pair ~sep:Fmt.comma Asn.OID.pp pp_basic_ocsp_response)
-      responseBytes
+      (match responseBytes with None -> None | Some (a, b, _) -> Some (a, b))
 
   let status {responseStatus;_} = responseStatus
 
   let responder_id = function
-    | {responseBytes=Some (_, {tbsResponseData={responderID;_};_});_} ->
+    | {responseBytes=Some (_, {tbsResponseData={responderID;_};_}, _);_} ->
       Ok responderID
     | _ -> Error (`Msg "this response has no responseBytes")
 
   let responses = function
-    | {responseBytes=Some (_, {tbsResponseData={responses;_};_});_} ->
+    | {responseBytes=Some (_, {tbsResponseData={responses;_};_}, _);_} ->
       Ok responses
     | _ -> Error (`Msg "this response has no responseBytes")
 
@@ -539,7 +558,7 @@ module Response = struct
         (optional ~label:"responseExtensions" @@ explicit 1 @@
          Extension.Asn.extensions_der)
 
-    let response_data_of_cs,response_data_to_cs =
+    let response_data_of_cs, response_data_to_cs =
       projections_of Asn.der response_data
 
     let basic_ocsp_response =
@@ -586,7 +605,7 @@ module Response = struct
             | Error e -> error e
             | Ok basic_response ->
               {responseStatus=`Successful;
-               responseBytes=Some (oid, basic_response)}
+               responseBytes=Some (oid, basic_response, response)}
           else
             parse_error "expected OID ad_ocsp_basic"
         | (`InternalError
@@ -599,9 +618,7 @@ module Response = struct
       in
       let g {responseStatus;responseBytes} =
         let responseBytes = match responseBytes with
-          | Some (oid, basic_response) ->
-            let response = basic_ocsp_response_to_cs basic_response in
-            Some (oid, response)
+          | Some (oid, _basic_response, response) -> Some (oid, response)
           | None -> None
         in
         (responseStatus,responseBytes)
@@ -645,9 +662,9 @@ module Response = struct
     create_basic_ocsp_response
       ?digest ?certs ?response_extensions private_key
       responderID producedAt responses >>| fun response ->
-    let responseBytes = Some (Asn.ocsp_basic_oid, response) in
-    {responseStatus=`Successful;
-     responseBytes}
+    let raw_resp = Asn.basic_ocsp_response_to_cs response in
+    let responseBytes = Some (Asn.ocsp_basic_oid, response, raw_resp) in
+    {responseStatus=`Successful; responseBytes}
 
   let create status =
     let status = match status with
@@ -659,4 +676,30 @@ module Response = struct
     in
     {responseStatus=status;responseBytes=None}
 
+  let validate t ?(allowed_hashes = Validation.sha2) ?now pub =
+    match t.responseBytes with
+    | None -> Error `No_signature
+    | Some (_oid, response, raw_resp) ->
+      let resp_der = Validation.raw_cert_hack raw_resp in
+      let dn =
+        let cn = "OCSP" in
+        [ Distinguished_name.(Relative_distinguished_name.singleton (CN cn)) ]
+      in
+      let open Rresult.R.Infix in
+      Validation.validate_raw_signature dn allowed_hashes resp_der
+        response.signatureAlgorithm response.signature pub >>= fun () ->
+      match now with
+      | None -> Ok ()
+      | Some now ->
+        if
+          List.for_all (fun single_resp ->
+              Ptime.is_later ~than:single_resp.thisUpdate now &&
+              match single_resp.nextUpdate with
+              | None -> true
+              | Some until -> Ptime.is_earlier ~than:until now)
+            response.tbsResponseData.responses
+        then
+          Ok ()
+        else
+          Error `Time_invalid
 end
