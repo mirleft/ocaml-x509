@@ -104,7 +104,7 @@ let test_simple_responder () =
     in
     let responses = List.map response_logic certids in
     let responder_id = `ByName responder_dn in
-    Fmt.epr "keytype = %a" Key_type.pp (Private_key.key_type responder_key);
+    (* Fmt.pr "keytype = %a" Key_type.pp (Private_key.key_type responder_key); *)
     match OCSP.Response.create_success ~certs:[responder_cert] responder_key responder_id now responses with
     | Error (`Msg e) -> Alcotest.fail e
     | Ok resp ->
