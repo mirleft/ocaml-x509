@@ -19,7 +19,7 @@ val create
 val sign
   :  ?allowed_hashes:Mirage_crypto.Hash.hash list
   -> ?digest:Mirage_crypto.Hash.hash
-  -> ?serial:Zarith.Z.t
+  -> ?serial:Z.t
   -> ?extensions:X509.Extension.t
   -> X509.Signing_request.t
   -> X509.Private_key.t
