@@ -1,0 +1,33 @@
+opam-version: "2.0"
+maintainer: [
+  "Hannes Mehnert <hannes@mehnert.org>"
+]
+authors: [
+  "Hannes Mehnert <hannes@mehnert.org>"
+  "David Kaloper <dk505@cam.ac.uk>"
+]
+license: "BSD-2-Clause"
+tags: "org:mirage"
+homepage: "https://github.com/mirleft/ocaml-x509"
+doc: "https://mirleft.github.io/ocaml-x509/doc"
+bug-reports: "https://github.com/mirleft/ocaml-x509/issues"
+depends: [
+  "ocaml" {>= "4.08.0"}
+  "dune" {>= "1.2"}
+  "x509" {= version}
+  "async" {>= "v0.14"}
+  "async_unix" {>= "v0.14"}
+  "async_find" {>= "v0.14"}
+  "core" {>= "v0.14"}
+  "ppx_jane" {>= "v0.14"}
+]
+build: [
+  ["dune" "subst"] {dev}
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j" jobs] {with-test}
+]
+dev-repo: "git+https://github.com/mirleft/ocaml-x509.git"
+synopsis: "Public Key Infrastructure (RFC 5280, PKCS), Async layer"
+description: """
+Async-friendly overlay for commonly used x509 functions
+"""

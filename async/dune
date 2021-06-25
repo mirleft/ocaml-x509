@@ -1,0 +1,6 @@
+(library
+ (name x509_async)
+ (public_name x509-async)
+ (preprocess (pps ppx_jane))
+ (libraries async async_find core x509))
+
