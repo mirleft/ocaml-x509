@@ -1,3 +1,8 @@
+## v0.14.1 (2021-08-04)
+
+* Use Cstruct.length instead of deprecated Cstruct.len, bump minimum cstruct
+  to 6.0.0 (#151 by @hannesm)
+
 ## v0.14.0 (2021-06-17)
 
 * FEATURE support Online Certificate Status Protocol (OCSP, RFC 6960)
