@@ -30,6 +30,7 @@ depends: [
   "domain-name" {>= "0.3.0"}
   "logs"
   "pbkdf"
+  "ipaddr" {>= "5.2.0"}
 ]
 build: [
   ["dune" "subst"] {dev}

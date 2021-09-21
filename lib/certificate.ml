@@ -240,3 +240,10 @@ let supports_hostname cert name =
   || (match wc_name_opt with
       | None -> false
       | Some wc_name -> Host.Set.mem (`Wildcard, wc_name) names)
+
+let ips { asn = cert ; _ } =
+  match Extension.ips cert.tbs_cert.extensions with
+  | None -> Ipaddr.Set.empty
+  | Some ips -> ips
+
+let supports_ip cert ip = Ipaddr.Set.mem ip (ips cert)

@@ -343,6 +343,28 @@ let hostnames exts =
       in
       if Host.Set.is_empty names then None else Some names
 
+let ips exts =
+  match find Subject_alt_name exts with
+  | None -> None
+  | Some (_, names) ->
+    match General_name.find IP names with
+    | None -> None
+    | Some xs ->
+      let ips =
+        List.fold_left (fun acc ip ->
+          let ip = Cstruct.to_string ip in
+          match
+            match String.length ip with
+            | 4 -> Result.map (fun ip -> Ipaddr.V4 ip) (Ipaddr.V4.of_octets ip)
+            | 16 -> Result.map (fun ip -> Ipaddr.V6 ip) (Ipaddr.V6.of_octets ip)
+            | _ -> Error (`Msg "unknown IP address kind")
+          with
+          | Ok ip -> Ipaddr.Set.add ip acc
+          | Error _ -> acc)
+        Ipaddr.Set.empty xs
+      in
+      if Ipaddr.Set.is_empty ips then None else Some ips
+
 module Asn = struct
   open Asn.S
   open Asn_grammars

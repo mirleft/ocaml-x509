@@ -7,4 +7,4 @@
                   key_type)
  (libraries asn1-combinators rresult fmt ptime cstruct mirage-crypto
             mirage-crypto-pk gmap domain-name base64 logs mirage-crypto-ec
-            pbkdf mirage-crypto-rng))
+            pbkdf mirage-crypto-rng ipaddr))
