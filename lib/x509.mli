@@ -711,8 +711,8 @@ module Validation : sig
       is [result].  First, all possible paths are constructed using the
       {!build_paths} function, the first certificate of the chain is verified to
       be a valid leaf certificate (no BasicConstraints extension) and contains
-      the given [host] (using {!hostnames}) or [ip] if specified (using {!ips};
-      if some path is valid, using
+      the given [host] (using {!Certificate.hostnames}) or [ip] if specified
+      (using {!Certificate.ips}; if some path is valid, using
       {!verify_chain}, the result will be [Ok] and contain the actual
       certificate chain and the trust anchor. *)
   val verify_chain_of_trust :
@@ -724,28 +724,33 @@ module Validation : sig
 
   (** {1 Fingerprint verification} *)
 
-  (** [trust_key_fingerprint host ~time ~hash ~fingerprint certificates] is
+  (** [trust_key_fingerprint ~ip ~host ~time ~hash ~fingerprint certificates] is
       [result], the first element of [certificates] is verified against the
       given [fingerprint] using {!Public_key.fingerprint}.  If [time] is
       provided, the certificate has to be valid at the given timestamp.  If
-      [host] is provided, the certificate is checked for this name. *)
+      [host] is provided, the certificate is checked for the given [host]
+      (using {!Certificate.hostnames}). If [ip] is provided, the certificate is
+      checked to include this IP address (using {!Certificate.ips}). *)
   val trust_key_fingerprint :
-    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t ->
-    Certificate.t list -> r
+    ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
+    time:(unit -> Ptime.t option) -> hash:Mirage_crypto.Hash.hash ->
+    fingerprint:Cstruct.t -> Certificate.t list -> r
 
   (** [trust_cert_fingerprint host ~time ~hash ~fingerprint certificates] is
       [result], the first element of [certificates] is verified to match the
       given [fingerprint] using {!Certificate.fingerprint}.  If [time] is
       provided, the certificate is checked to be valid in at the given
-      timestamp.  If [host] is provided, the certificate is checked for this
-      name. Note that {{!trust_key_fingerprint}public key pinning} has
+      timestamp. If [host] is provided, the certificate is checked for the given
+      [host] (using {!Certificate.hostnames}). If [ip] is provided, the
+      certificate is checked to include this IP address (using
+      {!Certificate.ips}). Note that
+      {{!trust_key_fingerprint}public key pinning} has
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
   val trust_cert_fingerprint :
-    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t ->
-    Certificate.t list -> r
+    ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
+    time:(unit -> Ptime.t option) -> hash:Mirage_crypto.Hash.hash ->
+    fingerprint:Cstruct.t -> Certificate.t list -> r
 end
 
 (** Certificate Signing request *)
@@ -971,11 +976,14 @@ end
 (** Certificate chain authenticators *)
 module Authenticator : sig
 
-  (** An authenticator [a] is a function type which takes a hostname and a
-      certificate stack to an authentication decision {!Validation.r}. *)
-  type t = host:[`host] Domain_name.t option -> Certificate.t list -> Validation.r
+  (** An authenticator [t] is a function type which takes optionally an IP
+      address, a hostname and a certificate stack to an authentication decision
+      {!Validation.r}. If [ip] is specified, it needs to be present in the
+      SubjectAlternativeName extension of the server certificate. *)
+  type t = ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
+    Certificate.t list -> Validation.r
 
-  (** [chain_of_trust ~time ~crls ~allowed_hashes ~ip trust_anchors] is
+  (** [chain_of_trust ~time ~crls ~allowed_hashes trust_anchors] is
       [authenticator], which uses the given [time] and list of [trust_anchors]
       to verify the certificate chain. All signatures must use a hash algorithm
       specified in [allowed_hashes], defaults to SHA-2.  Signatures on revocation
@@ -983,12 +991,9 @@ module Authenticator : sig
       an implementation of the algorithm described in
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC 5280}, using
       {!Validation.verify_chain_of_trust}.  The given trust anchors are not
-      validated, you can filter them with {!Validation.valid_cas} if desired.
-      If [ip] is specified, the server certificate needs to include the given
-      IP address in the SubjectAlternativeName extension. *)
+      validated, you can filter them with {!Validation.valid_cas} if desired. *)
   val chain_of_trust : time:(unit -> Ptime.t option) -> ?crls:CRL.t list ->
-    ?allowed_hashes:Mirage_crypto.Hash.hash list -> ?ip:Ipaddr.t ->
-    Certificate.t list -> t
+    ?allowed_hashes:Mirage_crypto.Hash.hash list -> Certificate.t list -> t
 
   (** [server_key_fingerprint ~time hash fingerprint] is an [authenticator]
       that uses the given [time] and [fingerprint] to verify that the

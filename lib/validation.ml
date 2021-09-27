@@ -452,27 +452,32 @@ let valid_cas ?(allowed_hashes = all_hashes) ?time cas =
       Rresult.R.is_ok (is_ca_cert_valid allowed_hashes time cert))
     cas
 
-let fingerprint_verification host now fingerprint fp = function
+let fingerprint_verification ?ip host now fingerprint fp = function
   | [] -> Error `EmptyCertificateChain
   | server::_ ->
     let computed_fingerprint = fp server in
     if Cstruct.equal computed_fingerprint fingerprint then
-      match validate_time now server, maybe_validate_hostname server host with
-      | true , true  -> Ok None
-      | false, _     -> Error (`LeafCertificateExpired (server, now))
-      | _    , false -> Error (`LeafInvalidName (server, host))
+      match
+        validate_time now server,
+        maybe_validate_hostname server host,
+        maybe_validate_ip server ip
+      with
+      | true , true , true  -> Ok None
+      | false, _    , _     -> Error (`LeafCertificateExpired (server, now))
+      | _    , false, _     -> Error (`LeafInvalidName (server, host))
+      | _    , _    , false -> Error (`LeafInvalidIP (server, ip))
     else
       Error (`InvalidFingerprint (server, computed_fingerprint, fingerprint))
 
-let trust_key_fingerprint ~host ~time ~hash ~fingerprint =
+let trust_key_fingerprint ?ip ~host ~time ~hash ~fingerprint =
   let now = time () in
   let fp cert = Public_key.fingerprint ~hash (Certificate.public_key cert) in
-  fingerprint_verification host now fingerprint fp
+  fingerprint_verification ?ip host now fingerprint fp
 
-let trust_cert_fingerprint ~host ~time ~hash ~fingerprint =
+let trust_cert_fingerprint ?ip ~host ~time ~hash ~fingerprint =
   let now = time () in
   let fp = Certificate.fingerprint hash in
-  fingerprint_verification host now fingerprint fp
+  fingerprint_verification ?ip host now fingerprint fp
 
 (* RFC5246 says 'root certificate authority MAY be omitted' *)
 
