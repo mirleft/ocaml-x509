@@ -689,8 +689,6 @@ module Validation : sig
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
-    | `ServerNameNotPresent of Certificate.t * [`host] Domain_name.t
-    | `NameNotInList of Certificate.t
     | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
   ]
 
@@ -726,33 +724,27 @@ module Validation : sig
 
   (** {1 Fingerprint verification} *)
 
-  (** [trust_key_fingerprint host ~time ~hash ~fingerprints certificates] is
+  (** [trust_key_fingerprint host ~time ~hash ~fingerprint certificates] is
       [result], the first element of [certificates] is verified against the
-      given [fingerprints] list using {!key_fingerprint}.  If [time] is
+      given [fingerprint] using {!Public_key.fingerprint}.  If [time] is
       provided, the certificate has to be valid at the given timestamp.  If
-      [host] is provided, the certificate is checked for this name.  The
-      [hostname] of the fingerprint list must match the name in the certificate,
-      using {!hostnames}. *)
+      [host] is provided, the certificate is checked for this name. *)
   val trust_key_fingerprint :
     host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash ->
-    fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
+    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t ->
     Certificate.t list -> r
 
-  (** [trust_cert_fingerprint host ~time ~hash ~fingerprints certificates] is
+  (** [trust_cert_fingerprint host ~time ~hash ~fingerprint certificates] is
       [result], the first element of [certificates] is verified to match the
-      given [fingerprints] list using {!fingerprint}.  If [time] is provided,
-      the certificate is checked to be valid in at the given timestamp.  If
-      [host] is provided, the certificate is checked for this name.  The
-      [hostname] of the fingerprint list must match the name in the
-      certificate, using {!hostnames}. Note that
-      {{!trust_key_fingerprint}public key pinning} has
+      given [fingerprint] using {!Certificate.fingerprint}.  If [time] is
+      provided, the certificate is checked to be valid in at the given
+      timestamp.  If [host] is provided, the certificate is checked for this
+      name. Note that {{!trust_key_fingerprint}public key pinning} has
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
   val trust_cert_fingerprint :
     host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash ->
-    fingerprints:([`host] Domain_name.t * Cstruct.t) list ->
+    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t ->
     Certificate.t list -> r
 end
 
@@ -998,24 +990,22 @@ module Authenticator : sig
     ?allowed_hashes:Mirage_crypto.Hash.hash list -> ?ip:Ipaddr.t ->
     Certificate.t list -> t
 
-  (** [server_key_fingerprint ~time hash fingerprints] is an [authenticator]
-      that uses the given [time] and list of [fingerprints] to verify that the
+  (** [server_key_fingerprint ~time hash fingerprint] is an [authenticator]
+      that uses the given [time] and [fingerprint] to verify that the
       fingerprint of the first element of the certificate chain matches the
       given fingerprint, using {!Validation.trust_key_fingerprint}. *)
   val server_key_fingerprint : time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash ->
-    fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
+    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
 
-  (** [server_cert_fingerprint ~time hash fingerprints] is an [authenticator]
-      that uses the given [time] and list of [fingerprints] to verify the first
+  (** [server_cert_fingerprint ~time hash fingerprint] is an [authenticator]
+      that uses the given [time] and [fingerprint] to verify the first
       element of the certificate chain, using
       {!Validation.trust_cert_fingerprint}.  Note that
       {{!server_key_fingerprint}public key pinning} has
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
   val server_cert_fingerprint : time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash ->
-    fingerprints:([`host] Domain_name.t * Cstruct.t) list -> t
+    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
 end
 
 (** PKCS12 archive files *)

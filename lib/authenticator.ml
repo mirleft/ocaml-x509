@@ -12,10 +12,10 @@ let chain_of_trust ~time ?crls ?(allowed_hashes = Validation.sha2) ?ip cas =
     Validation.verify_chain_of_trust ?ip ~host ~time ?revoked ~allowed_hashes
       ~anchors:cas certificates
 
-let server_key_fingerprint ~time ~hash ~fingerprints =
+let server_key_fingerprint ~time ~hash ~fingerprint =
   fun ~host certificates ->
-    Validation.trust_key_fingerprint ~host ~time ~hash ~fingerprints certificates
+    Validation.trust_key_fingerprint ~host ~time ~hash ~fingerprint certificates
 
-let server_cert_fingerprint ~time ~hash ~fingerprints =
+let server_cert_fingerprint ~time ~hash ~fingerprint =
   fun ~host certificates ->
-    Validation.trust_cert_fingerprint ~host ~time ~hash ~fingerprints certificates
+    Validation.trust_cert_fingerprint ~host ~time ~hash ~fingerprint certificates

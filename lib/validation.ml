@@ -311,20 +311,12 @@ let pp_chain_error ppf = function
   | #chain_validation_error as c -> pp_chain_validation_error ppf c
 
 type fingerprint_validation_error = [
-  | `ServerNameNotPresent of Certificate.t * [`host] Domain_name.t
-  | `NameNotInList of Certificate.t
   | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
 ]
 
 let pp_fingerprint_validation_error ppf = function
-  | `ServerNameNotPresent (c, n) ->
-    Fmt.pf ppf "server name %a was matched in the fingerprint list, but does not occur in certificate %a"
-      Domain_name.pp n Certificate.pp c
-  | `NameNotInList c ->
-    Fmt.pf ppf "certificate common name %a is not present in the fingerprint list"
-      Certificate.pp c
   | `InvalidFingerprint (c, c_fp, fp) ->
-    Fmt.pf ppf "fingerprint for %a (which is %a) does not match, expected %a"
+    Fmt.pf ppf "fingerprint for %a (computed %a) does not match, expected %a"
       Certificate.pp c Cstruct.hexdump_pp c_fp Cstruct.hexdump_pp fp
 
 type validation_error = [
@@ -460,40 +452,27 @@ let valid_cas ?(allowed_hashes = all_hashes) ?time cas =
       Rresult.R.is_ok (is_ca_cert_valid allowed_hashes time cert))
     cas
 
-let fingerprint_verification host now fingerprints fp = function
+let fingerprint_verification host now fingerprint fp = function
   | [] -> Error `EmptyCertificateChain
   | server::_ ->
-    let verify_fingerprint server fingerprints =
-      let fingerprint = fp server in
-      let fp_matches (_, fp') = Cstruct.equal fp' fingerprint in
-      if List.exists fp_matches fingerprints then
-        let name, _ = List.find fp_matches fingerprints in
-        if maybe_validate_hostname server (Some name) then
-          Ok None
-        else
-          Error (`ServerNameNotPresent (server, name))
-      else
-        let name_matches (n, _) = Certificate.supports_hostname server n in
-        if List.exists name_matches fingerprints then
-          let (_, fp) = List.find name_matches fingerprints in
-          Error (`InvalidFingerprint (server, fingerprint, fp))
-        else
-          Error (`NameNotInList server)
-    in
-    match validate_time now server, maybe_validate_hostname server host with
-    | true , true  -> verify_fingerprint server fingerprints
-    | false, _     -> Error (`LeafCertificateExpired (server, now))
-    | _    , false -> Error (`LeafInvalidName (server, host))
+    let computed_fingerprint = fp server in
+    if Cstruct.equal computed_fingerprint fingerprint then
+      match validate_time now server, maybe_validate_hostname server host with
+      | true , true  -> Ok None
+      | false, _     -> Error (`LeafCertificateExpired (server, now))
+      | _    , false -> Error (`LeafInvalidName (server, host))
+    else
+      Error (`InvalidFingerprint (server, computed_fingerprint, fingerprint))
 
-let trust_key_fingerprint ~host ~time ~hash ~fingerprints =
+let trust_key_fingerprint ~host ~time ~hash ~fingerprint =
   let now = time () in
   let fp cert = Public_key.fingerprint ~hash (Certificate.public_key cert) in
-  fingerprint_verification host now fingerprints fp
+  fingerprint_verification host now fingerprint fp
 
-let trust_cert_fingerprint ~host ~time ~hash ~fingerprints =
+let trust_cert_fingerprint ~host ~time ~hash ~fingerprint =
   let now = time () in
   let fp = Certificate.fingerprint hash in
-  fingerprint_verification host now fingerprints fp
+  fingerprint_verification host now fingerprint fp
 
 (* RFC5246 says 'root certificate authority MAY be omitted' *)
 
