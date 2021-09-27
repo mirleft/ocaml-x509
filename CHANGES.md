@@ -1,3 +1,15 @@
+## v0.15.0 (2021-09-27)
+
+* FEATURE support validation of an IP address in the leaf certificate
+  (#152 #153 @reynir @hannesm)
+* FEATURE provide Certificate.ips and Certificate.supports_ip
+  (#152 @reynir @hannesm)
+* BREAKING revise certificate and public key fingerprint authenticators API:
+  now a single fingerprint is supported, previously a list of pairs of
+  hostname and fingerprint was used (#153 @hannesm)
+* BREAKING The Authenticator.t type has been extended with ?ip:Ipaddr.t
+  (#153 @hannesm)
+
 ## v0.14.1 (2021-08-04)
 
 * Use Cstruct.length instead of deprecated Cstruct.len, bump minimum cstruct
