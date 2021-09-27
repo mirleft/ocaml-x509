@@ -534,6 +534,14 @@ module Certificate : sig
       [certificate] contains the given [hostname], using {!hostnames}. *)
   val supports_hostname : t -> [`host] Domain_name.t -> bool
 
+  (** [ips certificate] are the IP addresses the certificate is valid
+      for (as specified in SubjectAlternativeName extensioni). *)
+  val ips : t -> Ipaddr.Set.t
+
+  (** [supports_ip cert ip] is [true] if the [ip] is mentioned in
+      the SubjectAlternativeName extension, [false] otherwise. *)
+  val supports_ip : t -> Ipaddr.t -> bool
+
   (** [fingerprint hash cert] is [digest], the digest of [cert] using the
       specified [hash] algorithm *)
   val fingerprint : Mirage_crypto.Hash.hash -> t -> Cstruct.t
@@ -622,6 +630,7 @@ module Validation : sig
   (** The polymorphic variant of a leaf certificate validation error. *)
   type leaf_validation_error = [
     | `LeafCertificateExpired of Certificate.t * Ptime.t option
+    | `LeafInvalidIP of Certificate.t * Ipaddr.t option
     | `LeafInvalidName of Certificate.t * [`host] Domain_name.t option
     | `LeafInvalidVersion of Certificate.t
     | `LeafInvalidExtensions of Certificate.t
@@ -658,7 +667,7 @@ module Validation : sig
   (** [pp_chain_error ppf chain_error] pretty-prints the [chain_error]. *)
   val pp_chain_error : chain_error Fmt.t
 
-  (** [verify_chain ~host ~time ~revoked ~allowed_hashes ~anchors chain] is
+  (** [verify_chain ~ip ~host ~time ~revoked ~allowed_hashes ~anchors chain] is
       [result], either [Ok] and the trust anchor used to verify the chain, or
       [Error] and the chain error.  RFC 5280 describes the implemented
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}path validation}
@@ -668,9 +677,10 @@ module Validation : sig
       [chain] are checked, then a chain of trust from [anchors] to the server
       certificate is validated.  The path length constraints are checked.  The
       server certificate is checked to contain the given [host], using
-      {!hostnames}.  The returned certificate is the root of the chain, a member
-      of the given list of [anchors]. *)
-  val verify_chain : host:[`host] Domain_name.t option ->
+      {!hostnames}. If [ip] is specified, the certificate is checked to
+      contain the given [ip], using {!ips}. The returned certificate is the
+      root of the chain, a member of the given list of [anchors]. *)
+  val verify_chain : ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
     ?allowed_hashes:Mirage_crypto.Hash.hash list ->
@@ -699,15 +709,17 @@ module Validation : sig
 
   type r = ((Certificate.t list * Certificate.t) option, validation_error) result
 
-  (** [verify_chain_of_trust host ~time ~revoked ~allowed_hashes ~anchors certificates]
+  (** [verify_chain_of_trust ~ip ~host ~time ~revoked ~allowed_hashes ~anchors certificates]
       is [result].  First, all possible paths are constructed using the
       {!build_paths} function, the first certificate of the chain is verified to
       be a valid leaf certificate (no BasicConstraints extension) and contains
-      the given [host] (using {!hostnames}); if some path is valid, using
+      the given [host] (using {!hostnames}) or [ip] if specified (using {!ips};
+      if some path is valid, using
       {!verify_chain}, the result will be [Ok] and contain the actual
       certificate chain and the trust anchor. *)
   val verify_chain_of_trust :
-    host:[`host] Domain_name.t option -> time:(unit -> Ptime.t option) ->
+    ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
+    time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
     ?allowed_hashes:Mirage_crypto.Hash.hash list ->
     anchors:(Certificate.t list) -> Certificate.t list -> r
@@ -971,7 +983,7 @@ module Authenticator : sig
       certificate stack to an authentication decision {!Validation.r}. *)
   type t = host:[`host] Domain_name.t option -> Certificate.t list -> Validation.r
 
-  (** [chain_of_trust ~time ~crls ~allowed_hashes trust_anchors] is
+  (** [chain_of_trust ~time ~crls ~allowed_hashes ~ip trust_anchors] is
       [authenticator], which uses the given [time] and list of [trust_anchors]
       to verify the certificate chain. All signatures must use a hash algorithm
       specified in [allowed_hashes], defaults to SHA-2.  Signatures on revocation
@@ -979,9 +991,12 @@ module Authenticator : sig
       an implementation of the algorithm described in
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC 5280}, using
       {!Validation.verify_chain_of_trust}.  The given trust anchors are not
-      validated, you can filter them with {!Validation.valid_cas} if desired. *)
+      validated, you can filter them with {!Validation.valid_cas} if desired.
+      If [ip] is specified, the server certificate needs to include the given
+      IP address in the SubjectAlternativeName extension. *)
   val chain_of_trust : time:(unit -> Ptime.t option) -> ?crls:CRL.t list ->
-    ?allowed_hashes:Mirage_crypto.Hash.hash list -> Certificate.t list -> t
+    ?allowed_hashes:Mirage_crypto.Hash.hash list -> ?ip:Ipaddr.t ->
+    Certificate.t list -> t
 
   (** [server_key_fingerprint ~time hash fingerprints] is an [authenticator]
       that uses the given [time] and list of [fingerprints] to verify that the

@@ -37,6 +37,10 @@ let maybe_validate_hostname cert = function
   | None   -> true
   | Some x -> Certificate.supports_hostname cert x
 
+let maybe_validate_ip cert = function
+  | None -> true
+  | Some ip -> Certificate.supports_ip cert ip
+
 let issuer_matches_subject
     { Certificate.asn = parent ; _ } { Certificate.asn = cert ; _ } =
   Distinguished_name.equal parent.tbs_cert.subject cert.tbs_cert.issuer
@@ -235,6 +239,7 @@ let pp_ca_error ppf = function
 
 type leaf_validation_error = [
   | `LeafCertificateExpired of Certificate.t * Ptime.t option
+  | `LeafInvalidIP of Certificate.t * Ipaddr.t option
   | `LeafInvalidName of Certificate.t * [`host] Domain_name.t option
   | `LeafInvalidVersion of Certificate.t
   | `LeafInvalidExtensions of Certificate.t
@@ -245,6 +250,10 @@ let pp_leaf_validation_error ppf = function
     let pp_pt = Ptime.pp_human ~tz_offset_s:0 () in
     Fmt.pf ppf "leaf certificate %a expired (now %a)" Certificate.pp c
       Fmt.(option ~none:(unit "no timestamp provided") pp_pt) now
+  | `LeafInvalidIP (c, ip) ->
+    Fmt.pf ppf "leaf certificate %a does not contain the IP %a (IPs present: %a)"
+      Certificate.pp c Fmt.(option ~none:(unit "none") Ipaddr.pp) ip
+      Fmt.(list ~sep:(unit ", ") Ipaddr.pp) (Certificate.ips c |> Ipaddr.Set.elements)
   | `LeafInvalidName (c, n) ->
     Fmt.pf ppf "leaf certificate %a does not contain the name %a"
       Certificate.pp c Fmt.(option ~none:(unit "none") Domain_name.pp) n
@@ -368,18 +377,20 @@ let is_ca_cert_valid allowed_hashes now cert =
 let valid_ca ?(allowed_hashes = all_hashes) ?time cacert =
   is_ca_cert_valid allowed_hashes time cacert
 
-let is_server_cert_valid host now cert =
+let is_server_cert_valid ip host now cert =
   match
     validate_time now cert,
+    maybe_validate_ip cert ip,
     maybe_validate_hostname cert host,
     version_matches_extensions cert,
     validate_server_extensions cert
   with
-  | (true, true, true, true) -> Ok ()
-  | (false, _, _, _)         -> Error (`LeafCertificateExpired (cert, now))
-  | (_, false, _, _)         -> Error (`LeafInvalidName (cert, host))
-  | (_, _, false, _)         -> Error (`LeafInvalidVersion cert)
-  | (_, _, _, false)         -> Error (`LeafInvalidExtensions cert)
+  | (true, true, true, true, true) -> Ok ()
+  | (false, _, _, _, _)         -> Error (`LeafCertificateExpired (cert, now))
+  | (_, false, _, _, _)         -> Error (`LeafInvalidIP (cert, ip))
+  | (_, _, false, _, _)         -> Error (`LeafInvalidName (cert, host))
+  | (_, _, _, false, _)         -> Error (`LeafInvalidVersion cert)
+  | (_, _, _, _, false)         -> Error (`LeafInvalidExtensions cert)
 
 let signs hash pathlen trusted cert =
   match
@@ -417,12 +428,12 @@ let verify_single_chain now ?(revoked = fun ~issuer:_ ~cert:_ -> false) hash anc
   in
   climb 0 chain
 
-let verify_chain ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = function
+let verify_chain ?ip ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = function
   | [] -> Error `EmptyCertificateChain
   | server :: certs ->
     let now = time () in
     let anchors = List.filter (validate_time now) anchors in
-    is_server_cert_valid host now server >>= fun () ->
+    is_server_cert_valid ip host now server >>= fun () ->
     verify_single_chain now ?revoked allowed_hashes anchors (server :: certs)
 
 let rec any_m e f = function
@@ -431,12 +442,12 @@ let rec any_m e f = function
     | Ok ta -> Ok (Some (c, ta))
     | Error _ -> any_m e f cs
 
-let verify_chain_of_trust ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = function
+let verify_chain_of_trust ?ip ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = function
   | [] -> Error `EmptyCertificateChain
   | server :: certs ->
     let now = time () in
     (* verify server! *)
-    is_server_cert_valid host now server >>= fun () ->
+    is_server_cert_valid ip host now server >>= fun () ->
     (* build all paths *)
     let paths = build_paths server certs
     and anchors = List.filter (validate_time now) anchors
