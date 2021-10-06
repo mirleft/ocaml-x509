@@ -235,7 +235,7 @@ let pp_ca_error ppf = function
   | `CACertificateExpired (c, now) ->
     let pp_pt = Ptime.pp_human ~tz_offset_s:0 () in
     Fmt.pf ppf "CA certificate %a: expired (now %a)" Certificate.pp c
-      Fmt.(option ~none:(unit "no timestamp provided") pp_pt) now
+      Fmt.(option ~none:(any "no timestamp provided") pp_pt) now
 
 type leaf_validation_error = [
   | `LeafCertificateExpired of Certificate.t * Ptime.t option
@@ -249,14 +249,14 @@ let pp_leaf_validation_error ppf = function
   | `LeafCertificateExpired (c, now) ->
     let pp_pt = Ptime.pp_human ~tz_offset_s:0 () in
     Fmt.pf ppf "leaf certificate %a expired (now %a)" Certificate.pp c
-      Fmt.(option ~none:(unit "no timestamp provided") pp_pt) now
+      Fmt.(option ~none:(any "no timestamp provided") pp_pt) now
   | `LeafInvalidIP (c, ip) ->
     Fmt.pf ppf "leaf certificate %a does not contain the IP %a (IPs present: %a)"
-      Certificate.pp c Fmt.(option ~none:(unit "none") Ipaddr.pp) ip
-      Fmt.(list ~sep:(unit ", ") Ipaddr.pp) (Certificate.ips c |> Ipaddr.Set.elements)
+      Certificate.pp c Fmt.(option ~none:(any "none") Ipaddr.pp) ip
+      Fmt.(list ~sep:(any ", ") Ipaddr.pp) (Certificate.ips c |> Ipaddr.Set.elements)
   | `LeafInvalidName (c, n) ->
     Fmt.pf ppf "leaf certificate %a does not contain the name %a"
-      Certificate.pp c Fmt.(option ~none:(unit "none") Domain_name.pp) n
+      Certificate.pp c Fmt.(option ~none:(any "none") Domain_name.pp) n
   | `LeafInvalidVersion c ->
     Fmt.pf ppf "leaf certificate %a: version 3 is required for extensions" Certificate.pp c
   | `LeafInvalidExtensions c ->
@@ -280,7 +280,7 @@ let pp_chain_validation_error ppf = function
   | `IntermediateCertificateExpired (c, now) ->
     let pp_pt = Ptime.pp_human ~tz_offset_s:0 () in
     Fmt.pf ppf "intermediate certificate %a expired (now %a)" Certificate.pp c
-      Fmt.(option ~none:(unit "no timestamp provided") pp_pt) now
+      Fmt.(option ~none:(any "no timestamp provided") pp_pt) now
   | `IntermediateInvalidVersion c ->
     Fmt.pf ppf "intermediate certificate %a: version 3 is required for extensions"
       Certificate.pp c

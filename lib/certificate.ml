@@ -174,7 +174,7 @@ let pp ppf { asn ; _ } =
   let sigalg = Algorithm.to_signature_algorithm tbs.signature in
   Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %a"
     pp_version tbs.version Z.pp_print tbs.serial
-    Fmt.(option ~none:(unit "NONE") pp_sigalg) sigalg
+    Fmt.(option ~none:(any "NONE") pp_sigalg) sigalg
     Distinguished_name.pp tbs.issuer
     (Ptime.pp_human ~tz_offset_s:0 ()) (fst tbs.validity)
     (Ptime.pp_human ~tz_offset_s:0 ()) (snd tbs.validity)

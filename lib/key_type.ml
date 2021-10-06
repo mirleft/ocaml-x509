@@ -11,7 +11,7 @@ let of_string s =
   | Some kt -> Ok kt
   | None ->
     Rresult.R.error_msgf "unkown key type %s, supported are %a"
-      s Fmt.(list ~sep:(unit ", ") string) (List.map fst strings)
+      s Fmt.(list ~sep:(any ", ") string) (List.map fst strings)
 
 let pp ppf t = Fmt.string ppf (to_string t)
 

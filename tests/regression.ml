@@ -297,7 +297,7 @@ let host_set_test =
           (match typ with `Strict -> "" | `Wildcard -> "*.")
           Domain_name.pp name
       in
-      Fmt.(list ~sep:(unit ", ") pp_one) ppf (Host.Set.elements hs)
+      Fmt.(list ~sep:(any ", ") pp_one) ppf (Host.Set.elements hs)
     let equal = Host.Set.equal
   end in (module M: Alcotest.TESTABLE with type t = M.t)
 
