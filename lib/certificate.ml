@@ -135,22 +135,24 @@ let decode_pkcs1_digest_info cs =
 
 let encode_pkcs1_digest_info = Asn.pkcs1_digest_info_to_cstruct
 
+let ( let* ) = Result.bind
+
 let decode_der cs =
-  let open Rresult.R.Infix in
-  Asn_grammars.err_to_msg (Asn.certificate_of_cstruct cs) >>| fun asn ->
-  { asn ; raw = cs }
+  let* asn = Asn_grammars.err_to_msg (Asn.certificate_of_cstruct cs) in
+  Ok { asn ; raw = cs }
 
 let encode_der { raw ; _ } = raw
 
 let decode_pem_multiple cs =
-  let open Rresult.R.Infix in
-  Pem.parse cs >>= fun data ->
-  let certs = List.filter (fun (t, _) -> String.equal "CERTIFICATE" t) data in
+  let* data = Pem.parse cs in
+  let certs =
+    List.filter (fun (t, _) -> String.equal "CERTIFICATE" t) data
+  in
   Pem.foldM (fun (_, cs) -> decode_der cs) certs
 
 let decode_pem cs =
-  let open Rresult.R.Infix in
-  decode_pem_multiple cs >>= Pem.exactly_one ~what:"certificate"
+  let* certs = decode_pem_multiple cs in
+  Pem.exactly_one ~what:"certificate" certs
 
 let encode_pem v =
   Pem.unparse ~tag:"CERTIFICATE" (encode_der v)
