@@ -22,7 +22,6 @@ depends: [
   "mirage-crypto-pk"
   "mirage-crypto-ec" {>= "0.10.0"}
   "mirage-crypto-rng"
-  "rresult"
   "fmt" {>= "0.8.7"}
   "alcotest" {with-test}
   "cstruct-unix" {with-test & >= "3.0.0"}

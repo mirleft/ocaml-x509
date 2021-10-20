@@ -1,4 +1,4 @@
-open Rresult.R.Infix
+let ( let* ) = Result.bind
 
 let sha2 = [ `SHA256 ; `SHA384 ; `SHA512 ]
 let all_hashes = [ `MD5 ; `SHA1 ; `SHA224 ] @ sha2
@@ -57,9 +57,10 @@ let validate_raw_signature subject allowed_hashes msg sig_alg signature pk =
     else if not (Key_type.supports_signature_scheme (Public_key.key_type pk) scheme) then
       Error (`Unsupported_keytype (subject, pk))
     else
-      Rresult.R.reword_error
-        (function `Msg m -> `Bad_signature (subject, m))
-        (Public_key.verify siga ~scheme ~signature pk (`Message msg)) >>= fun () ->
+      let* () =
+        Result.map_error (function `Msg m -> `Bad_signature (subject, m))
+          (Public_key.verify siga ~scheme ~signature pk (`Message msg))
+      in
       if not (List.mem siga sha2) then
         Log.warn (fun m -> m "%a signature uses %a, a weak hash algorithm"
                      Distinguished_name.pp subject Certificate.pp_hash siga);
@@ -409,9 +410,9 @@ let rec validate_anchors revoked hash pathlen cert = function
 let verify_single_chain now ?(revoked = fun ~issuer:_ ~cert:_ -> false) hash anchors chain =
   let rec climb pathlen = function
     | cert :: issuer :: certs ->
-      is_cert_valid now issuer >>= fun () ->
-      (if revoked ~issuer ~cert then Error (`Revoked cert) else Ok ()) >>= fun () ->
-      signs hash pathlen issuer cert >>= fun () ->
+      let* () = is_cert_valid now issuer in
+      let* () = if revoked ~issuer ~cert then Error (`Revoked cert) else Ok () in
+      let* () = signs hash pathlen issuer cert in
       climb (succ pathlen) (issuer :: certs)
     | [c] ->
       let anchors = issuer anchors c in
@@ -425,7 +426,7 @@ let verify_chain ?ip ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = fu
   | server :: certs ->
     let now = time () in
     let anchors = List.filter (validate_time now) anchors in
-    is_server_cert_valid ip host now server >>= fun () ->
+    let* () = is_server_cert_valid ip host now server in
     verify_single_chain now ?revoked allowed_hashes anchors (server :: certs)
 
 let rec any_m e f = function
@@ -439,7 +440,7 @@ let verify_chain_of_trust ?ip ~host ~time ?revoked ?(allowed_hashes = sha2) ~anc
   | server :: certs ->
     let now = time () in
     (* verify server! *)
-    is_server_cert_valid ip host now server >>= fun () ->
+    let* () = is_server_cert_valid ip host now server in
     (* build all paths *)
     let paths = build_paths server certs
     and anchors = List.filter (validate_time now) anchors
@@ -449,7 +450,7 @@ let verify_chain_of_trust ?ip ~host ~time ?revoked ?(allowed_hashes = sha2) ~anc
 
 let valid_cas ?(allowed_hashes = all_hashes) ?time cas =
   List.filter (fun cert ->
-      Rresult.R.is_ok (is_ca_cert_valid allowed_hashes time cert))
+      Result.is_ok (is_ca_cert_valid allowed_hashes time cert))
     cas
 
 let fingerprint_verification ?ip host now fingerprint fp = function

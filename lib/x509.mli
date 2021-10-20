@@ -51,8 +51,6 @@
 
     {e %%VERSION%% - {{:%%PKG_HOMEPAGE%% }homepage}} *)
 
-open Rresult
-
 (** Hostnames (strict, wildcard), used for validation. *)
 module Host : sig
   (** The polymorphic variant for hostname validation. *)
@@ -83,7 +81,7 @@ module Key_type : sig
   val to_string : t -> string
   (** [to_string kt] is a string representation of [kt]. *)
 
-  val of_string : string -> (t, [> R.msg ]) result
+  val of_string : string -> (t, [> `Msg of string ]) result
   (** [of_string s] is [Ok key_type] if the string could be decoded as
       [key_type], or an [Error _]. *)
 
@@ -150,7 +148,7 @@ module Public_key : sig
     ?scheme:Key_type.signature_scheme ->
     signature:Cstruct.t -> t ->
     [ `Message of Cstruct.t | `Digest of Cstruct.t ] ->
-    (unit, [> R.msg ]) result
+    (unit, [> `Msg of string ]) result
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
@@ -158,10 +156,10 @@ module Public_key : sig
   val encode_der : t -> Cstruct.t
 
   (** [decode_der buffer] is [pubkey], the public key of the ASN.1 encoded buffer. *)
-  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** [decode_pem pem] is [t], where the public key of [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_pem : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** [encode_pem public_key] is [pem], the pem encoded public key. *)
   val encode_pem : t -> Cstruct.t
@@ -195,7 +193,7 @@ module Private_key : sig
 
   (** [of_cstruct data] decodes the buffer as private key. Only supported
       for elliptic curve keys. *)
-  val of_cstruct : Cstruct.t -> Key_type.t -> (t, [> R.msg ]) result
+  val of_cstruct : Cstruct.t -> Key_type.t -> (t, [> `Msg of string ]) result
 
   (** {1 Operations on private keys} *)
 
@@ -214,14 +212,14 @@ module Private_key : sig
   val sign : Mirage_crypto.Hash.hash ->
     ?scheme:Key_type.signature_scheme ->
     t -> [ `Digest of Cstruct.t | `Message of Cstruct.t ] ->
-    (Cstruct.t, [> R.msg ]) result
+    (Cstruct.t, [> `Msg of string ]) result
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
   (** [decode_der der] is [t], where the private key of [der] is
       extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo
       structure. *)
-  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** [encode_der key] is [der], the encoded private key as PKCS8 (RFC 5208,
       Section 5) PrivateKeyInfo structure. *)
@@ -229,7 +227,7 @@ module Private_key : sig
 
   (** [decode_pem pem] is [t], where the private key of [pem] is
       extracted. Both RSA PRIVATE KEY and PRIVATE KEY stanzas are supported. *)
-  val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_pem : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** [encode_pem key] is [pem], the encoded private key (using [PRIVATE KEY]). *)
   val encode_pem : t -> Cstruct.t
@@ -316,7 +314,7 @@ module Distinguished_name : sig
   val common_name : t -> string option
 
   (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs]. *)
-  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** [encode_der dn] is [cstruct], the ASN.1 encoded representation of the
       distinguished name [dn]. *)
@@ -472,7 +470,7 @@ module Certificate : sig
   (** [decode_pkcs1_digest_info buffer] is [hash, signature], the hash and raw
       signature of the given [buffer] in ASN.1 DER encoding, or an error. *)
   val decode_pkcs1_digest_info : Cstruct.t ->
-    (Mirage_crypto.Hash.hash * Cstruct.t, [> R.msg ]) result
+    (Mirage_crypto.Hash.hash * Cstruct.t, [> `Msg of string ]) result
 
   (** [encode_pkcs1_digest_info (hash, signature)] is [data], the ASN.1 DER
       encoded hash and signature. *)
@@ -490,7 +488,7 @@ module Certificate : sig
 
   (** [decode_der cstruct] is [certificate], the ASN.1 decoded [certificate]
       or an error. *)
-  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** [encode_der certificate] is [cstruct], the ASN.1 encoded representation of
       the [certificate]. *)
@@ -498,11 +496,11 @@ module Certificate : sig
 
   (** [decode_pem_multiple pem] is [t list], where all certificates of the [pem]
        are extracted *)
-  val decode_pem_multiple : Cstruct.t -> (t list, [> R.msg ]) result
+  val decode_pem_multiple : Cstruct.t -> (t list, [> `Msg of string ]) result
 
   (** [decode_pem pem] is [t], where the single certificate of the
       [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_pem : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** [encode_pem_multiple certificates] is [pem], the pem encoded certificates. *)
   val encode_pem_multiple : t list -> Cstruct.t
@@ -770,13 +768,13 @@ module Signing_request : sig
       is validated, and its hash algorithm must be in [allowed_hashes] (by
       default only SHA-2 is accepted). *)
   val decode_der : ?allowed_hashes:Mirage_crypto.Hash.hash list -> Cstruct.t ->
-    (t, [> R.msg ]) result
+    (t, [> `Msg of string ]) result
 
   (** [encode_der sr] is [cstruct], the ASN.1 encoded representation of the [sr]. *)
   val encode_der : t -> Cstruct.t
 
   (** [decode_pem pem] is [t], where the single signing request of the [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_pem : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** [encode_pem signing_request] is [pem], the pem encoded signing request. *)
   val encode_pem : t -> Cstruct.t
@@ -822,7 +820,7 @@ module Signing_request : sig
       a certification request using the given [subject], [digest] (defaults to
       [`SHA256]) and list of [extensions]. *)
   val create : Distinguished_name.t -> ?digest:Mirage_crypto.Hash.hash ->
-    ?extensions:Ext.t -> Private_key.t -> (t, [> R.msg ]) result
+    ?extensions:Ext.t -> Private_key.t -> (t, [> `Msg of string ]) result
 
   (** {1 Provision a signing request to a certificate} *)
 
@@ -871,7 +869,7 @@ module CRL : sig
 
   (** [decode_der buffer] is [crl], the certificate revocation list of the
       ASN.1 encoded buffer. *)
-  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** {1 Operations on CRLs} *)
 
@@ -956,21 +954,21 @@ module CRL : sig
     issuer:Distinguished_name.t ->
     this_update:Ptime.t -> ?next_update:Ptime.t ->
     ?extensions:Extension.t ->
-    revoked_cert list -> Private_key.t -> (t, [> R.msg ]) result
+    revoked_cert list -> Private_key.t -> (t, [> `Msg of string ]) result
 
   (** [revoke_certificate cert ~this_update ~next_update t priv] adds [cert] to
       the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificate : revoked_cert ->
     this_update:Ptime.t -> ?next_update:Ptime.t -> t -> Private_key.t ->
-    (t, [> R.msg ]) result
+    (t, [> `Msg of string ]) result
 
   (** [revoke_certificates certs ~this_update ~next_update t priv] adds [certs]
       to the revocation list, increments its counter, adjusts [this_update] and
       [next_update] timestamps, and digitally signs it using [priv]. *)
   val revoke_certificates : revoked_cert list ->
     this_update:Ptime.t -> ?next_update:Ptime.t -> t -> Private_key.t ->
-    (t, [> R.msg ]) result
+    (t, [> `Msg of string ]) result
 end
 
 (** Certificate chain authenticators *)
@@ -1020,7 +1018,7 @@ module PKCS12 : sig
   type t
 
   (** [decode_der buffer] is [t], the PKCS12 archive of [buffer]. *)
-  val decode_der : Cstruct.t -> (t, [> R.msg ]) result
+  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
 
   (** [encode_der t] is [buf], the PKCS12 encoded archive of [t]. *)
   val encode_der : t -> Cstruct.t
@@ -1030,7 +1028,7 @@ module PKCS12 : sig
   val verify : string -> t ->
     ([ `Certificate of Certificate.t | `Crl of CRL.t
      | `Private_key of Private_key.t | `Decrypted_private_key of Private_key.t ]
-       list, [> R.msg ]) result
+       list, [> `Msg of string ]) result
 
   (** [create ~mac ~algorithm ~iterations password certificates private_key]
       constructs a PKCS12 archive with [certificates] and [private_key]. They
@@ -1076,7 +1074,7 @@ module OCSP : sig
         [certs] may be used by responder to check requestor authority. *)
     val create : ?certs:Certificate.t list -> ?digest:Mirage_crypto.Hash.hash ->
       ?requestor_name:General_name.b -> ?key:Private_key.t -> cert_id list ->
-      (t, [> R.msg ]) result
+      (t, [> `Msg of string ]) result
 
     (** [validate request key] validates the signature of [request]
         with the pulic [key]. *)
@@ -1169,7 +1167,7 @@ module OCSP : sig
       Private_key.t ->
       responder_id ->
       Ptime.t ->
-      single_response list -> (t, [> R.msg ]) result
+      single_response list -> (t, [> `Msg of string ]) result
 
     (** [create status] creates error response. Successful status is not
         allowed here because it requires responseBytes. *)
@@ -1188,10 +1186,10 @@ module OCSP : sig
     val status : t -> status
 
     (** [responder_id request] is responder id from response *)
-    val responder_id : t -> (responder_id, [> R.msg ]) result
+    val responder_id : t -> (responder_id, [> `Msg of string ]) result
 
     (** [responses response] is a list of responses (status per certificate). *)
-    val responses : t -> (single_response list, [> R.msg ]) result
+    val responses : t -> (single_response list, [> `Msg of string ]) result
 
     (** [decode_der buffer] decodes response in buffer *)
     val decode_der : Cstruct.t -> (t, Asn.error) result
