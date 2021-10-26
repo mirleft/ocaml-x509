@@ -1,7 +1,7 @@
 ## v0.15.1 (2021-10-26)
 
-* avoid usae of deprecated functions of fmt
-* remove rresult dependency
+* avoid usae of deprecated functions of fmt (@hannesm)
+* remove rresult dependency (@hannesm)
 
 ## v0.15.0 (2021-09-27)
 
