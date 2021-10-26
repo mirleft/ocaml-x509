@@ -1,3 +1,8 @@
+## v0.15.1 (2021-10-26)
+
+* avoid usae of deprecated functions of fmt
+* remove rresult dependency
+
 ## v0.15.0 (2021-09-27)
 
 * FEATURE support validation of an IP address in the leaf certificate
