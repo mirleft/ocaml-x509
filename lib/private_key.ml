@@ -59,6 +59,21 @@ let of_cstruct data =
     let* k = ec_err (P521.Dsa.priv_of_cstruct data) in
     Ok (`P521 k)
 
+let of_string ?seed_or_data ?bits typ data =
+  match seed_or_data with
+  | None ->
+    begin match typ with
+      | `RSA -> Ok (generate ~seed:(Cstruct.of_string data) ?bits `RSA)
+      | _ ->
+        let* data = Base64.decode data in
+        of_cstruct (Cstruct.of_string data) typ
+    end
+  | Some `Seed ->
+    Ok (generate ~seed:(Cstruct.of_string data) ?bits typ)
+  | Some `Data ->
+    let* data = Base64.decode data in
+    of_cstruct (Cstruct.of_string data) typ
+
 let public = function
   | `RSA priv -> `RSA (Mirage_crypto_pk.Rsa.pub_of_priv priv)
   | `ED25519 priv -> `ED25519 (Mirage_crypto_ec.Ed25519.pub_of_priv priv)
