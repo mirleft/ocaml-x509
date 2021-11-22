@@ -1,3 +1,8 @@
+## v0.15.2 (2021-11-22)
+
+* Provide X509.Private_key.of_string (as used by awa and dns-certify). This
+  takes a b64 encoded raw private key or a seed. (@reynir @hannesm #155)
+
 ## v0.15.1 (2021-10-26)
 
 * avoid usae of deprecated functions of fmt (@hannesm)
