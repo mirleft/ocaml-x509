@@ -191,9 +191,17 @@ module Private_key : sig
   *)
   val generate : ?seed:Cstruct.t -> ?bits:int -> Key_type.t -> t
 
-  (** [of_cstruct data] decodes the buffer as private key. Only supported
+  (** [of_cstruct data type] decodes the buffer as private key. Only supported
       for elliptic curve keys. *)
   val of_cstruct : Cstruct.t -> Key_type.t -> (t, [> `Msg of string ]) result
+
+  (** [of_string ~seed_or_data ~bits type data] attempts to decode the data as a
+      private key. If [seed_or_data] is provided and [`Seed], the [data] is
+      taken as seed and {!generate} is used. If it is [`Data], {!of_cstruct} is
+      used with the Base64 decoded [data]. By default, if [type] is RSA, the
+      data is used as seed, otherwise directly as the private key data. *)
+  val of_string : ?seed_or_data:[`Seed | `Data] -> ?bits:int -> Key_type.t ->
+    string -> (t, [> `Msg of string ]) result
 
   (** {1 Operations on private keys} *)
 
