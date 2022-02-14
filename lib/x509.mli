@@ -1027,7 +1027,7 @@ module Authenticator : sig
         its key fingerprint
       - [cert(:<hash>)?<base64-encoded fingerprint>] to authenticate a peer via
         its certificate fingerprint
-      - [trust-anchor(:<base64-encoded DER certificate>)+ to authenticate a peer from
+      - [trust-anchor(:<base64-encoded DER certificate>)+] to authenticate a peer from
         a list of certificates
 
       It returns a function which expect a [now ()] function as an argument. *)
