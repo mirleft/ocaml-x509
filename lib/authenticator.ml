@@ -20,3 +20,52 @@ let server_key_fingerprint ~time ~hash ~fingerprint =
 let server_cert_fingerprint ~time ~hash ~fingerprint =
   fun ?ip ~host certificates ->
     Validation.trust_cert_fingerprint ?ip ~host ~time ~hash ~fingerprint certificates
+
+let of_fingerprint str =
+  let res =
+    let hash_of_string = function
+      | "md5" -> Some `MD5
+      | "sha" | "sha1" -> Some `SHA1
+      | "sha224" -> Some `SHA224
+      | "sha256" -> Some `SHA256
+      | "sha384" -> Some `SHA384
+      | "sha512" -> Some `SHA512
+      | _ -> None
+    in
+    match String.split_on_char ':' str with
+    | [] -> Error (`Msg (Fmt.str "Invalid fingerprint %S" str))
+    | [ fp ] -> Ok (`SHA256, fp)
+    | hash :: rest ->
+        match hash_of_string (String.lowercase_ascii hash) with
+        | Some hash -> Ok (hash, String.concat "" rest)
+        | None -> Error (`Msg (Fmt.str "Invalid hash algorithm: %S" hash))
+  in
+  match res with
+  | Error _ as err -> err
+  | Ok (hash, fp) ->
+    try Ok (hash, Cstruct.of_string (Base64.decode_exn fp))
+    with _ -> Error (`Msg (Fmt.str "Invalid base64 fingerprint value: %S" fp))
+
+let none ?ip:_ ~host:_ _ = Ok None
+
+let of_string ~time str =
+  let ( >|= ) x f = Result.map f x in
+  match String.split_on_char ':' str with
+  | "key" :: tls_key_fingerprint ->
+    let tls_key_fingerprint = String.concat ":" tls_key_fingerprint in
+    of_fingerprint tls_key_fingerprint >|= fun (hash, fingerprint) ->
+    server_key_fingerprint ~time ~hash ~fingerprint
+  | "cert" :: tls_cert_fingerprint ->
+    let tls_cert_fingerprint = String.concat ":" tls_cert_fingerprint in
+    of_fingerprint tls_cert_fingerprint >|= fun (hash, fingerprint) ->
+    server_cert_fingerprint ~time ~hash ~fingerprint
+  | "trust-anchor" :: certs ->
+    let certs = List.map Base64.decode certs in
+    let certs = List.map (Result.map Cstruct.of_string) certs in
+    let certs = List.map
+      (fun cert -> Result.bind cert Certificate.decode_der)
+      certs in
+    let certs = List.filter_map Result.to_option certs in
+    Ok (chain_of_trust ~time certs)
+  | [ "none" ] -> Ok none
+  | _ -> Error (`Msg (Fmt.str "Invalid TLS authenticator: %S" str))
