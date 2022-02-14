@@ -1019,7 +1019,7 @@ module Authenticator : sig
     hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
 
   val of_string : string
-    -> ((unit -> Ptime.t option) -> Authenticator.t, [> `Msg of string ]) result
+    -> ((unit -> Ptime.t option) -> t, [> `Msg of string ]) result
   (** [of_string str] tries to parse the given [str] to an
       {!type:Authenticator.t}. The format of it is:
       - [none] no authentication
