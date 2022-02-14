@@ -49,6 +49,7 @@ let of_fingerprint str =
 let none ?ip:_ ~host:_ _ = Ok None
 
 let of_string str =
+  let ( >>= ) = Result.bind in
   let ( >|= ) x f = Result.map f x in
   match String.split_on_char ':' str with
   | "key" :: tls_key_fingerprint ->
@@ -61,11 +62,11 @@ let of_string str =
     (fun time -> server_cert_fingerprint ~time ~hash ~fingerprint)
   | "trust-anchor" :: certs ->
     let certs = List.map Base64.decode certs in
-    let certs = List.map (Result.map Cstruct.of_string) certs in
-    let certs = List.map
-      (fun cert -> Result.bind cert Certificate.decode_der)
-      certs in
-    let certs = List.filter_map Result.to_option certs in
-    Ok (fun time -> chain_of_trust ~time certs)
+    List.fold_left (fun a x ->
+      match a, Result.(bind (map Cstruct.of_string x)) Certificate.decode_der with
+      | Ok a, Ok x -> Ok (x :: a)
+      | Error _ as err, _ -> err
+      | Ok _, (Error _ as err) -> err) (Ok []) certs >>= fun certs ->
+    Ok (fun time -> chain_of_trust ~time (List.rev certs))
   | [ "none" ] -> Ok (fun _ -> none)
   | _ -> Error (`Msg (Fmt.str "Invalid TLS authenticator: %S" str))
