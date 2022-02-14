@@ -1,3 +1,5 @@
+let ( let* ) = Result.bind
+
 type t = ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
   Certificate.t list -> Validation.r
 
@@ -22,51 +24,53 @@ let server_cert_fingerprint ~time ~hash ~fingerprint =
     Validation.trust_cert_fingerprint ?ip ~host ~time ~hash ~fingerprint certificates
 
 let of_fingerprint str =
-  let res =
-    let hash_of_string = function
-      | "md5" -> Some `MD5
-      | "sha" | "sha1" -> Some `SHA1
-      | "sha224" -> Some `SHA224
-      | "sha256" -> Some `SHA256
-      | "sha384" -> Some `SHA384
-      | "sha512" -> Some `SHA512
-      | _ -> None
+  let dec_b64 s =
+    let* d =
+      Result.map_error
+        (function `Msg m ->
+           `Msg (Fmt.str "Invalid base64 encoding in fingerprint (%s): %S" m s))
+        (Base64.decode s)
     in
-    match String.split_on_char ':' str with
-    | [] -> Error (`Msg (Fmt.str "Invalid fingerprint %S" str))
-    | [ fp ] -> Ok (`SHA256, fp)
-    | hash :: rest ->
-        match hash_of_string (String.lowercase_ascii hash) with
-        | Some hash -> Ok (hash, String.concat "" rest)
-        | None -> Error (`Msg (Fmt.str "Invalid hash algorithm: %S" hash))
+    Ok (Cstruct.of_string d)
   in
-  match res with
-  | Error _ as err -> err
-  | Ok (hash, fp) ->
-    try Ok (hash, Cstruct.of_string (Base64.decode_exn fp))
-    with _ -> Error (`Msg (Fmt.str "Invalid base64 fingerprint value: %S" fp))
-
-let none ?ip:_ ~host:_ _ = Ok None
+  let hash_of_string = function
+    | "md5" -> Ok `MD5
+    | "sha" | "sha1" -> Ok `SHA1
+    | "sha224" -> Ok `SHA224
+    | "sha256" -> Ok `SHA256
+    | "sha384" -> Ok `SHA384
+    | "sha512" -> Ok `SHA512
+    | hash -> Error (`Msg (Fmt.str "Unknown hash algorithm %S" hash))
+  in
+  match String.split_on_char ':' str with
+  | [ fp ] ->
+    let* fp = dec_b64 fp in
+    Ok (`SHA256, fp)
+  | [ hash ; fp ] ->
+    let* hash = hash_of_string (String.lowercase_ascii hash) in
+    let* fp = dec_b64 fp in
+    Ok (hash, fp)
+  | _ -> Error (`Msg (Fmt.str "Invalid fingerprint %S" str))
 
 let of_string str =
-  let ( >>= ) = Result.bind in
-  let ( >|= ) x f = Result.map f x in
   match String.split_on_char ':' str with
   | "key" :: tls_key_fingerprint ->
     let tls_key_fingerprint = String.concat ":" tls_key_fingerprint in
-    of_fingerprint tls_key_fingerprint >|= fun (hash, fingerprint) ->
-    (fun time -> server_key_fingerprint ~time ~hash ~fingerprint)
+    let* hash, fingerprint = of_fingerprint tls_key_fingerprint in
+    Ok (fun time -> server_key_fingerprint ~time ~hash ~fingerprint)
   | "cert" :: tls_cert_fingerprint ->
     let tls_cert_fingerprint = String.concat ":" tls_cert_fingerprint in
-    of_fingerprint tls_cert_fingerprint >|= fun (hash, fingerprint) ->
-    (fun time -> server_cert_fingerprint ~time ~hash ~fingerprint)
+    let* hash, fingerprint = of_fingerprint tls_cert_fingerprint in
+    Ok (fun time -> server_cert_fingerprint ~time ~hash ~fingerprint)
   | "trust-anchor" :: certs ->
-    let certs = List.map Base64.decode certs in
-    List.fold_left (fun a x ->
-      match a, Result.(bind (map Cstruct.of_string x)) Certificate.decode_der with
-      | Ok a, Ok x -> Ok (x :: a)
-      | Error _ as err, _ -> err
-      | Ok _, (Error _ as err) -> err) (Ok []) certs >>= fun certs ->
-    Ok (fun time -> chain_of_trust ~time (List.rev certs))
-  | [ "none" ] -> Ok (fun _ -> none)
+    let* anchors =
+      List.fold_left (fun acc s ->
+          let* acc = acc in
+          let* der = Base64.decode s in
+          let* cert = Certificate.decode_der (Cstruct.of_string der) in
+          Ok (cert :: acc))
+        (Ok []) certs
+    in
+    Ok (fun time -> chain_of_trust ~time (List.rev anchors))
+  | [ "none" ] -> Ok (fun _ ?ip:_ ~host:_ _ -> Ok None)
   | _ -> Error (`Msg (Fmt.str "Invalid TLS authenticator: %S" str))
