@@ -54,11 +54,11 @@ let of_fingerprint str =
 
 let of_string str =
   match String.split_on_char ':' str with
-  | "key" :: tls_key_fingerprint ->
+  | "key-fp" :: tls_key_fingerprint ->
     let tls_key_fingerprint = String.concat ":" tls_key_fingerprint in
     let* hash, fingerprint = of_fingerprint tls_key_fingerprint in
     Ok (fun time -> server_key_fingerprint ~time ~hash ~fingerprint)
-  | "cert" :: tls_cert_fingerprint ->
+  | "cert-fp" :: tls_cert_fingerprint ->
     let tls_cert_fingerprint = String.concat ":" tls_cert_fingerprint in
     let* hash, fingerprint = of_fingerprint tls_cert_fingerprint in
     Ok (fun time -> server_cert_fingerprint ~time ~hash ~fingerprint)

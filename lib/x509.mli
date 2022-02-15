@@ -1021,9 +1021,9 @@ module Authenticator : sig
   (** [of_string str] tries to parse the given [str] to an
       {!type:Authenticator.t}. The format of it is:
       - [none] no authentication,
-      - [key(:<hash>?):<base64-encoded fingerprint>] to authenticate a peer via
+      - [key-fp(:<hash>?):<base64-encoded fingerprint>] to authenticate a peer via
         its key fingerprint (hash is optional and defaults to SHA256),
-      - [cert(:<hash>?):<base64-encoded fingerprint>] to authenticate a peer via
+      - [cert-fp(:<hash>?):<base64-encoded fingerprint>] to authenticate a peer via
         its certificate fingerprint (hash is optional and defaults to SHA256),
       - [trust-anchor(:<base64-encoded DER certificate>)+] to authenticate a
         peer from a list of certificates (certificate must be in PEM format
