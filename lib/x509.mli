@@ -1018,6 +1018,24 @@ module Authenticator : sig
       over certificate pinning. *)
   val server_cert_fingerprint : time:(unit -> Ptime.t option) ->
     hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
+
+  (** [of_string str] tries to parse the given [str] to an
+      {!type:Authenticator.t}. The format of it is:
+      - [none] no authentication,
+      - [key-fp(:<hash>?):<base64-encoded fingerprint>] to authenticate a peer via
+        its key fingerprint (hash is optional and defaults to SHA256),
+      - [cert-fp(:<hash>?):<base64-encoded fingerprint>] to authenticate a peer via
+        its certificate fingerprint (hash is optional and defaults to SHA256),
+      - [trust-anchor(:<base64-encoded DER certificate>)+] to authenticate a
+        peer from a list of certificates (certificate must be in PEM format
+        without header and footer (----BEGIN CERTIFICATE-----) and without
+        newlines).
+
+      If decoding is successful, the returned value expects a function which
+      outputs the current timestamp ([unit -> Ptime.t option]) and is then
+      an authenticator. If decoding fails, and error is returned. *)
+  val of_string : string ->
+    ((unit -> Ptime.t option) -> t, [> `Msg of string ]) result
 end
 
 (** PKCS12 archive files *)
