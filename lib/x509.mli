@@ -1022,15 +1022,17 @@ module Authenticator : sig
     -> ((unit -> Ptime.t option) -> t, [> `Msg of string ]) result
   (** [of_string str] tries to parse the given [str] to an
       {!type:Authenticator.t}. The format of it is:
-      - [none] no authentication
-      - [key(:<hash>)?<base64-encoded fingerprint>] to authenticate a peer via
-        its key fingerprint
-      - [cert(:<hash>)?<base64-encoded fingerprint>] to authenticate a peer via
-        its certificate fingerprint
-      - [trust-anchor(:<base64-encoded DER certificate>)+] to authenticate a peer from
-        a list of certificates
+      - [none] no authentication,
+      - [key(:<hash>?):<base64-encoded fingerprint>] to authenticate a peer via
+        its key fingerprint (hash is optional and defaults to SHA256),
+      - [cert(:<hash>?):<base64-encoded fingerprint>] to authenticate a peer via
+        its certificate fingerprint (hash is optional and defaults to SHA256),
+      - [trust-anchor(:<base64-encoded DER certificate>)+] to authenticate a
+        peer from a list of certificates.
 
-      It returns a function which expect a [now ()] function as an argument. *)
+      If decoding is successful, the returned value expects a function which
+      outputs the current timestamp ([unit -> Ptime.t option]) and is then
+      an authenticator. If decoding fails, and error is returned. *)
 end
 
 (** PKCS12 archive files *)
