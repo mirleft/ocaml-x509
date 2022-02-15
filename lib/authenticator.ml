@@ -23,43 +23,38 @@ let server_cert_fingerprint ~time ~hash ~fingerprint =
   fun ?ip ~host certificates ->
     Validation.trust_cert_fingerprint ?ip ~host ~time ~hash ~fingerprint certificates
 
-let of_fingerprint str =
-  let dec_b64 s =
-    let* d =
-      Result.map_error
-        (function `Msg m ->
-           `Msg (Fmt.str "Invalid base64 encoding in fingerprint (%s): %S" m s))
-        (Base64.decode ~pad:false s)
-    in
-    Ok (Cstruct.of_string d)
+let hash_of_string = function
+  | "sha224" -> Ok `SHA224
+  | "sha256" -> Ok `SHA256
+  | "sha384" -> Ok `SHA384
+  | "sha512" -> Ok `SHA512
+  | hash -> Error (`Msg (Fmt.str "Unknown hash algorithm %S" hash))
+
+let fingerprint_of_string s =
+  let* d =
+    Result.map_error
+      (function `Msg m ->
+         `Msg (Fmt.str "Invalid base64 encoding in fingerprint (%s): %S" m s))
+      (Base64.decode ~pad:false s)
   in
-  let hash_of_string = function
-    | "sha224" -> Ok `SHA224
-    | "sha256" -> Ok `SHA256
-    | "sha384" -> Ok `SHA384
-    | "sha512" -> Ok `SHA512
-    | hash -> Error (`Msg (Fmt.str "Unknown hash algorithm %S" hash))
-  in
-  match String.split_on_char ':' str with
-  | [ fp ] ->
-    let* fp = dec_b64 fp in
-    Ok (`SHA256, fp)
-  | [ hash ; fp ] ->
-    let* hash = hash_of_string (String.lowercase_ascii hash) in
-    let* fp = dec_b64 fp in
-    Ok (hash, fp)
-  | _ -> Error (`Msg (Fmt.str "Invalid fingerprint %S" str))
+  Ok (Cstruct.of_string d)
 
 let of_string str =
   match String.split_on_char ':' str with
-  | "key-fp" :: tls_key_fingerprint ->
-    let tls_key_fingerprint = String.concat ":" tls_key_fingerprint in
-    let* hash, fingerprint = of_fingerprint tls_key_fingerprint in
+  | [ "key-fp" ; hash ; tls_key_fingerprint ] ->
+    let* hash = hash_of_string (String.lowercase_ascii hash) in
+    let* fingerprint = fingerprint_of_string tls_key_fingerprint in
     Ok (fun time -> server_key_fingerprint ~time ~hash ~fingerprint)
-  | "cert-fp" :: tls_cert_fingerprint ->
-    let tls_cert_fingerprint = String.concat ":" tls_cert_fingerprint in
-    let* hash, fingerprint = of_fingerprint tls_cert_fingerprint in
+  | [ "key-fp" ; tls_key_fingerprint ] ->
+    let* fingerprint = fingerprint_of_string tls_key_fingerprint in
+    Ok (fun time -> server_key_fingerprint ~time ~hash:`SHA256 ~fingerprint)
+  | [ "cert-fp" ; hash ; tls_cert_fingerprint ] ->
+    let* hash = hash_of_string (String.lowercase_ascii hash) in
+    let* fingerprint = fingerprint_of_string tls_cert_fingerprint in
     Ok (fun time -> server_cert_fingerprint ~time ~hash ~fingerprint)
+  | [ "cert-fp" ; tls_cert_fingerprint ] ->
+    let* fingerprint = fingerprint_of_string tls_cert_fingerprint in
+    Ok (fun time -> server_cert_fingerprint ~time ~hash:`SHA256 ~fingerprint)
   | "trust-anchor" :: certs ->
     let* anchors =
       List.fold_left (fun acc s ->
