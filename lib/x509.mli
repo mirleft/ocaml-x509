@@ -1033,8 +1033,8 @@ module Authenticator : sig
       If decoding is successful, the returned value expects a function which
       outputs the current timestamp ([unit -> Ptime.t option]) and is then
       an authenticator. If decoding fails, and error is returned. *)
-  val of_string : string
-    -> ((unit -> Ptime.t option) -> t, [> `Msg of string ]) result
+  val of_string : string ->
+    ((unit -> Ptime.t option) -> t, [> `Msg of string ]) result
 end
 
 (** PKCS12 archive files *)
