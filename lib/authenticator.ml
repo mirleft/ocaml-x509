@@ -29,13 +29,11 @@ let of_fingerprint str =
       Result.map_error
         (function `Msg m ->
            `Msg (Fmt.str "Invalid base64 encoding in fingerprint (%s): %S" m s))
-        (Base64.decode s)
+        (Base64.decode ~pad:false s)
     in
     Ok (Cstruct.of_string d)
   in
   let hash_of_string = function
-    | "md5" -> Ok `MD5
-    | "sha" | "sha1" -> Ok `SHA1
     | "sha224" -> Ok `SHA224
     | "sha256" -> Ok `SHA256
     | "sha384" -> Ok `SHA384
@@ -66,7 +64,7 @@ let of_string str =
     let* anchors =
       List.fold_left (fun acc s ->
           let* acc = acc in
-          let* der = Base64.decode s in
+          let* der = Base64.decode ~pad:false s in
           let* cert = Certificate.decode_der (Cstruct.of_string der) in
           Ok (cert :: acc))
         (Ok []) certs
