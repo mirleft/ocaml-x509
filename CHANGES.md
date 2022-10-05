@@ -1,3 +1,8 @@
+## v0.16.2 (2022-10-05)
+
+* Improve parse error message of Authenticator.of_string (mirage/ocaml-git#593
+  by @dinosaure, mirage/ocaml-git#582 by @reynir)
+
 ## v0.16.1 (2022-09-14)
 
 * Support ECDSA signatures where the hash algorithm output length exceeds the
