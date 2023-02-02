@@ -173,10 +173,16 @@ let validate_ca_extensions { Certificate.asn = cert ; _ } =
       | _ -> not (Extension.critical k v) )
     exts
 
-let validate_server_extensions { Certificate.asn = cert ; _ } =
+let validate_server_extensions ?(allow_ca_cert=false) c =
+  let { Certificate.asn = cert ; _ } = c in
   Extension.for_all (fun (Extension.B (k, v)) ->
       match k, v with
-      | Extension.Basic_constraints, (_, (true, _)) -> false
+      | Extension.Basic_constraints, (_, (true, _)) ->
+          if not allow_ca_cert then false
+          else begin
+            Log.warn (fun m -> m "allowing server certificate with incorrectly hset CA = true (because allow_ca_cert=true): %a" Certificate.pp c);
+            true
+          end
       | Extension.Basic_constraints, (_, (false, _)) -> true
       | Extension.Key_usage, _ -> true
       | Extension.Ext_key_usage, _ -> true
@@ -370,13 +376,13 @@ let is_ca_cert_valid allowed_hashes now cert =
 let valid_ca ?(allowed_hashes = all_hashes) ?time cacert =
   is_ca_cert_valid allowed_hashes time cacert
 
-let is_server_cert_valid ip host now cert =
+let is_server_cert_valid ?allow_ca_cert ip host now cert =
   match
     validate_time now cert,
     maybe_validate_ip cert ip,
     maybe_validate_hostname cert host,
     version_matches_extensions cert,
-    validate_server_extensions cert
+    validate_server_extensions ?allow_ca_cert cert
   with
   | (true, true, true, true, true) -> Ok ()
   | (false, _, _, _, _)         -> Error (`LeafCertificateExpired (cert, now))
@@ -435,12 +441,12 @@ let rec any_m e f = function
     | Ok ta -> Ok (Some (c, ta))
     | Error _ -> any_m e f cs
 
-let verify_chain_of_trust ?ip ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = function
+let verify_chain_of_trust ?ip ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors ?allow_ca_cert = function
   | [] -> Error `EmptyCertificateChain
   | server :: certs ->
     let now = time () in
     (* verify server! *)
-    let* () = is_server_cert_valid ip host now server in
+    let* () = is_server_cert_valid ?allow_ca_cert ip host now server in
     (* build all paths *)
     let paths = build_paths server certs
     and anchors = List.filter (validate_time now) anchors

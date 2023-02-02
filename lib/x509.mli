@@ -721,13 +721,16 @@ module Validation : sig
       the given [host] (using {!Certificate.hostnames}) or [ip] if specified
       (using {!Certificate.ips}; if some path is valid, using
       {!verify_chain}, the result will be [Ok] and contain the actual
-      certificate chain and the trust anchor. *)
+      certificate chain and the trust anchor. [allow_ca_cert] is a workaround for
+      buggy servers that configure their server certificate with CA=true.
+      Setting this to true will print a warning to stderr. *)
   val verify_chain_of_trust :
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
     ?allowed_hashes:Mirage_crypto.Hash.hash list ->
-    anchors:(Certificate.t list) -> Certificate.t list -> r
+    anchors:(Certificate.t list) ->
+    ?allow_ca_cert:bool -> Certificate.t list -> r
 
   (** {1 Fingerprint verification} *)
 
@@ -998,9 +1001,13 @@ module Authenticator : sig
       an implementation of the algorithm described in
       {{:https://tools.ietf.org/html/rfc5280#section-6.1}RFC 5280}, using
       {!Validation.verify_chain_of_trust}.  The given trust anchors are not
-      validated, you can filter them with {!Validation.valid_cas} if desired. *)
+      validated, you can filter them with {!Validation.valid_cas} if desired.
+      [allow_ca_cert] is a workaround for buggy servers that configure their
+      server certificate with CA=true. Setting this to true will print a warning
+      to stderr. *)
   val chain_of_trust : time:(unit -> Ptime.t option) -> ?crls:CRL.t list ->
-    ?allowed_hashes:Mirage_crypto.Hash.hash list -> Certificate.t list -> t
+    ?allowed_hashes:Mirage_crypto.Hash.hash list -> ?allow_ca_cert:bool
+    -> Certificate.t list -> t
 
   (** [server_key_fingerprint ~time hash fingerprint] is an [authenticator]
       that uses the given [time] and [fingerprint] to verify that the
