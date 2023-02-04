@@ -173,10 +173,15 @@ let validate_ca_extensions { Certificate.asn = cert ; _ } =
       | _ -> not (Extension.critical k v) )
     exts
 
-let validate_server_extensions { Certificate.asn = cert ; _ } =
+let validate_server_extensions cert =
   Extension.for_all (fun (Extension.B (k, v)) ->
       match k, v with
-      | Extension.Basic_constraints, (_, (true, _)) -> false
+      | Extension.Basic_constraints, (_, (true, _)) ->
+        if is_self_signed cert then
+          (Log.warn (fun m -> m "allowing self-signed certificate with BasicConstraints CA true");
+           true)
+        else
+          false
       | Extension.Basic_constraints, (_, (false, _)) -> true
       | Extension.Key_usage, _ -> true
       | Extension.Ext_key_usage, _ -> true
@@ -184,7 +189,7 @@ let validate_server_extensions { Certificate.asn = cert ; _ } =
       | Extension.Policies, (crit, ps) -> not crit || List.mem `Any ps
       (* we've to deal with _all_ extensions marked critical! *)
       | _, _ -> not (Extension.critical k v))
-    cert.tbs_cert.extensions
+    cert.Certificate.asn.tbs_cert.extensions
 
 let valid_trust_anchor_extensions cert =
   match cert.Certificate.asn.tbs_cert.version with
