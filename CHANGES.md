@@ -1,3 +1,9 @@
+## v0.16.3 (2023-02-04)
+
+* Validation: allow self-signed server certificate with BasicConstraints CA=true
+  (reported by @mbacarella in mirleft/ocaml-tls#446
+   (https://github.com/lightningnetwork/lnd/issues/5450), fix #161 by @hannesm)
+
 ## v0.16.2 (2022-10-05)
 
 * Improve parse error message of Authenticator.of_string (mirage/ocaml-git#593
