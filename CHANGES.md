@@ -1,3 +1,7 @@
+## v0.16.4 (2023-02-13)
+
+* Adapt to mirage-crypto-rng 0.11.0 API changes (#162 @hannesm)
+
 ## v0.16.3 (2023-02-04)
 
 * Validation: allow self-signed server certificate with BasicConstraints CA=true
