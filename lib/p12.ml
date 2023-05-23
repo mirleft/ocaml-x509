@@ -431,13 +431,20 @@ let verify password (data, ((algorithm, digest), salt, iterations)) =
   end else
     Error (`Msg "invalid signature")
 
-let create ?(mac = `SHA256) ?(algorithm = `AES256_CBC) ?(iterations = 2048) password certificates private_key =
+let create ?(mac = `SHA256) ?(algorithm = `AES256_CBC) ?(iterations = 2048) ?local_key_id password certificates private_key =
+  let attributes = match local_key_id with
+    | None -> None
+    | Some local_key_id ->
+      Some [
+        Registry.PKCS9.local_key_id, [local_key_id]
+      ]
+  in
   let cert_sc =
-    Asn.safe_contents_to_cs (List.map (fun c -> `Certificate c, None) certificates)
+    Asn.safe_contents_to_cs (List.map (fun c -> `Certificate c, attributes) certificates)
   and priv_sc =
     let data = Private_key.Asn.private_to_cstruct private_key in
     let algo, data = pkcs5_2_encrypt mac iterations algorithm password data in
-    Asn.safe_contents_to_cs [ `Encrypted_private_key (algo, data), None ]
+    Asn.safe_contents_to_cs [ `Encrypted_private_key (algo, data), attributes ]
   in
   let cert_sc_enc =
     let algo, data = pkcs5_2_encrypt mac iterations algorithm password cert_sc in

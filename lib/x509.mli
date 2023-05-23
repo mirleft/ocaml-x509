@@ -1057,13 +1057,14 @@ module PKCS12 : sig
      | `Private_key of Private_key.t | `Decrypted_private_key of Private_key.t ]
        list, [> `Msg of string ]) result
 
-  (** [create ~mac ~algorithm ~iterations password certificates private_key]
+  (** [create ~mac ~algorithm ~iterations ~local_key_id password certificates private_key]
       constructs a PKCS12 archive with [certificates] and [private_key]. They
       are encrypted with [algorithm] (using PBES2, PKCS5v2) and integrity
       protected using [mac]. *)
   val create : ?mac:[`SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ] ->
     ?algorithm:[ `AES128_CBC | `AES192_CBC | `AES256_CBC ] ->
     ?iterations:int ->
+    ?local_key_id:Cstruct.t ->
     string -> Certificate.t list -> Private_key.t ->
     t
 end
