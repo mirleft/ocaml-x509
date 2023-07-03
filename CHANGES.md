@@ -1,3 +1,8 @@
+## v0.16.5 (2023-07-03)
+
+* Always embed local_key_id in PKCS12 bags (reported #163 by @NightBlues,
+  revised and implemented by @hannesm)
+
 ## v0.16.4 (2023-02-13)
 
 * Adapt to mirage-crypto-rng 0.11.0 API changes (#162 @hannesm)
