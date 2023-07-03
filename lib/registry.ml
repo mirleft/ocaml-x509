@@ -147,6 +147,7 @@ module PKCS9 = struct
   and smime_capabilities   = pkcs9 <| 15
   and smime_oid_registry   = pkcs9 <| 16
   and friendly_name        = pkcs9 <| 20
+  and local_key_id         = pkcs9 <| 21
   and cert_types           = pkcs9 <| 22
   and crl_types            = pkcs9 <| 23
 end

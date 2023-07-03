@@ -1060,7 +1060,8 @@ module PKCS12 : sig
   (** [create ~mac ~algorithm ~iterations password certificates private_key]
       constructs a PKCS12 archive with [certificates] and [private_key]. They
       are encrypted with [algorithm] (using PBES2, PKCS5v2) and integrity
-      protected using [mac]. *)
+      protected using [mac]. A [local key id] is always embedded in the private
+      key and matching certificate. *)
   val create : ?mac:[`SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ] ->
     ?algorithm:[ `AES128_CBC | `AES192_CBC | `AES256_CBC ] ->
     ?iterations:int ->
