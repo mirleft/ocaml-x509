@@ -1009,7 +1009,8 @@ module Authenticator : sig
   val key_fingerprint : time:(unit -> Ptime.t option) ->
     hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
 
-  (** [server_key_fingerprint] is an alias of [key_fingerprint] *)
+  (** [server_key_fingerprint] is an alias of [key_fingerprint], and does not
+      check extended key usage is server auth. *)
   val server_key_fingerprint : time:(unit -> Ptime.t option) ->
     hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
   [@@ocaml.deprecated "Use key_fingerprint instead"]
@@ -1024,7 +1025,8 @@ module Authenticator : sig
   val cert_fingerprint : time:(unit -> Ptime.t option) ->
     hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
 
-  (** [server_cert_fingerprint] is an alias of [cert_fingerprint] *)
+  (** [server_cert_fingerprint] is an alias of [cert_fingerprint], and does not
+      check extended key usage is server auth. *)
   val server_cert_fingerprint : time:(unit -> Ptime.t option) ->
     hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
   [@@ocaml.deprecated "Use cert_fingerprint instead"]
