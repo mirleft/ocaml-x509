@@ -24,7 +24,7 @@ let pp_signature_error ppf = function
       Distinguished_name.pp subj err Cstruct.hexdump_pp sig_
   | `Hash_not_allowed (subj, hash) ->
     Fmt.pf ppf "hash algorithm %a is not allowed, but %a is signed using it"
-      Distinguished_name.pp subj Certificate.pp_hash hash
+      Certificate.pp_hash hash Distinguished_name.pp subj
   | `Unsupported_keytype (subj, pk) ->
     Fmt.pf ppf "unsupported key used to sign %a: %a" Distinguished_name.pp subj
       Public_key.pp pk
