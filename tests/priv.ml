@@ -30,7 +30,6 @@ let test_ec (key_type, data) () =
 
 let ec_data = [
   `ED25519, "W0p4c4tBHtSaTj4zij4oARCjhFbIi8voYg+65bl7wLU=" ;
-  `P224, "Wjy6Nf4/xJSaaR/eeoQBUxJMA3PDP/c+8VkuPA==" ;
   `P256, "arvDmHpdTdzbc0uo+KCXoArmrmAs2GAvfk14D8gi6gM=" ;
   `P384, "UEZz/xVx2f3s7W8/cFy/w38LkjAq0xfMYJiXamdwgW9zwSK18+vrhKzgE23sFnyq" ;
   `P521, "AVb4DIpMO5hzyfX1n4qi4xtj/JBDCTCwyOLasKnnVS6FHW2hEZbGwd1c2J4rwpNKZqTKNsKu3dVJAmlp3EFhqv5T" ;

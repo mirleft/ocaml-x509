@@ -12,10 +12,9 @@ open Asn_grammars
  *)
 
 type ec_curve =
-  [ `SECP224R1 | `SECP256R1 | `SECP384R1 | `SECP521R1 ]
+  [ `SECP256R1 | `SECP384R1 | `SECP521R1 ]
 
 let ec_curve_to_string = function
-  | `SECP224R1 -> "SECP224R1"
   | `SECP256R1 -> "SECP256R1"
   | `SECP384R1 -> "SECP384R1"
   | `SECP521R1 -> "SECP521R1"
@@ -218,13 +217,11 @@ let curve_of_oid, curve_to_oid =
   let open Registry.ANSI_X9_62 in
   (let default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid) in
    case_of_oid ~default [
-     (secp224r1, `SECP224R1) ;
      (secp256r1, `SECP256R1) ;
      (secp384r1, `SECP384R1) ;
      (secp521r1, `SECP521R1) ;
    ]),
   (function
-    | `SECP224R1 -> secp224r1
     | `SECP256R1 -> secp256r1
     | `SECP384R1 -> secp384r1
     | `SECP521R1 -> secp521r1)

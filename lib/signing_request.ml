@@ -164,7 +164,6 @@ let encode_pem v =
 let digest_of_key = function
   | `RSA _ -> `SHA256
   | `ED25519 _ -> `SHA512
-  | `P224 _ -> `SHA224
   | `P256 _ -> `SHA256
   | `P384 _ -> `SHA384
   | `P521 _ -> `SHA512

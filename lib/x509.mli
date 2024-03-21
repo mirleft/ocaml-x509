@@ -72,7 +72,7 @@ end
 (** Types of keys *)
 module Key_type : sig
   (** The polymorphic variant of key types. *)
-  type t = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521 ]
+  type t = [ `RSA | `ED25519 | `P256 | `P384 | `P521 ]
 
   val strings : (string * t) list
   (** [strings] is an associative list of string and key_type pairs. Useful for
@@ -112,7 +112,6 @@ module Public_key : sig
   type t = [
     | `RSA of Mirage_crypto_pk.Rsa.pub
     | `ED25519 of Mirage_crypto_ec.Ed25519.pub
-    | `P224 of Mirage_crypto_ec.P224.Dsa.pub
     | `P256 of Mirage_crypto_ec.P256.Dsa.pub
     | `P384 of Mirage_crypto_ec.P384.Dsa.pub
     | `P521 of Mirage_crypto_ec.P521.Dsa.pub
@@ -177,7 +176,6 @@ module Private_key : sig
   type t = [
     | `RSA of Mirage_crypto_pk.Rsa.priv
     | `ED25519 of Mirage_crypto_ec.Ed25519.priv
-    | `P224 of Mirage_crypto_ec.P224.Dsa.priv
     | `P256 of Mirage_crypto_ec.P256.Dsa.priv
     | `P384 of Mirage_crypto_ec.P384.Dsa.priv
     | `P521 of Mirage_crypto_ec.P521.Dsa.priv
