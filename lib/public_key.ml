@@ -1,7 +1,6 @@
 let ( let* ) = Result.bind
 
 type ecdsa = [
-  | `P224 of Mirage_crypto_ec.P224.Dsa.pub
   | `P256 of Mirage_crypto_ec.P256.Dsa.pub
   | `P384 of Mirage_crypto_ec.P384.Dsa.pub
   | `P521 of Mirage_crypto_ec.P521.Dsa.pub
@@ -47,7 +46,6 @@ module Asn = struct
     function
     | (RSA      , cs) -> `RSA (rsa_pub_of_cs cs)
     | (ED25519  , cs) -> `ED25519 (to_err (Ed25519.pub_of_cstruct cs))
-    | (EC_pub `SECP224R1, cs) -> `P224 (to_err (P224.Dsa.pub_of_cstruct cs))
     | (EC_pub `SECP256R1, cs) -> `P256 (to_err (P256.Dsa.pub_of_cstruct cs))
     | (EC_pub `SECP384R1, cs) -> `P384 (to_err (P384.Dsa.pub_of_cstruct cs))
     | (EC_pub `SECP521R1, cs) -> `P521 (to_err (P521.Dsa.pub_of_cstruct cs))
@@ -59,7 +57,6 @@ module Asn = struct
     function
     | `RSA pk    -> (RSA, rsa_pub_to_cs pk)
     | `ED25519 pk -> (ED25519, Ed25519.pub_to_cstruct pk)
-    | `P224 pk -> (EC_pub `SECP224R1, P224.Dsa.pub_to_cstruct pk)
     | `P256 pk -> (EC_pub `SECP256R1, P256.Dsa.pub_to_cstruct pk)
     | `P384 pk -> (EC_pub `SECP384R1, P384.Dsa.pub_to_cstruct pk)
     | `P521 pk -> (EC_pub `SECP521R1, P521.Dsa.pub_to_cstruct pk)
@@ -78,7 +75,6 @@ let id k =
   let data = match k with
     | `RSA p -> Asn.rsa_public_to_cstruct p
     | `ED25519 pk -> Mirage_crypto_ec.Ed25519.pub_to_cstruct pk
-    | `P224 pk -> Mirage_crypto_ec.P224.Dsa.pub_to_cstruct pk
     | `P256 pk -> Mirage_crypto_ec.P256.Dsa.pub_to_cstruct pk
     | `P384 pk -> Mirage_crypto_ec.P384.Dsa.pub_to_cstruct pk
     | `P521 pk -> Mirage_crypto_ec.P521.Dsa.pub_to_cstruct pk
@@ -91,7 +87,6 @@ let fingerprint ?(hash = `SHA256) pub =
 let key_type = function
   | `RSA _ -> `RSA
   | `ED25519 _ -> `ED25519
-  | `P224 _ -> `P224
   | `P256 _ -> `P256
   | `P384 _ -> `P384
   | `P521 _ -> `P521
@@ -147,7 +142,6 @@ let verify hash ?scheme ~signature key data =
     let* s = ecdsa_of_cs signature in
     ok_if_true
       (match key with
-       | `P224 key -> P224.Dsa.verify ~key s (trunc P224.Dsa.byte_length d)
        | `P256 key -> P256.Dsa.verify ~key s (trunc P256.Dsa.byte_length d)
        | `P384 key -> P384.Dsa.verify ~key s (trunc P384.Dsa.byte_length d)
        | `P521 key -> P521.Dsa.verify ~key s (trunc P521.Dsa.byte_length d))
