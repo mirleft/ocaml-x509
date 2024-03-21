@@ -1002,22 +1002,34 @@ module Authenticator : sig
   val chain_of_trust : time:(unit -> Ptime.t option) -> ?crls:CRL.t list ->
     ?allowed_hashes:Mirage_crypto.Hash.hash list -> Certificate.t list -> t
 
-  (** [server_key_fingerprint ~time hash fingerprint] is an [authenticator]
+  (** [key_fingerprint ~time hash fingerprint] is an [authenticator]
       that uses the given [time] and [fingerprint] to verify that the
       fingerprint of the first element of the certificate chain matches the
       given fingerprint, using {!Validation.trust_key_fingerprint}. *)
-  val server_key_fingerprint : time:(unit -> Ptime.t option) ->
+  val key_fingerprint : time:(unit -> Ptime.t option) ->
     hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
 
-  (** [server_cert_fingerprint ~time hash fingerprint] is an [authenticator]
+  (** [server_key_fingerprint] is an alias of [key_fingerprint], and does not
+      check extended key usage is server auth. *)
+  val server_key_fingerprint : time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
+  [@@ocaml.deprecated "Use key_fingerprint instead"]
+
+  (** [cert_fingerprint ~time hash fingerprint] is an [authenticator]
       that uses the given [time] and [fingerprint] to verify the first
       element of the certificate chain, using
       {!Validation.trust_cert_fingerprint}.  Note that
       {{!server_key_fingerprint}public key pinning} has
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
+  val cert_fingerprint : time:(unit -> Ptime.t option) ->
+    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
+
+  (** [server_cert_fingerprint] is an alias of [cert_fingerprint], and does not
+      check extended key usage is server auth. *)
   val server_cert_fingerprint : time:(unit -> Ptime.t option) ->
     hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
+  [@@ocaml.deprecated "Use cert_fingerprint instead"]
 
   (** [of_string str] tries to parse the given [str] to an
       {!type:Authenticator.t}. The format of it is:
