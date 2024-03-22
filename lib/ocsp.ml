@@ -11,17 +11,18 @@ let version_v1 = 0
 *)
 type cert_id = {
   hashAlgorithm: Algorithm.t;
-  issuerNameHash: Cstruct.t;
-  issuerKeyHash: Cstruct.t;
+  issuerNameHash: string;
+  issuerKeyHash: string;
   serialNumber: Z.t;
 }
 
 let create_cert_id ?(hash=`SHA1) issuer serialNumber =
   let hashAlgorithm = Algorithm.of_hash hash in
+  let module Hash = (val (Digestif.module_of_hash' (hash :> Digestif.hash'))) in
   let issuerNameHash =
     Certificate.subject issuer
     |> Distinguished_name.encode_der
-    |> Mirage_crypto.Hash.digest hash
+    |> Hash.(fun x -> to_raw_string (digest_string x))
   in
   let issuerKeyHash =
     Public_key.fingerprint ~hash (Certificate.public_key issuer)
@@ -33,8 +34,8 @@ let cert_id_serial {serialNumber;_} = serialNumber
 let pp_cert_id ppf {hashAlgorithm;issuerNameHash;issuerKeyHash;serialNumber} =
   Fmt.pf ppf "CertID @[<1>{@ algo=%a;@ issuerNameHash=%a;@ issuerKeyHash=%a;@ serialNumber=%a@ }@]"
     Algorithm.pp hashAlgorithm
-    Cstruct.hexdump_pp issuerNameHash
-    Cstruct.hexdump_pp issuerKeyHash
+    Ohex.pp issuerNameHash
+    Ohex.pp issuerKeyHash
     Z.pp_print serialNumber
 
 module Asn_common = struct
@@ -45,10 +46,11 @@ module Asn_common = struct
       {hashAlgorithm;
        issuerNameHash;
        issuerKeyHash;
-       serialNumber;}
+       serialNumber= Mirage_crypto_pk.Z_extra.of_octets_be serialNumber;}
     in
     let g {hashAlgorithm;issuerNameHash;issuerKeyHash;serialNumber;} =
-      (hashAlgorithm, issuerNameHash, issuerKeyHash, serialNumber)
+      (hashAlgorithm, issuerNameHash, issuerKeyHash,
+       Mirage_crypto_pk.Z_extra.to_octets_be serialNumber)
     in
     map f g @@
     sequence4
@@ -116,14 +118,14 @@ module Request = struct
   *)
   type signature = {
     signatureAlgorithm: Algorithm.t;
-    signature: Cstruct.t;
+    signature: string;
     certs: Certificate.t list option;
   }
 
   let pp_signature ppf {signatureAlgorithm;signature;certs;} =
     Fmt.pf ppf "Signature @[<1>{@ signatureAlgorithm=%a;@ signature=%a;@ certs=%a}@]"
       Algorithm.pp signatureAlgorithm
-      Cstruct.hexdump_pp signature
+      Ohex.pp signature
       (Fmt.option ~none:(Fmt.any "None") @@
        Fmt.brackets @@
        Fmt.list ~sep:Fmt.semi Certificate.pp) certs
@@ -139,7 +141,7 @@ module Request = struct
   }
 
   type t = {
-    raw : Cstruct.t ;
+    raw : string ;
     asn : req ;
   }
 
@@ -193,7 +195,7 @@ module Request = struct
         (required ~label:"requestList" @@ sequence_of request)
         (optional ~label:"requestExtensions" @@ Extension.Asn.extensions_der)
 
-    let tbs_request_of_cs,tbs_request_to_cs =
+    let tbs_request_of_str,tbs_request_to_str =
       projections_of Asn.der tbs_request
 
     let signature =
@@ -202,7 +204,7 @@ module Request = struct
           | None -> None
           | Some certs ->
             let encode cert =
-              let raw = Certificate.Asn.certificate_to_cstruct cert in
+              let raw = Certificate.Asn.certificate_to_octets cert in
               Certificate.{raw; asn=cert}
             in
             Some (List.map encode certs)
@@ -220,7 +222,7 @@ module Request = struct
       map f g @@
       sequence3
         (required ~label:"signatureAlgorithm" Algorithm.identifier)
-        (required ~label:"signature" bit_string_cs)
+        (required ~label:"signature" bit_string_octets)
         (optional ~label:"certs" @@ explicit 0 @@
          sequence_of Certificate.Asn.certificate)
 
@@ -236,13 +238,13 @@ module Request = struct
         (required ~label:"tbsRequest" tbs_request)
         (optional ~label:"optionalSignature" signature)
 
-    let (ocsp_request_of_cstruct, ocsp_request_to_cstruct) =
+    let (ocsp_request_of_octets, ocsp_request_to_octets) =
       projections_of Asn.der ocsp_request
 
   end
 
   let decode_der raw =
-    let* asn = Asn.ocsp_request_of_cstruct raw in
+    let* asn = Asn.ocsp_request_of_octets raw in
     Ok { asn ; raw }
 
   let encode_der { raw ; _ } = raw
@@ -262,12 +264,12 @@ module Request = struct
         let digest = Signing_request.default_digest digest key in
         let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
         let signatureAlgorithm = Algorithm.of_signature_algorithm scheme digest in
-        let tbs_der = Asn.tbs_request_to_cs tbsRequest in
+        let tbs_der = Asn.tbs_request_to_str tbsRequest in
         let* signature = Private_key.sign digest ~scheme key (`Message tbs_der) in
         Ok (Some { signature ; signatureAlgorithm ; certs; })
     in
     let asn = { tbsRequest ; optionalSignature } in
-    let raw = Asn.ocsp_request_to_cstruct asn in
+    let raw = Asn.ocsp_request_to_octets asn in
     Ok { raw ; asn }
 
   let validate { asn ; raw } ?(allowed_hashes = Validation.sha2) pub =
@@ -396,7 +398,7 @@ module Response = struct
   *)
   type responder_id = [
     | `ByName of Distinguished_name.t
-    | `ByKey of Cstruct.t
+    | `ByKey of string
   ]
 
   let create_responder_id pubkey =
@@ -405,7 +407,7 @@ module Response = struct
 
   let pp_responder_id ppf = function
     | `ByName dn -> Fmt.pf ppf "ByName %a" Distinguished_name.pp dn
-    | `ByKey hash -> Fmt.pf ppf "ByKey %a" Cstruct.hexdump_pp hash
+    | `ByKey hash -> Fmt.pf ppf "ByKey %a" Ohex.pp hash
 
   (* ResponseData ::= SEQUENCE {
    *  version              [0] EXPLICIT Version DEFAULT v1,
@@ -435,7 +437,7 @@ module Response = struct
   type basic_ocsp_response = {
     tbsResponseData: response_data;
     signatureAlgorithm: Algorithm.t;
-    signature: Cstruct.t;
+    signature: string;
     certs: Certificate.t list option;
   }
 
@@ -443,7 +445,7 @@ module Response = struct
     Fmt.pf ppf "BasicOCSPResponse @[<1>{@ tbsResponseData=%a;@ signatureAlgorithm=%a;@ signature=%a;@ certs=%a@ }@]"
       pp_response_data tbsResponseData
       Algorithm.pp signatureAlgorithm
-      Cstruct.hexdump_pp signature
+      Ohex.pp signature
       (Fmt.option ~none:(Fmt.any "None") @@
        Fmt.list ~sep:Fmt.semi @@ Certificate.pp) certs
 
@@ -457,7 +459,7 @@ module Response = struct
 
   type t = {
     responseStatus: status;
-    responseBytes: (Asn.oid * basic_ocsp_response * Cstruct.t) option;
+    responseBytes: (Asn.oid * basic_ocsp_response * string) option;
   }
 
   let pp ppf {responseStatus;responseBytes;} =
@@ -558,7 +560,7 @@ module Response = struct
         (optional ~label:"responseExtensions" @@ explicit 1 @@
          Extension.Asn.extensions_der)
 
-    let response_data_of_cs, response_data_to_cs =
+    let response_data_of_str, response_data_to_str =
       projections_of Asn.der response_data
 
     let basic_ocsp_response =
@@ -567,7 +569,7 @@ module Response = struct
           | None -> None
           | Some certs ->
             let encode cert =
-              let raw = Certificate.Asn.certificate_to_cstruct cert in
+              let raw = Certificate.Asn.certificate_to_octets cert in
               Certificate.{raw; asn=cert}
             in
             Some (List.map encode certs)
@@ -586,11 +588,11 @@ module Response = struct
       sequence4
         (required ~label:"tbsResponseData" response_data)
         (required ~label:"signatureAlgorithm" Algorithm.identifier)
-        (required ~label:"signature" bit_string_cs)
+        (required ~label:"signature" bit_string_octets)
         (optional ~label:"certs" @@ explicit 0 @@
          sequence_of Certificate.Asn.certificate)
 
-    let basic_ocsp_response_of_cs,basic_ocsp_response_to_cs =
+    let basic_ocsp_response_of_str,basic_ocsp_response_to_str =
       projections_of Asn.der basic_ocsp_response
 
     let ocsp_basic_oid = Cert_extn.Private_internet_extensions.ad_ocsp_basic
@@ -601,7 +603,7 @@ module Response = struct
           parse_error "Successful status requires responseBytes"
         | `Successful, Some (oid, response) ->
           if Asn.OID.equal ocsp_basic_oid oid then
-            match basic_ocsp_response_of_cs response with
+            match basic_ocsp_response_of_str response with
             | Error e -> error e
             | Ok basic_response ->
               {responseStatus=`Successful;
@@ -631,13 +633,13 @@ module Response = struct
            (required ~label:"responseType" oid)
            (required ~label:"response" octet_string))
 
-    let ocsp_response_of_cs, ocsp_response_to_cs =
+    let ocsp_response_of_str, ocsp_response_to_str =
       projections_of Asn.der ocsp_response
 
   end
 
-  let decode_der = Asn.ocsp_response_of_cs
-  let encode_der = Asn.ocsp_response_to_cs
+  let decode_der = Asn.ocsp_response_of_str
+  let encode_der = Asn.ocsp_response_to_str
 
   let create_basic_ocsp_response ?digest ?certs
       ?response_extensions:responseExtensions key responderID producedAt
@@ -651,7 +653,7 @@ module Response = struct
       responses;
       responseExtensions;
     } in
-    let resp_der = Asn.response_data_to_cs tbsResponseData in
+    let resp_der = Asn.response_data_to_str tbsResponseData in
     let* signature = Private_key.sign digest ~scheme key (`Message resp_der) in
     Ok { tbsResponseData ; signatureAlgorithm ; signature;certs }
 
@@ -662,7 +664,7 @@ module Response = struct
         ?digest ?certs ?response_extensions private_key
         responderID producedAt responses
     in
-    let raw_resp = Asn.basic_ocsp_response_to_cs response in
+    let raw_resp = Asn.basic_ocsp_response_to_str response in
     let responseBytes = Some (Asn.ocsp_basic_oid, response, raw_resp) in
     Ok { responseStatus = `Successful ; responseBytes }
 

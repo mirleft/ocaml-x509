@@ -37,7 +37,7 @@ let fingerprint_of_string s =
          `Msg (Fmt.str "Invalid base64 encoding in fingerprint (%s): %S" m s))
       (Base64.decode ~pad:false s)
   in
-  Ok (Cstruct.of_string d)
+  Ok d
 
 let format =
   {|
@@ -73,7 +73,7 @@ let of_string str =
       List.fold_left (fun acc s ->
           let* acc = acc in
           let* der = Base64.decode ~pad:false s in
-          let* cert = Certificate.decode_der (Cstruct.of_string der) in
+          let* cert = Certificate.decode_der der in
           Ok (cert :: acc))
         (Ok []) certs
     in

@@ -38,12 +38,12 @@ type request_info = {
 type request = {
   info : request_info ;
   signature_algorithm : Algorithm.t ;
-  signature : Cstruct.t
+  signature : string
 }
 
 type t = {
   asn : request ;
-  raw : Cstruct.t ;
+  raw : string ;
 }
 
 module Asn = struct
@@ -93,7 +93,7 @@ module Asn = struct
       (required ~label:"subjectPKInfo" Public_key.Asn.pk_info_der)
       (required ~label:"attributes" @@ implicit 0 (set_of attributes))
 
-  let request_info_of_cs, request_info_to_cs =
+  let request_info_of_str, request_info_to_str =
     projections_of Asn.der request_info
 
   let signing_request =
@@ -106,9 +106,9 @@ module Asn = struct
     sequence3
       (required ~label:"certificationRequestInfo" request_info)
       (required ~label:"signatureAlgorithm" Algorithm.identifier)
-      (required ~label:"signature" bit_string_cs)
+      (required ~label:"signature" bit_string_octets)
 
-  let signing_request_of_cs, signing_request_to_cs =
+  let signing_request_of_str, signing_request_to_str =
     projections_of Asn.der signing_request
 end
 
@@ -139,7 +139,7 @@ let validate_signature allowed_hashes { asn ; raw } =
     asn.signature_algorithm asn.signature asn.info.public_key
 
 let decode_der ?(allowed_hashes = Validation.sha2) cs =
-  let* csr = Asn_grammars.err_to_msg (Asn.signing_request_of_cs cs) in
+  let* csr = Asn_grammars.err_to_msg (Asn.signing_request_of_str cs) in
   let csr = { raw = cs ; asn = csr } in
   let* () =
     Result.map_error
@@ -175,12 +175,12 @@ let create subject ?digest ?(extensions = Ext.empty) (key : Private_key.t) =
   let hash = default_digest digest key in
   let public_key = Private_key.public key in
   let info : request_info = { subject ; public_key ; extensions } in
-  let info_cs = Asn.request_info_to_cs info in
+  let info_str = Asn.request_info_to_str info in
   let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
-  let* signature = Private_key.sign hash ~scheme key (`Message info_cs) in
+  let* signature = Private_key.sign hash ~scheme key (`Message info_str) in
   let signature_algorithm = Algorithm.of_signature_algorithm scheme hash in
   let asn = { info ; signature_algorithm ; signature } in
-  let raw = Asn.signing_request_to_cs asn in
+  let raw = Asn.signing_request_to_str asn in
   Ok { asn ; raw }
 
 let sign signing_request
@@ -210,7 +210,7 @@ let sign signing_request
     subject_id = None ;
     extensions
   } in
-  let tbs_raw = Certificate.Asn.tbs_certificate_to_cstruct tbs_cert in
+  let tbs_raw = Certificate.Asn.tbs_certificate_to_octets tbs_cert in
   let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
   let* signature_val = Private_key.sign hash ~scheme key (`Message tbs_raw) in
   let asn = {
@@ -218,5 +218,5 @@ let sign signing_request
     signature_algo ;
     signature_val ;
   } in
-  let raw = Certificate.Asn.certificate_to_cstruct asn in
+  let raw = Certificate.Asn.certificate_to_octets asn in
   Ok { Certificate.asn ; raw }

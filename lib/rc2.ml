@@ -33,8 +33,8 @@ let tm effective =
 (* L[i] is the i-th byte of the key; K[i] is the i-th 16-bit-word of the key *)
 let key_expansion effective key =
   (* result is a 128 byte key, where we need the words.. *)
-  let t = Cstruct.length key in
-  let l = Array.init 128 (fun idx -> if idx < t then Cstruct.get_uint8 key idx else 0) in
+  let t = String.length key in
+  let l = Array.init 128 (fun idx -> if idx < t then String.get_uint8 key idx else 0) in
   let t8, tm = tm effective in
   for i = t to 127 do
     l.(i) <- pitable.((l.(i - 1) + l.(i - t)) mod 256)
@@ -137,7 +137,7 @@ let r_mash_round r k =
   r_mash r 0 k
 
 let decrypt_one ~key ~data ?(off = 0) dst =
-  let r = Array.init 4 (fun idx -> Cstruct.LE.get_uint16 data (off + idx * 2)) in
+  let r = Array.init 4 (fun idx -> String.get_uint16_le data (off + idx * 2)) in
   let j = 63 in
   let j = r_mix_round r key j in
   let j = r_mix_round r key j in
@@ -157,19 +157,22 @@ let decrypt_one ~key ~data ?(off = 0) dst =
   let j = r_mix_round r key j in
   let j = r_mix_round r key j in
   let _j = r_mix_round r key j in
-  Cstruct.LE.set_uint16 dst (off + 0) r.(0);
-  Cstruct.LE.set_uint16 dst (off + 2) r.(1);
-  Cstruct.LE.set_uint16 dst (off + 4) r.(2);
-  Cstruct.LE.set_uint16 dst (off + 6) r.(3)
+  Bytes.set_uint16_le dst (off + 0) r.(0);
+  Bytes.set_uint16_le dst (off + 2) r.(1);
+  Bytes.set_uint16_le dst (off + 4) r.(2);
+  Bytes.set_uint16_le dst (off + 6) r.(3)
+
+let shift buf off =
+  Bytes.sub buf off (Bytes.length buf - off)
 
 let decrypt_cbc ?(effective = 128) ~key ~iv data =
   let block = 8 in
   let key = key_expansion effective key in
-  let l = Cstruct.length data in
-  let dst = Cstruct.create l in
+  let l = String.length data in
+  let dst = Bytes.create l in
   for i = 0 to pred ((l + pred block) / block) do
     decrypt_one ~key ~data ~off:(i * block) dst
   done;
-  Mirage_crypto.Uncommon.Cs.xor_into iv dst block;
-  Mirage_crypto.Uncommon.Cs.xor_into data (Cstruct.shift dst block) (l - block);
-  dst
+  Mirage_crypto.Uncommon.xor_into iv dst block;
+  Mirage_crypto.Uncommon.xor_into data (shift dst block) (l - block);
+  Bytes.unsafe_to_string dst

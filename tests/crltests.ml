@@ -1,21 +1,27 @@
 open X509
 
+let of_ic ic =
+  let ln = in_channel_length ic in
+  let rs = Bytes.create ln in
+  really_input ic rs 0 ln;
+  Bytes.unsafe_to_string rs
+
 let with_loaded_files file ~f =
   let pre = "./crl/" in
   let fullpath1 = pre ^ file ^ ".pem"
   and fullpath2 = pre ^ file ^ ".crl"
   in
-  let fd1 = Unix.(openfile fullpath1 [O_RDONLY] 0)
-  and fd2 = Unix.(openfile fullpath2 [O_RDONLY] 0)
+  let fd1 = open_in fullpath1
+  and fd2 = open_in fullpath2
   in
-  let buf1 = Unix_cstruct.of_fd fd1
-  and buf2 = Unix_cstruct.of_fd fd2
+  let buf1 = of_ic fd1
+  and buf2 = of_ic fd2
   in
-  try let r = f buf1 buf2 in Unix.close fd1 ; Unix.close fd2 ;
+  try let r = f buf1 buf2 in close_in fd1 ; close_in fd2 ;
     match r with
     | Ok x -> x
     | Error (`Msg e) -> Alcotest.failf "decoding error %s" e
-  with e -> Unix.close fd1 ; Unix.close fd2 ;
+  with e -> close_in fd1 ; close_in fd2 ;
     Alcotest.failf "exception %s" (Printexc.to_string e)
 
 let allowed_hashes = [ `SHA1 ; `SHA256 ; `SHA384 ; `SHA512 ]

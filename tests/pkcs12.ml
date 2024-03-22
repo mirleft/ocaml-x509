@@ -1,9 +1,14 @@
 open X509
 
-let cs_mmap file =
-  Unix_cstruct.of_fd Unix.(openfile file [O_RDONLY] 0)
+let mmap file =
+  let ic = open_in file in
+  let ln = in_channel_length ic in
+  let rs = Bytes.create ln in
+  really_input ic rs 0 ln;
+  close_in ic;
+  Bytes.unsafe_to_string rs
 
-let data file = cs_mmap ("./pkcs12/" ^ file)
+let data file = mmap ("./ocsp/" ^ file)
 
 let cert = match Certificate.decode_pem (data "certificate.pem") with
   | Ok c -> c

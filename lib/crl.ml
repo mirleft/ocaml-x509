@@ -17,7 +17,7 @@ type tBS_CRL = {
 type crl = {
   tbs_crl : tBS_CRL ;
   signature_algo : Algorithm.t ;
-  signature_val : Cstruct.t
+  signature_val : string
 }
 
 module Asn = struct
@@ -81,17 +81,17 @@ module Asn = struct
     sequence3
       (required ~label:"tbsCertList" @@ tBSCertList)
       (required ~label:"signatureAlgorithm" @@ Algorithm.identifier)
-      (required ~label:"signatureValue" @@ bit_string_cs)
+      (required ~label:"signatureValue" @@ bit_string_octets)
 
-  let (crl_of_cstruct, crl_to_cstruct) =
+  let (crl_of_octets, crl_to_octets) =
     projections_of Asn.der certificateList
 
-  let (tbs_CRL_of_cstruct, tbs_CRL_to_cstruct) =
+  let (tbs_CRL_of_octets, tbs_CRL_to_octets) =
     projections_of Asn.der tBSCertList
 end
 
 type t = {
-  raw : Cstruct.t ;
+  raw : string ;
   asn : crl ;
 }
 
@@ -100,7 +100,7 @@ let guard p e = if p then Ok () else Error e
 let ( let* ) = Result.bind
 
 let decode_der raw =
-  let* asn = Asn_grammars.err_to_msg (Asn.crl_of_cstruct raw) in
+  let* asn = Asn_grammars.err_to_msg (Asn.crl_of_octets raw) in
   Ok { raw ; asn }
 
 let encode_der { raw ; _ } = raw
@@ -202,14 +202,14 @@ let is_revoked ?allowed_hashes ~issuer:super ~cert (crls : t list) =
     crls
 
 let sign_tbs (tbs : tBS_CRL) key =
-  let tbs_raw = Asn.tbs_CRL_to_cstruct tbs in
+  let tbs_raw = Asn.tbs_CRL_to_octets tbs in
   match Algorithm.to_signature_algorithm tbs.signature with
   | None -> Error (`Msg "couldn't parse signature algorithm")
   | Some (_, hash) ->
     let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
     let* signature_val = Private_key.sign hash ~scheme key (`Message tbs_raw) in
     let asn = { tbs_crl = tbs ; signature_algo = tbs.signature ; signature_val } in
-    let raw = Asn.crl_to_cstruct asn in
+    let raw = Asn.crl_to_octets asn in
     Ok { asn ; raw }
 
 let revoke

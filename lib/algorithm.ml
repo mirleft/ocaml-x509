@@ -64,19 +64,19 @@ type t =
   | HMAC_SHA512
 
   (* symmetric block ciphers *)
-  | AES128_CBC of Cstruct.t
-  | AES192_CBC of Cstruct.t
-  | AES256_CBC of Cstruct.t
+  | AES128_CBC of string
+  | AES192_CBC of string
+  | AES256_CBC of string
 
   (* PBE encryption algorithms *)
-  | SHA_RC4_128 of Cstruct.t * int
-  | SHA_RC4_40 of Cstruct.t * int
-  | SHA_3DES_CBC of Cstruct.t * int
-  | SHA_2DES_CBC of Cstruct.t * int
-  | SHA_RC2_128_CBC of Cstruct.t * int
-  | SHA_RC2_40_CBC of Cstruct.t * int
+  | SHA_RC4_128 of string * int
+  | SHA_RC4_40 of string * int
+  | SHA_3DES_CBC of string * int
+  | SHA_2DES_CBC of string * int
+  | SHA_RC2_128_CBC of string * int
+  | SHA_RC2_40_CBC of string * int
 
-  | PBKDF2 of Cstruct.t * int * int option * t
+  | PBKDF2 of string * int * int option * t
   | PBES2 of t * t
 
 let to_string = function
@@ -403,24 +403,22 @@ let identifier =
            (choice4 null oid pbkdf2_or_pbe_or_pbes2_params octet_string)))
 
 let ecdsa_sig =
-  let f (r, s) =
+  let f (r', s') =
+    let r = Mirage_crypto_pk.Z_extra.of_octets_be r' in
+    let s = Mirage_crypto_pk.Z_extra.of_octets_be s' in
     if Z.sign r < 0 then
       Asn.S.parse_error "ECDSA signature: r < 0"
     else if Z.sign s < 0 then
       Asn.S.parse_error "ECDSA signature: s < 0"
-    else
-      Mirage_crypto_pk.Z_extra.to_cstruct_be r,
-      Mirage_crypto_pk.Z_extra.to_cstruct_be s
-  and g (r, s) =
-    Mirage_crypto_pk.Z_extra.of_cstruct_be r,
-    Mirage_crypto_pk.Z_extra.of_cstruct_be s
+    else (r', s')
+  and g (r, s) = (r, s)
   in
   map f g @@
   sequence2
     (required ~label:"r" integer)
     (required ~label:"s" integer)
 
-let ecdsa_sig_of_cstruct, ecdsa_sig_to_cstruct =
+let ecdsa_sig_of_octets, ecdsa_sig_to_octets =
   projections_of Asn.der ecdsa_sig
 
 let pp fmt x = Fmt.string fmt (to_string x)

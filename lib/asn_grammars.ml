@@ -5,7 +5,7 @@ let ( let* ) = Result.bind
 
 let decode codec cs =
   let* a, cs = Asn.decode codec cs in
-  if Cstruct.length cs = 0 then Ok a else Error (`Parse "Leftover")
+  if String.length cs = 0 then Ok a else Error (`Parse "Leftover")
 
 let projections_of encoding asn =
   let c = Asn.codec encoding asn in (decode c, Asn.encode c)

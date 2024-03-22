@@ -14,7 +14,6 @@ bug-reports: "https://github.com/mirleft/ocaml-x509/issues"
 depends: [
   "ocaml" {>= "4.08.0"}
   "dune" {>= "1.2"}
-  "cstruct" {>= "6.0.0"}
   "asn1-combinators" {>= "0.2.0"}
   "ptime"
   "base64" {>= "3.3.0"}
@@ -25,7 +24,6 @@ depends: [
   "mirage-crypto-rng" {with-test & >= "0.11.0"}
   "fmt" {>= "0.8.7"}
   "alcotest" {with-test}
-  "cstruct-unix" {with-test & >= "3.0.0"}
   "gmap" {>= "0.3.0"}
   "domain-name" {>= "0.3.0"}
   "logs"
@@ -49,3 +47,11 @@ The Public Key Cryptography Standards (PKCS) defines encoding and decoding
 (in ASN.1 DER and PEM format), which is also implemented by this library -
 namely PKCS 1, PKCS 5, PKCS 7, PKCS 8, PKCS 9, PKCS 10, and PKCS 12.
 """
+
+pin-depends: [
+  [ "mirage-crypto.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
+  [ "mirage-crypto-pk.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
+  [ "mirage-crypto-ec.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
+  [ "mirage-crypto-rng.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
+  [ "pbkdf.dev" "git+https://github.com/dinosaure/ocaml-pbkdf.git#5af4644b88774c1ed3288df4b43256b9a6767e01" ]
+]
