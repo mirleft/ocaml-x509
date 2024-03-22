@@ -246,10 +246,10 @@ module Asn = struct
     in
     sequence_of rd_name (* A vacuous choice, in the standard. *)
 
-  let (name_of_cstruct, name_to_cstruct) =
+  let (name_of_octets, name_to_octets) =
     projections_of Asn.der name
 end
 
-let decode_der cs = Asn_grammars.err_to_msg (Asn.name_of_cstruct cs)
+let decode_der cs = Asn_grammars.err_to_msg (Asn.name_of_octets cs)
 
-let encode_der = Asn.name_to_cstruct
+let encode_der = Asn.name_to_octets
