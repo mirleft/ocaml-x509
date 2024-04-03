@@ -404,14 +404,19 @@ let identifier =
 
 let ecdsa_sig =
   let f (r', s') =
-    let r = Mirage_crypto_pk.Z_extra.of_octets_be r' in
-    let s = Mirage_crypto_pk.Z_extra.of_octets_be s' in
-    if Z.sign r < 0 then
+    let r1 = String.get_uint8 r' 0
+    and s1 = String.get_uint8 s' 0
+    in
+    if r1 > 0x7F then
       Asn.S.parse_error "ECDSA signature: r < 0"
-    else if Z.sign s < 0 then
+    else if s1 > 0x7F then
       Asn.S.parse_error "ECDSA signature: s < 0"
-    else (r', s')
-  and g (r, s) = (r, s)
+    else
+      (if r1 = 0x00 then String.sub r' 1 (String.length r' - 1) else r'),
+      (if s1 = 0x00 then String.sub s' 1 (String.length s' - 1) else s')
+  and g (r, s) =
+    (if String.get_uint8 r 0 > 0x7F then String.make 1 '\x00' ^ r else r),
+    (if String.get_uint8 s 0 > 0x7F then String.make 1 '\x00' ^ s else s)
   in
   map f g @@
   sequence2

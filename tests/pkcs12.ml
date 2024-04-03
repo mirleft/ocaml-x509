@@ -8,7 +8,7 @@ let mmap file =
   close_in ic;
   Bytes.unsafe_to_string rs
 
-let data file = mmap ("./ocsp/" ^ file)
+let data file = mmap ("./pkcs12/" ^ file)
 
 let cert = match Certificate.decode_pem (data "certificate.pem") with
   | Ok c -> c
@@ -28,11 +28,11 @@ let cert_and_key xs =
 
 let openssl1 () =
   match PKCS12.decode_der (data "ossl.p12") with
-  | Error _ -> Alcotest.fail "failed to decode ossl.p12"
+  | Error `Msg m -> Alcotest.fail ("failed to decode ossl.p12: " ^ m)
   | Ok data ->
     match PKCS12.verify pass data with
     | Ok xs -> cert_and_key xs
-    | Error _ -> Alcotest.fail "failed to verify ossl.p12"
+    | Error `Msg m -> Alcotest.fail ("failed to verify ossl.p12: " ^ m)
 
 let openssl2 () =
   match PKCS12.decode_der (data "ossl_aes.p12") with

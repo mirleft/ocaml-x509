@@ -162,9 +162,6 @@ let decrypt_one ~key ~data ?(off = 0) dst =
   Bytes.set_uint16_le dst (off + 4) r.(2);
   Bytes.set_uint16_le dst (off + 6) r.(3)
 
-let shift buf off =
-  Bytes.sub buf off (Bytes.length buf - off)
-
 let decrypt_cbc ?(effective = 128) ~key ~iv data =
   let block = 8 in
   let key = key_expansion effective key in
@@ -174,5 +171,5 @@ let decrypt_cbc ?(effective = 128) ~key ~iv data =
     decrypt_one ~key ~data ~off:(i * block) dst
   done;
   Mirage_crypto.Uncommon.xor_into iv dst block;
-  Mirage_crypto.Uncommon.xor_into data (shift dst block) (l - block);
+  Mirage_crypto.Uncommon.xor_into data dst ~dst_off:block (l - block);
   Bytes.unsafe_to_string dst
