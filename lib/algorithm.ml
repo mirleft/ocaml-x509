@@ -415,8 +415,23 @@ let ecdsa_sig =
       (if r1 = 0x00 then String.sub r' 1 (String.length r' - 1) else r'),
       (if s1 = 0x00 then String.sub s' 1 (String.length s' - 1) else s')
   and g (r, s) =
-    (if String.get_uint8 r 0 > 0x7F then String.make 1 '\x00' ^ r else r),
-    (if String.get_uint8 s 0 > 0x7F then String.make 1 '\x00' ^ s else s)
+    let rec strip_leading_0 s off =
+      if String.length s - off >= 2 then
+        let s0 = String.get_uint8 s off
+        and s1 = String.get_uint8 s (off + 1)
+        in
+        if s0 = 0x00 && s1 < 0x80 then
+          strip_leading_0 s (off + 1)
+        else
+          String.sub s off (String.length s - off)
+      else
+        String.sub s off (String.length s - off)
+    in
+    let s = strip_leading_0 s 0
+    and r = strip_leading_0 r 0
+    in
+    (if String.get_uint8 r 0 > 0x7F then "\x00" ^ r else r),
+    (if String.get_uint8 s 0 > 0x7F then "\x00" ^ s else s)
   in
   map f g @@
   sequence2

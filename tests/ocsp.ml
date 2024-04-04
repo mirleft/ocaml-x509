@@ -115,7 +115,13 @@ let test_simple_responder () =
     | Ok resp ->
       match OCSP.Response.validate resp (Private_key.public responder_key) with
       | Ok () -> ()
-      | Error _ -> Alcotest.fail "cannot verify the signature of OCSP response"
+      | Error e ->
+        let pp_e ppf = function
+          | #Validation.signature_error as e -> X509.Validation.pp_signature_error ppf e
+          | `No_signature -> Fmt.string ppf "no signature"
+          | `Time_invalid -> Fmt.string ppf "time invalid"
+        in
+        Alcotest.failf "cannot verify the signature of OCSP response: %a" pp_e e
 
 let tests = [
   "OpenSSL request", `Quick, test_request ;
