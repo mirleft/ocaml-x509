@@ -28,6 +28,7 @@ depends: [
   "domain-name" {>= "0.3.0"}
   "logs"
   "pbkdf"
+  "ohex"
   "ipaddr" {>= "5.2.0"}
 ]
 conflicts: [ "result" {< "1.5"} ]
