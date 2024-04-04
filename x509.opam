@@ -54,5 +54,5 @@ pin-depends: [
   [ "mirage-crypto-pk.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
   [ "mirage-crypto-ec.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
   [ "mirage-crypto-rng.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
-  [ "pbkdf.dev" "git+https://github.com/dinosaure/ocaml-pbkdf.git#5af4644b88774c1ed3288df4b43256b9a6767e01" ]
+  [ "pbkdf.dev" "git+https://github.com/dinosaure/ocaml-pbkdf.git#0ef32f89cac4091e74d1a0fa34cf417f9b7c70df" ]
 ]
