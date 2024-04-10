@@ -50,9 +50,9 @@ namely PKCS 1, PKCS 5, PKCS 7, PKCS 8, PKCS 9, PKCS 10, and PKCS 12.
 """
 
 pin-depends: [
-  [ "mirage-crypto.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
-  [ "mirage-crypto-pk.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
-  [ "mirage-crypto-ec.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
-  [ "mirage-crypto-rng.dev" "git+https://github.com/mirage/mirage-crypto.git#918bef0ea7b7b71f02d27205a183ea5a709a7424" ]
+  [ "mirage-crypto.dev" "git+https://github.com/mirage/mirage-crypto.git#47127ec04403b18216696de5a8a637f7e88ca85e" ]
+  [ "mirage-crypto-pk.dev" "git+https://github.com/mirage/mirage-crypto.git#47127ec04403b18216696de5a8a637f7e88ca85e" ]
+  [ "mirage-crypto-ec.dev" "git+https://github.com/mirage/mirage-crypto.git#47127ec04403b18216696de5a8a637f7e88ca85e" ]
+  [ "mirage-crypto-rng.dev" "git+https://github.com/mirage/mirage-crypto.git#47127ec04403b18216696de5a8a637f7e88ca85e" ]
   [ "pbkdf.dev" "git+https://github.com/dinosaure/ocaml-pbkdf.git#0ef32f89cac4091e74d1a0fa34cf417f9b7c70df" ]
 ]

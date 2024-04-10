@@ -315,17 +315,16 @@ let pkcs12_decrypt algo password data =
   let key = pbes hash `Encryption password salt count key_len
   and iv = pbes hash `Iv password salt count iv_len
   in
+  let open Mirage_crypto in
   let* data =
     match algo with
     | SHA_RC2_40_CBC _ | SHA_RC2_128_CBC _ ->
       Ok (Rc2.decrypt_cbc ~effective:(key_len * 8) ~key ~iv data)
     | SHA_RC4_40 _ | SHA_RC4_128 _ ->
-      let open Mirage_crypto.Cipher_stream in
       let key = ARC4.of_secret key in
       let { ARC4.message ; _ } = ARC4.decrypt ~key data in
       Ok message
     | SHA_3DES_CBC _ ->
-      let open Mirage_crypto.Cipher_block in
       let key = DES.CBC.of_secret key in
       Ok (DES.CBC.decrypt ~key ~iv data)
     | _ -> Error (`Msg "encryption algorithm not supported")
@@ -352,13 +351,13 @@ let pkcs5_2_decrypt kdf enc password data =
     | _ -> Error (`Msg "expected kdf being pbkdf2")
   in
   let key = Pbkdf.pbkdf2 ~prf ~password ~salt ~count ~dk_len in
-  let key = Mirage_crypto.Cipher_block.AES.CBC.of_secret key in
-  let msg = Mirage_crypto.Cipher_block.AES.CBC.decrypt ~key ~iv data in
+  let key = Mirage_crypto.AES.CBC.of_secret key in
+  let msg = Mirage_crypto.AES.CBC.decrypt ~key ~iv data in
   Ok (unpad msg)
 
 let pkcs5_2_encrypt (mac : [ `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ]) count algo password data =
   let module Hash = (val (Digestif.module_of_hash' (mac :> Digestif.hash'))) in
-  let bs = Mirage_crypto.Cipher_block.AES.CBC.block_size in
+  let bs = Mirage_crypto.AES.CBC.block_size in
   let iv = Mirage_crypto_rng.generate bs in
   let enc, dk_len =
     match algo with
@@ -368,10 +367,10 @@ let pkcs5_2_encrypt (mac : [ `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ]) co
   in
   let salt = Mirage_crypto_rng.generate Hash.digest_size in
   let key = Pbkdf.pbkdf2 ~prf:(mac :> Digestif.hash') ~password ~salt ~count ~dk_len in
-  let key = Mirage_crypto.Cipher_block.AES.CBC.of_secret key in
+  let key = Mirage_crypto.AES.CBC.of_secret key in
   let padded_data = pad bs data in
   let enc_data =
-    Mirage_crypto.Cipher_block.AES.CBC.encrypt ~key ~iv padded_data
+    Mirage_crypto.AES.CBC.encrypt ~key ~iv padded_data
   in
   let kdf = Algorithm.PBKDF2 (salt, count, None, Algorithm.of_hmac mac) in
   Algorithm.PBES2 (kdf, enc), enc_data
