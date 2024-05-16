@@ -403,40 +403,9 @@ let identifier =
            (choice4 null oid pbkdf2_or_pbe_or_pbes2_params octet_string)))
 
 let ecdsa_sig =
-  let f (r', s') =
-    let r1 = String.get_uint8 r' 0
-    and s1 = String.get_uint8 s' 0
-    in
-    if r1 > 0x7F then
-      Asn.S.parse_error "ECDSA signature: r < 0"
-    else if s1 > 0x7F then
-      Asn.S.parse_error "ECDSA signature: s < 0"
-    else
-      (if r1 = 0x00 then String.sub r' 1 (String.length r' - 1) else r'),
-      (if s1 = 0x00 then String.sub s' 1 (String.length s' - 1) else s')
-  and g (r, s) =
-    let rec strip_leading_0 s off =
-      if String.length s - off >= 2 then
-        let s0 = String.get_uint8 s off
-        and s1 = String.get_uint8 s (off + 1)
-        in
-        if s0 = 0x00 && s1 < 0x80 then
-          strip_leading_0 s (off + 1)
-        else
-          String.sub s off (String.length s - off)
-      else
-        String.sub s off (String.length s - off)
-    in
-    let s = strip_leading_0 s 0
-    and r = strip_leading_0 r 0
-    in
-    (if String.get_uint8 r 0 > 0x7F then "\x00" ^ r else r),
-    (if String.get_uint8 s 0 > 0x7F then "\x00" ^ s else s)
-  in
-  map f g @@
   sequence2
-    (required ~label:"r" integer)
-    (required ~label:"s" integer)
+    (required ~label:"r" unsigned_integer)
+    (required ~label:"s" unsigned_integer)
 
 let ecdsa_sig_of_octets, ecdsa_sig_to_octets =
   projections_of Asn.der ecdsa_sig
