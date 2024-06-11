@@ -13,7 +13,7 @@ type cert_id = {
   hashAlgorithm: Algorithm.t;
   issuerNameHash: string;
   issuerKeyHash: string;
-  serialNumber: Z.t;
+  serialNumber: string;
 }
 
 let create_cert_id ?(hash=`SHA1) issuer serialNumber =
@@ -36,28 +36,24 @@ let pp_cert_id ppf {hashAlgorithm;issuerNameHash;issuerKeyHash;serialNumber} =
     Algorithm.pp hashAlgorithm
     Ohex.pp issuerNameHash
     Ohex.pp issuerKeyHash
-    Z.pp_print serialNumber
+    Ohex.pp serialNumber
 
 module Asn_common = struct
   open Asn.S
 
   let cert_id =
     let f (hashAlgorithm, issuerNameHash, issuerKeyHash, serialNumber) =
-      {hashAlgorithm;
-       issuerNameHash;
-       issuerKeyHash;
-       serialNumber= Mirage_crypto_pk.Z_extra.of_octets_be serialNumber;}
+      {hashAlgorithm; issuerNameHash; issuerKeyHash; serialNumber;}
     in
     let g {hashAlgorithm;issuerNameHash;issuerKeyHash;serialNumber;} =
-      (hashAlgorithm, issuerNameHash, issuerKeyHash,
-       Mirage_crypto_pk.Z_extra.to_octets_be serialNumber)
+      (hashAlgorithm, issuerNameHash, issuerKeyHash, serialNumber)
     in
     map f g @@
     sequence4
       (required ~label:"hashAlgorithm" Algorithm.identifier)
       (required ~label:"issuerNameHash" octet_string)
       (required ~label:"issuerKeyHash" octet_string)
-      (required ~label:"serialNumber" integer)
+      (required ~label:"serialNumber" Asn_grammars.serial)
 end
 
 let ( let* ) = Result.bind

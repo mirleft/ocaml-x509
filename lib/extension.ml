@@ -51,13 +51,13 @@ let pp_extended_key_usage ppf = function
   | `Ocsp_signing -> Fmt.string ppf "ocsp signing"
   | `Other oid -> Asn.OID.pp ppf oid
 
-type authority_key_id = string option * General_name.t * Z.t option
+type authority_key_id = string option * General_name.t * string option
 
 let pp_authority_key_id ppf (id, issuer, serial) =
-  Fmt.pf ppf "identifier %a@ issuer %a@ serial %s@ "
+  Fmt.pf ppf "identifier %a@ issuer %a@ serial %a@ "
     Fmt.(option ~none:(any "none") Ohex.pp) id
     General_name.pp issuer
-    (match serial with None -> "none" | Some x -> Z.to_string x)
+    Fmt.(option ~none:(any "none") Ohex.pp) serial
 
 type priv_key_usage_period = [
   | `Interval   of Ptime.t * Ptime.t
@@ -426,13 +426,15 @@ module Asn = struct
       (optional ~label:"pathLen" int)
 
   let authority_key_id =
-    map (fun (a, b, c) -> (a, def  General_name.empty b, Option.map Mirage_crypto_pk.Z_extra.of_octets_be c))
-        (fun (a, b, c) -> (a, def' General_name.empty b, Option.map Mirage_crypto_pk.Z_extra.to_octets_be c))
+    map (fun (a, b, c) ->
+        (a, def  General_name.empty b, c))
+      (fun (a, b, c) ->
+         (a, def' General_name.empty b, c))
     @@
     sequence3
       (optional ~label:"keyIdentifier"  @@ implicit 0 octet_string)
       (optional ~label:"authCertIssuer" @@ implicit 1 General_name.Asn.gen_names)
-      (optional ~label:"authCertSN"     @@ implicit 2 integer)
+      (optional ~label:"authCertSN"     @@ implicit 2 serial)
 
   let priv_key_usage_period =
     let f = function

@@ -386,7 +386,7 @@ module Extension : sig
   (** The authority key identifier, as present in the
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.1}Authority Key Identifier}
       extension. *)
-  type authority_key_id = string option * General_name.t * Z.t option
+  type authority_key_id = string option * General_name.t * string option
 
   (** The private key usage period, as defined in
       {{:https://tools.ietf.org/html/rfc3280#section-4.2.1.4}RFC 3280}. *)
@@ -559,7 +559,7 @@ module Certificate : sig
   val issuer : t -> Distinguished_name.t
 
   (** [serial certificate] is [sn], the serial number of the [certificate]. *)
-  val serial : t -> Z.t
+  val serial : t -> string
 
   (** [validity certificate] is [from, until], the validity of the certificate. *)
   val validity : t -> Ptime.t * Ptime.t
@@ -849,7 +849,7 @@ module Signing_request : sig
 ]} *)
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
     ?allowed_hashes:Digestif.hash' list ->
-    ?digest:Digestif.hash' -> ?serial:Z.t -> ?extensions:Extension.t ->
+    ?digest:Digestif.hash' -> ?serial:string -> ?extensions:Extension.t ->
     ?subject:Distinguished_name.t ->
     Private_key.t -> Distinguished_name.t ->
     (Certificate.t, Validation.signature_error) result
@@ -895,7 +895,7 @@ module CRL : sig
       {{:https://tools.ietf.org/html/rfc5280#section-5.3}RFC 5280 section 5.3}
       for allowed extensions (not enforced). *)
   type revoked_cert = {
-    serial : Z.t ;
+    serial : string ;
     date : Ptime.t ;
     extensions : Extension.t
   }
@@ -1076,11 +1076,11 @@ module OCSP : sig
   type cert_id
 
   (** [create_cert_id issuer serial] creates cert_id for this serial *)
-  val create_cert_id : ?hash:[ `MD5 | `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ] -> Certificate.t -> Z.t ->
+  val create_cert_id : ?hash:[ `MD5 | `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ] -> Certificate.t -> string ->
     cert_id
 
   (** [cert_id_serial certid] is serial number of this certid *)
-  val cert_id_serial : cert_id -> Z.t
+  val cert_id_serial : cert_id -> string
 
   (** [pp_cert_id ppf cert_id] pretty prints cert_id *)
   val pp_cert_id : cert_id Fmt.t

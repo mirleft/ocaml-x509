@@ -43,15 +43,13 @@ let responder_cert = match Certificate.decode_pem (data "certificate.pem") with
   | Ok c -> c
   | Error _ -> assert false
 let responder_dn = Certificate.subject responder_cert
-let test1_serial = Z.of_int 0x2710
+let test1_serial = "\x27\x10"
 
 let responder_key = match Private_key.decode_pem (data "key.pem") with
   | Ok k -> k
   | Error _ -> assert false
 
-let z_testable = Alcotest.testable Z.pp_print Z.equal
 let cert_dn_testable = Alcotest.testable Distinguished_name.pp Distinguished_name.equal
-
 
 let test_request () =
   let open OCSP.Request in
@@ -63,7 +61,7 @@ let test_request () =
     match cert_ids request with
     | [certid] ->
       let serialNumber = OCSP.cert_id_serial certid in
-      Alcotest.(check z_testable __LOC__ test1_serial serialNumber)
+      Alcotest.(check string __LOC__ test1_serial serialNumber)
     | _ -> Alcotest.fail "something wrong with OCSP request"
 
 let test_response () =
@@ -88,7 +86,7 @@ let test_response () =
     in
     let certid = single_response_cert_id response in
     let serialNumber = OCSP.cert_id_serial certid in
-    Alcotest.(check z_testable __LOC__ test1_serial serialNumber);
+    Alcotest.(check string __LOC__ test1_serial serialNumber);
     Alcotest.(check cert_dn_testable __LOC__ responder responder_dn)
 
 let test_simple_responder () =
@@ -100,7 +98,7 @@ let test_simple_responder () =
     let response_logic cert_id =
       let serial = OCSP.cert_id_serial cert_id in
       let cert_status =
-        if Z.equal test1_serial serial then
+        if String.equal test1_serial serial then
           `Revoked (now, None)
         else
           `Good

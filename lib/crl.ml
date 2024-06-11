@@ -1,5 +1,5 @@
 type revoked_cert = {
-  serial : Z.t ;
+  serial : string ;
   date : Ptime.t ;
   extensions : Extension.t
 }
@@ -34,7 +34,7 @@ module Asn = struct
     in
     map f g @@
     sequence3
-      (required ~label:"userCertificate" @@ Certificate.Asn.certificate_sn)
+      (required ~label:"userCertificate" @@ serial)
       (required ~label:"revocationDate" @@ Certificate.Asn.time)
       (optional ~label:"crlEntryExtensions" @@ Extension.Asn.extensions_der)
 
@@ -187,7 +187,7 @@ let is_revoked ?allowed_hashes ~issuer:super ~cert (crls : t list) =
         | Ok () ->
           begin try
               let entry = List.find
-                  (fun r -> Z.equal (Certificate.serial cert) r.serial)
+                  (fun r -> String.equal (Certificate.serial cert) r.serial)
                   (revoked_certificates crl)
               in
               match reason entry with

@@ -3,7 +3,7 @@
  *)
 type tBSCertificate = {
   version    : [ `V1 | `V2 | `V3 ] ;
-  serial     : Z.t ;
+  serial     : string ;
   signature  : Algorithm.t ;
   issuer     : Distinguished_name.t ;
   validity   : Ptime.t * Ptime.t ;
@@ -43,12 +43,6 @@ module Asn = struct
       (function `V3 -> 2 | `V2 -> 1 | `V1 -> 0)
       int
 
-  let certificate_sn =
-    map
-      Mirage_crypto_pk.Z_extra.of_octets_be
-      Mirage_crypto_pk.Z_extra.to_octets_be
-      integer
-
   let time =
     let f = function `C1 t -> t | `C2 t -> t
     and g t =
@@ -65,8 +59,7 @@ module Asn = struct
 
   let tBSCertificate =
     let f = fun (a, (b, (c, (d, (e, (f, (g, (h, (i, j))))))))) ->
-      let extn = match j with None -> Extension.empty | Some xs -> xs
-      in
+      let extn = match j with None -> Extension.empty | Some xs -> xs in
       { version    = def `V1 a ; serial     = b ;
         signature  = c         ; issuer     = d ;
         validity   = e         ; subject    = f ;
@@ -78,14 +71,13 @@ module Asn = struct
         validity   = e ; subject    = f ;
         pk_info    = g ; issuer_id  = h ;
         subject_id = i ; extensions = j } ->
-      let extn = if Extension.is_empty j then None else Some j
-      in
+      let extn = if Extension.is_empty j then None else Some j in
       (def' `V1 a, (b, (c, (d, (e, (f, (g, (h, (i, extn)))))))))
     in
     map f g @@
     sequence @@
     (optional ~label:"version"       @@ explicit 0 version) (* default v1 *)
-    @ (required ~label:"serialNumber"  @@ certificate_sn)
+    @ (required ~label:"serialNumber"  @@ serial)
     @ (required ~label:"signature"     @@ Algorithm.identifier)
     @ (required ~label:"issuer"        @@ Distinguished_name.Asn.name)
     @ (required ~label:"validity"      @@ validity)
@@ -179,7 +171,7 @@ let pp ppf { asn ; _ } =
   let tbs = asn.tbs_cert in
   let sigalg = Algorithm.to_signature_algorithm tbs.signature in
   Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %a"
-    pp_version tbs.version Z.pp_print tbs.serial
+    pp_version tbs.version Ohex.pp tbs.serial
     Fmt.(option ~none:(any "NONE") pp_sigalg) sigalg
     Distinguished_name.pp tbs.issuer
     (Ptime.pp_human ~tz_offset_s:0 ()) (fst tbs.validity)

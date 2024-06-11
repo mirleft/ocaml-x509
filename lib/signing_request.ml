@@ -187,7 +187,7 @@ let sign signing_request
     ~valid_from ~valid_until
     ?(allowed_hashes = Validation.sha2)
     ?digest
-    ?(serial = Mirage_crypto_pk.(Z_extra.gen_r Z.one Z.(one lsl 64)))
+    ?(serial = Mirage_crypto_rng.generate 10)
     ?(extensions = Extension.empty)
     ?(subject = signing_request.asn.info.subject)
     key issuer =
