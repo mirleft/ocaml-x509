@@ -1,3 +1,10 @@
+## v1.0.0 (2024-07-17)
+
+* **breaking change** Replace `Cstruct.t` by `string` (@dinosaure, @hannesm, #167)
+* Remove P224 (@dinosaure, @hannes, #166)
+* The serial number of certificates is a `string` and enforced to be a positive
+  integer of at most 20 bytes in length (@hannesm, #167)
+
 ## v0.16.5 (2023-07-03)
 
 * Always embed local_key_id in PKCS12 bags (reported #163 by @NightBlues,
