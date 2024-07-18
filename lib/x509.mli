@@ -504,6 +504,11 @@ module Certificate : sig
        are extracted *)
   val decode_pem_multiple : string -> (t list, [> `Msg of string ]) result
 
+  (** [fold_decode_pem_multiple fn acc pem] is a fold of the function [fn],
+      with the initial accumulator [acc], over the certificates extracted
+      (and potential parsing errors) from the [pem]. *)
+  val fold_decode_pem_multiple : ('a -> (t, [> `Msg of string ]) result -> 'a) -> 'a -> string -> 'a
+
   (** [decode_pem pem] is [t], where the single certificate of the
       [pem] is extracted *)
   val decode_pem : string -> (t, [> `Msg of string ]) result

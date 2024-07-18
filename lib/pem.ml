@@ -54,24 +54,27 @@ module Cs = struct
       | `Data cs :: tail -> accumulate t (cs :: acc) tail
       | `End t' :: tail ->
         if String.equal t t' then
-          Ok (concat "" (List.rev acc), tail)
+          let data = match Base64.decode (concat "" (List.rev acc)) with
+            | Ok data -> Ok (t, data)
+            | Error e -> Error e
+          in
+          data, tail
         else
-          Error (`Msg ("invalid end, expected " ^ t ^ ", found " ^ t'))
-      | _ :: _ -> Error (`Msg "invalid line, expected data or end")
-      | [] -> Error (`Msg "end of input")
+          Error (`Msg ("invalid end, expected " ^ t ^ ", found " ^ t')), tail
+      | _ :: tail -> Error (`Msg "invalid line, expected data or end"), tail
+      | [] -> Error (`Msg "end of input"), []
     in
 
     let rec block acc = function
       | `Begin t :: tail ->
-        let* body, tail = accumulate t [] tail in
-        let* data = Base64.decode body in
-        block ((t, data) :: acc) tail
+        let body, tail = accumulate t [] tail in
+        block (body :: acc) tail
       | _::xs -> block acc xs
-      | []    -> Ok (List.rev acc)
+      | [] -> List.rev acc
     in
     block [] ilines
 
-  let parse data= combine (lines data)
+  let parse_with_errors data = combine (lines data)
 
   let unparse ~tag value =
     let rec split_at_64 acc = function
@@ -91,7 +94,17 @@ module Cs = struct
     concat "" (first @ lines @ last)
 end
 
-let parse, unparse = Cs.(parse, unparse)
+let parse_with_errors, unparse = Cs.(parse_with_errors, unparse)
+
+let parse data =
+  let entries, errors =
+    List.partition_map
+      (function Ok v -> Either.Left v | Error e -> Either.Right e)
+      (parse_with_errors data)
+  in
+  match errors with
+  | [] -> Ok entries
+  | first_error :: _ -> Error first_error
 
 let exactly_one ~what = function
   | []  -> Error (`Msg ("No " ^ what))
