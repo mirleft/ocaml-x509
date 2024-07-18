@@ -6,7 +6,7 @@ type _ k =
   | Directory : Distinguished_name.t list k
   | EDI_party : (string option * string) list k
   | URI : string list k
-  | IP : Cstruct.t list k
+  | IP : string list k
   | Registered_id : Asn.oid list k
 
 module K = struct
@@ -47,7 +47,7 @@ let pp_k : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
                (pair ~sep:(any ", ")
                   (option ~none:(any "") string) string)) xs
   | URI, x -> Fmt.pf ppf "uri %a" pp_strs x
-  | IP, x -> Fmt.pf ppf "ip %a" Fmt.(list ~sep:(any ";") Cstruct.hexdump_pp) x
+  | IP, x -> Fmt.pf ppf "ip %a" Fmt.(list ~sep:(any ";") (fmt "%S")) x
   | Registered_id, x ->
     Fmt.pf ppf "registered id %a"
       Fmt.(list ~sep:(any ";") Asn.OID.pp) x

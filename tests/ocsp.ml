@@ -29,24 +29,27 @@ openssl ocsp -respin response.der -CAfile certificate.pem -text
 
 *)
 
-let cs_mmap file =
-  Unix_cstruct.of_fd Unix.(openfile file [O_RDONLY] 0)
+let mmap file =
+  let ic = open_in file in
+  let ln = in_channel_length ic in
+  let rs = Bytes.create ln in
+  really_input ic rs 0 ln;
+  close_in ic;
+  Bytes.unsafe_to_string rs
 
-let data file = cs_mmap ("./ocsp/" ^ file)
+let data file = mmap ("./ocsp/" ^ file)
 
 let responder_cert = match Certificate.decode_pem (data "certificate.pem") with
   | Ok c -> c
   | Error _ -> assert false
 let responder_dn = Certificate.subject responder_cert
-let test1_serial = Z.of_int 0x2710
+let test1_serial = "\x27\x10"
 
 let responder_key = match Private_key.decode_pem (data "key.pem") with
   | Ok k -> k
   | Error _ -> assert false
 
-let z_testable = Alcotest.testable Z.pp_print Z.equal
 let cert_dn_testable = Alcotest.testable Distinguished_name.pp Distinguished_name.equal
-
 
 let test_request () =
   let open OCSP.Request in
@@ -58,7 +61,7 @@ let test_request () =
     match cert_ids request with
     | [certid] ->
       let serialNumber = OCSP.cert_id_serial certid in
-      Alcotest.(check z_testable __LOC__ test1_serial serialNumber)
+      Alcotest.(check string __LOC__ test1_serial serialNumber)
     | _ -> Alcotest.fail "something wrong with OCSP request"
 
 let test_response () =
@@ -83,7 +86,7 @@ let test_response () =
     in
     let certid = single_response_cert_id response in
     let serialNumber = OCSP.cert_id_serial certid in
-    Alcotest.(check z_testable __LOC__ test1_serial serialNumber);
+    Alcotest.(check string __LOC__ test1_serial serialNumber);
     Alcotest.(check cert_dn_testable __LOC__ responder responder_dn)
 
 let test_simple_responder () =
@@ -95,7 +98,7 @@ let test_simple_responder () =
     let response_logic cert_id =
       let serial = OCSP.cert_id_serial cert_id in
       let cert_status =
-        if Z.equal test1_serial serial then
+        if String.equal test1_serial serial then
           `Revoked (now, None)
         else
           `Good
@@ -110,7 +113,13 @@ let test_simple_responder () =
     | Ok resp ->
       match OCSP.Response.validate resp (Private_key.public responder_key) with
       | Ok () -> ()
-      | Error _ -> Alcotest.fail "cannot verify the signature of OCSP response"
+      | Error e ->
+        let pp_e ppf = function
+          | #Validation.signature_error as e -> X509.Validation.pp_signature_error ppf e
+          | `No_signature -> Fmt.string ppf "no signature"
+          | `Time_invalid -> Fmt.string ppf "time invalid"
+        in
+        Alcotest.failf "cannot verify the signature of OCSP response: %a" pp_e e
 
 let tests = [
   "OpenSSL request", `Quick, test_request ;

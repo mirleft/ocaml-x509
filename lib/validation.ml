@@ -8,8 +8,8 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 type signature_error = [
   | `Bad_signature of Distinguished_name.t * string
-  | `Bad_encoding of Distinguished_name.t * string * Cstruct.t
-  | `Hash_not_allowed of Distinguished_name.t * Mirage_crypto.Hash.hash
+  | `Bad_encoding of Distinguished_name.t * string * string
+  | `Hash_not_allowed of Distinguished_name.t * [ `MD5 | `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ]
   | `Unsupported_keytype of Distinguished_name.t * Public_key.t
   | `Unsupported_algorithm of Distinguished_name.t * string
   | `Msg of string
@@ -21,7 +21,7 @@ let pp_signature_error ppf = function
       Distinguished_name.pp subj msg
   | `Bad_encoding (subj, err, sig_) ->
     Fmt.pf ppf "bad signature encoding of %a, ASN error %s:@.%a"
-      Distinguished_name.pp subj err Cstruct.hexdump_pp sig_
+      Distinguished_name.pp subj err Ohex.pp sig_
   | `Hash_not_allowed (subj, hash) ->
     Fmt.pf ppf "hash algorithm %a is not allowed, but %a is signed using it"
       Certificate.pp_hash hash Distinguished_name.pp subj
@@ -68,21 +68,24 @@ let validate_raw_signature subject allowed_hashes msg sig_alg signature pk =
   | None ->
     Error (`Unsupported_algorithm (subject, Algorithm.to_string sig_alg))
 
+let shift str off =
+  String.sub str off (String.length str - off)
+
 (* XXX should return the tbs_cert blob from the parser, this is insane *)
 let raw_cert_hack raw =
   (* we only support definite-length *)
   let loff = 1 in
-  let snd = Cstruct.get_uint8 raw loff in
+  let snd = String.get_uint8 raw loff in
   let lenl = 2 + if 0x80 land snd = 0 then 0 else 0x7F land snd in
   (* cut away the SEQUENCE and LENGTH from outer sequence (tbs, sigalg, sig) *)
-  let cert_buf = Cstruct.shift raw lenl in
+  let cert_buf = shift raw lenl in
   let rec l acc idx last =
     if idx = last then
       acc
     else
-      l (acc lsl 8 + Cstruct.get_uint8 cert_buf idx) (succ idx) last
+      l (acc lsl 8 + String.get_uint8 cert_buf idx) (succ idx) last
   in
-  let cert_len_byte = Cstruct.get_uint8 cert_buf loff in
+  let cert_len_byte = String.get_uint8 cert_buf loff in
   let cert_len =
     (* two cases: *)
     if 0x80 land cert_len_byte = 0 then
@@ -94,7 +97,7 @@ let raw_cert_hack raw =
       let len_len = 2 + 0x7F land cert_len_byte in
       len_len + (l 0 2 len_len)
   in
-  Cstruct.sub cert_buf 0 cert_len
+  String.sub cert_buf 0 cert_len
 
 let validate_signature allowed_hashes { Certificate.asn = trusted ; _ } { Certificate.asn ; raw } =
   let tbs_raw = raw_cert_hack raw in
@@ -201,7 +204,7 @@ let ext_authority_matches_subject trusted cert =
                    find Subject_key_id (Certificate.extensions trusted))
   with
   | (_, None) | (None, _)                       -> true (* not mandatory *)
-  | Some (_, (Some auth, _, _)), Some (_, au)   -> Cstruct.equal auth au
+  | Some (_, (Some auth, _, _)), Some (_, au)   -> String.equal auth au
   (* TODO: check exact rules in RFC5280 *)
   | Some (_, (None, _, _)), _                   -> true (* not mandatory *)
 
@@ -257,7 +260,7 @@ let pp_leaf_validation_error ppf = function
     Fmt.pf ppf "leaf certificate %a expired (now %a)" Certificate.pp c
       Fmt.(option ~none:(any "no timestamp provided") pp_pt) now
   | `LeafInvalidIP (c, ip) ->
-    Fmt.pf ppf "leaf certificate %a does not contain the IP %a (IPs present: %a)"
+    Fmt.pf ppf "leaf certificate %a does not contain the IP %a (IPs present: %a)String"
       Certificate.pp c Fmt.(option ~none:(any "none") Ipaddr.pp) ip
       Fmt.(list ~sep:(any ", ") Ipaddr.pp) (Certificate.ips c |> Ipaddr.Set.elements)
   | `LeafInvalidName (c, n) ->
@@ -317,13 +320,13 @@ let pp_chain_error ppf = function
   | #chain_validation_error as c -> pp_chain_validation_error ppf c
 
 type fingerprint_validation_error = [
-  | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
+  | `InvalidFingerprint of Certificate.t * string * string
 ]
 
 let pp_fingerprint_validation_error ppf = function
   | `InvalidFingerprint (c, c_fp, fp) ->
     Fmt.pf ppf "fingerprint for %a (computed %a) does not match, expected %a"
-      Certificate.pp c Cstruct.hexdump_pp c_fp Cstruct.hexdump_pp fp
+      Certificate.pp c Ohex.pp c_fp Ohex.pp fp
 
 type validation_error = [
   | signature_error
@@ -462,7 +465,7 @@ let fingerprint_verification ?ip host now fingerprint fp = function
   | [] -> Error `EmptyCertificateChain
   | server::_ ->
     let computed_fingerprint = fp server in
-    if Cstruct.equal computed_fingerprint fingerprint then
+    if String.equal computed_fingerprint fingerprint then
       match
         validate_time now server,
         maybe_validate_hostname server host,

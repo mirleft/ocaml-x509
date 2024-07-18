@@ -4,16 +4,19 @@ let time () = None
 
 let with_loaded_file file ~f =
   let fullpath = "./testcertificates/" ^ file ^ ".pem" in
-  let fd = Unix.(openfile fullpath [O_RDONLY] 0) in
-  let buf = Unix_cstruct.of_fd fd in
+  let fd = open_in fullpath in
+  let ln = in_channel_length fd in
+  let buf = Bytes.create ln in
+  really_input fd buf 0 ln;
+  let buf = Bytes.unsafe_to_string buf in
   try
     let r = f buf in
-    Unix.close fd;
+    close_in fd;
     match r with
     | Ok data -> data
     | Error (`Msg m) -> Alcotest.failf "decoding error in %s: %s" fullpath m
   with e ->
-    Unix.close fd;
+    close_in fd;
     Alcotest.failf "exception in %s: %s" fullpath (Printexc.to_string e)
 
 let priv =

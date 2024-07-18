@@ -5,7 +5,7 @@ let ( let* ) = Result.bind
 
 let decode codec cs =
   let* a, cs = Asn.decode codec cs in
-  if Cstruct.length cs = 0 then Ok a else Error (`Parse "Leftover")
+  if String.length cs = 0 then Ok a else Error (`Parse "Leftover")
 
 let projections_of encoding asn =
   let c = Asn.codec encoding asn in (decode c, Asn.encode c)
@@ -53,3 +53,15 @@ let generalized_time_no_frac_s =
                 parse_error "generalized time has fractional seconds")
            (fun y -> Ptime.truncate ~frac_s:0 y)
            generalized_time)
+
+(* serial number, as defined in RFC 5280 4.1.2.2: must be > 0 and not be longer than 20 octets
+   we accept 0. *)
+let serial =
+  Asn.S.(map
+           (fun x ->
+              if String.length x > 20 then parse_error "serial exceeds 20 octets";
+              x)
+           (fun y ->
+              if String.length y > 20 then failwith "serial exceeds 20 octets";
+              y)
+           unsigned_integer)

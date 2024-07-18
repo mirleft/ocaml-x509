@@ -51,13 +51,13 @@ let pp_extended_key_usage ppf = function
   | `Ocsp_signing -> Fmt.string ppf "ocsp signing"
   | `Other oid -> Asn.OID.pp ppf oid
 
-type authority_key_id = Cstruct.t option * General_name.t * Z.t option
+type authority_key_id = string option * General_name.t * string option
 
 let pp_authority_key_id ppf (id, issuer, serial) =
-  Fmt.pf ppf "identifier %a@ issuer %a@ serial %s@ "
-    Fmt.(option ~none:(any "none") Cstruct.hexdump_pp) id
+  Fmt.pf ppf "identifier %a@ issuer %a@ serial %a@ "
+    Fmt.(option ~none:(any "none") Ohex.pp) id
     General_name.pp issuer
-    (match serial with None -> "none" | Some x -> Z.to_string x)
+    Fmt.(option ~none:(any "none") Ohex.pp) serial
 
 type priv_key_usage_period = [
   | `Interval   of Ptime.t * Ptime.t
@@ -172,10 +172,10 @@ let pp_issuing_distribution_point ppf (name, onlyuser, onlyca, onlysome, indirec
 type 'a extension = bool * 'a
 
 type _ k =
-  | Unsupported : Asn.oid -> Cstruct.t extension k
+  | Unsupported : Asn.oid -> string extension k
   | Subject_alt_name : General_name.t extension k
   | Authority_key_id : authority_key_id extension k
-  | Subject_key_id : Cstruct.t extension k
+  | Subject_key_id : string extension k
   | Issuer_alt_name : General_name.t extension k
   | Key_usage : key_usage list extension k
   | Ext_key_usage : extended_key_usage list extension k
@@ -203,7 +203,7 @@ let pp_one : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
       pp_authority_key_id kid
   | Subject_key_id, (crit, kid) ->
     Fmt.pf ppf "%ssubjectKeyIdentifier %a" (c_to_str crit)
-      Cstruct.hexdump_pp kid
+      Ohex.pp kid
   | Issuer_alt_name, (crit, alt) ->
     Fmt.pf ppf "%sissuerAlternativeNames %a" (c_to_str crit)
       General_name.pp alt
@@ -244,9 +244,9 @@ let pp_one : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
   | Policies, (crit, pols) ->
     Fmt.pf ppf "%spolicies %a" (c_to_str crit)
       Fmt.(list ~sep:(any "; ") pp_policy) pols
-  | Unsupported oid, (crit, cs) ->
+  | Unsupported oid, (crit, str) ->
     Fmt.pf ppf "%sunsupported %a: %a" (c_to_str crit) Asn.OID.pp oid
-      Cstruct.hexdump_pp cs
+      Ohex.pp str
 
 module ID = Registry.Cert_extn
 
@@ -352,7 +352,6 @@ let ips exts =
     | Some xs ->
       let ips =
         List.fold_left (fun acc ip ->
-          let ip = Cstruct.to_string ip in
           match
             match String.length ip with
             | 4 -> Result.map (fun ip -> Ipaddr.V4 ip) (Ipaddr.V4.of_octets ip)
@@ -427,13 +426,15 @@ module Asn = struct
       (optional ~label:"pathLen" int)
 
   let authority_key_id =
-    map (fun (a, b, c) -> (a, def  General_name.empty b, c))
-        (fun (a, b, c) -> (a, def' General_name.empty b, c))
+    map (fun (a, b, c) ->
+        (a, def  General_name.empty b, c))
+      (fun (a, b, c) ->
+         (a, def' General_name.empty b, c))
     @@
     sequence3
       (optional ~label:"keyIdentifier"  @@ implicit 0 octet_string)
       (optional ~label:"authCertIssuer" @@ implicit 1 General_name.Asn.gen_names)
-      (optional ~label:"authCertSN"     @@ implicit 2 integer)
+      (optional ~label:"authCertSN"     @@ implicit 2 serial)
 
   let priv_key_usage_period =
     let f = function
@@ -563,83 +564,83 @@ module Asn = struct
     let rev = List.map (fun (k, v) -> (v, k)) alist in
     enumerated (fun i -> List.assoc i alist) (fun k -> List.assoc k rev)
 
-  let gen_names_of_cs, gen_names_to_cs       = project_exn General_name.Asn.gen_names
-  and auth_key_id_of_cs, auth_key_id_to_cs   = project_exn authority_key_id
-  and subj_key_id_of_cs, subj_key_id_to_cs   = project_exn octet_string
-  and key_usage_of_cs, key_usage_to_cs       = project_exn key_usage
-  and e_key_usage_of_cs, e_key_usage_to_cs   = project_exn ext_key_usage
-  and basic_constr_of_cs, basic_constr_to_cs = project_exn basic_constraints
-  and pr_key_peri_of_cs, pr_key_peri_to_cs   = project_exn priv_key_usage_period
-  and name_con_of_cs, name_con_to_cs         = project_exn name_constraints
-  and crl_distrib_of_cs, crl_distrib_to_cs   = project_exn crl_distribution_points
-  and cert_pol_of_cs, cert_pol_to_cs         = project_exn cert_policies
-  and int_of_cs, int_to_cs                   = project_exn int
-  and issuing_dp_of_cs, issuing_dp_to_cs     = project_exn issuing_distribution_point
-  and crl_reason_of_cs, crl_reason_to_cs     = project_exn crl_reason
-  and time_of_cs, time_to_cs                 = project_exn generalized_time_no_frac_s
+  let gen_names_of_str, gen_names_to_str       = project_exn General_name.Asn.gen_names
+  and auth_key_id_of_str, auth_key_id_to_str   = project_exn authority_key_id
+  and subj_key_id_of_str, subj_key_id_to_str   = project_exn octet_string
+  and key_usage_of_str, key_usage_to_str       = project_exn key_usage
+  and e_key_usage_of_str, e_key_usage_to_str   = project_exn ext_key_usage
+  and basic_constr_of_str, basic_constr_to_str = project_exn basic_constraints
+  and pr_key_peri_of_str, pr_key_peri_to_str   = project_exn priv_key_usage_period
+  and name_con_of_str, name_con_to_str         = project_exn name_constraints
+  and crl_distrib_of_str, crl_distrib_to_str   = project_exn crl_distribution_points
+  and cert_pol_of_str, cert_pol_to_str         = project_exn cert_policies
+  and int_of_str, int_to_str                   = project_exn int
+  and issuing_dp_of_str, issuing_dp_to_str     = project_exn issuing_distribution_point
+  and crl_reason_of_str, crl_reason_to_str     = project_exn crl_reason
+  and time_of_str, time_to_str                 = project_exn generalized_time_no_frac_s
 
   (* XXX 4.2.1.4. - cert policies! ( and other x509 extensions ) *)
 
   let reparse_extension_exn crit = case_of_oid_f [
       (ID.subject_alternative_name,
-       fun cs -> B (Subject_alt_name, (crit, gen_names_of_cs cs))) ;
+       fun cs -> B (Subject_alt_name, (crit, gen_names_of_str cs))) ;
       (ID.issuer_alternative_name,
-       fun cs -> B (Issuer_alt_name, (crit, gen_names_of_cs cs))) ;
+       fun cs -> B (Issuer_alt_name, (crit, gen_names_of_str cs))) ;
       (ID.authority_key_identifier,
-       fun cs -> B (Authority_key_id, (crit, auth_key_id_of_cs cs))) ;
+       fun cs -> B (Authority_key_id, (crit, auth_key_id_of_str cs))) ;
       (ID.subject_key_identifier,
-       fun cs -> B (Subject_key_id, (crit, subj_key_id_of_cs cs))) ;
+       fun cs -> B (Subject_key_id, (crit, subj_key_id_of_str cs))) ;
       (ID.key_usage,
-       fun cs -> B (Key_usage, (crit, key_usage_of_cs cs))) ;
+       fun cs -> B (Key_usage, (crit, key_usage_of_str cs))) ;
       (ID.basic_constraints,
-       fun cs -> B (Basic_constraints, (crit, basic_constr_of_cs cs))) ;
+       fun cs -> B (Basic_constraints, (crit, basic_constr_of_str cs))) ;
       (ID.crl_number,
-       fun cs -> B (CRL_number, (crit, int_of_cs cs))) ;
+       fun cs -> B (CRL_number, (crit, int_of_str cs))) ;
       (ID.delta_crl_indicator,
-       fun cs -> B (Delta_CRL_indicator, (crit, int_of_cs cs))) ;
+       fun cs -> B (Delta_CRL_indicator, (crit, int_of_str cs))) ;
       (ID.extended_key_usage,
-       fun cs -> B (Ext_key_usage, (crit, e_key_usage_of_cs cs))) ;
+       fun cs -> B (Ext_key_usage, (crit, e_key_usage_of_str cs))) ;
       (ID.private_key_usage_period,
-       fun cs -> B (Priv_key_period, (crit, pr_key_peri_of_cs cs))) ;
+       fun cs -> B (Priv_key_period, (crit, pr_key_peri_of_str cs))) ;
       (ID.name_constraints,
-       fun cs -> B (Name_constraints, (crit, name_con_of_cs cs))) ;
+       fun cs -> B (Name_constraints, (crit, name_con_of_str cs))) ;
       (ID.crl_distribution_points,
-       fun cs -> B (CRL_distribution_points, (crit, crl_distrib_of_cs cs))) ;
+       fun cs -> B (CRL_distribution_points, (crit, crl_distrib_of_str cs))) ;
       (ID.issuing_distribution_point,
-       fun cs -> B (Issuing_distribution_point, (crit, issuing_dp_of_cs cs))) ;
+       fun cs -> B (Issuing_distribution_point, (crit, issuing_dp_of_str cs))) ;
       (ID.freshest_crl,
-       fun cs -> B (Freshest_CRL, (crit, crl_distrib_of_cs cs))) ;
+       fun cs -> B (Freshest_CRL, (crit, crl_distrib_of_str cs))) ;
       (ID.reason_code,
-       fun cs -> B (Reason, (crit, crl_reason_of_cs cs))) ;
+       fun cs -> B (Reason, (crit, crl_reason_of_str cs))) ;
       (ID.invalidity_date,
-       fun cs -> B (Invalidity_date, (crit, time_of_cs cs))) ;
+       fun cs -> B (Invalidity_date, (crit, time_of_str cs))) ;
       (ID.certificate_issuer,
-       fun cs -> B (Certificate_issuer, (crit, gen_names_of_cs cs))) ;
+       fun cs -> B (Certificate_issuer, (crit, gen_names_of_str cs))) ;
       (ID.certificate_policies_2,
-       fun cs -> B (Policies, (crit, cert_pol_of_cs cs)))
+       fun cs -> B (Policies, (crit, cert_pol_of_str cs)))
     ]
       ~default:(fun oid -> fun cs -> B (Unsupported oid, (crit, cs)))
 
   let unparse_extension (B (k, v)) =
     let v' = match k, v with
-      | Subject_alt_name, (_, x) -> gen_names_to_cs x
-      | Issuer_alt_name, (_, x) -> gen_names_to_cs x
-      | Authority_key_id, (_, x) -> auth_key_id_to_cs x
-      | Subject_key_id, (_, x) -> subj_key_id_to_cs  x
-      | Key_usage, (_, x) -> key_usage_to_cs x
-      | Basic_constraints, (_, x) -> basic_constr_to_cs x
-      | CRL_number, (_, x) -> int_to_cs x
-      | Delta_CRL_indicator, (_, x) -> int_to_cs x
-      | Ext_key_usage, (_, x) -> e_key_usage_to_cs x
-      | Priv_key_period, (_, x) -> pr_key_peri_to_cs x
-      | Name_constraints, (_, x) -> name_con_to_cs x
-      | CRL_distribution_points, (_, x) -> crl_distrib_to_cs x
-      | Issuing_distribution_point, (_, x) -> issuing_dp_to_cs x
-      | Freshest_CRL, (_, x) -> crl_distrib_to_cs x
-      | Reason, (_, x) -> crl_reason_to_cs x
-      | Invalidity_date, (_, x) -> time_to_cs x
-      | Certificate_issuer, (_, x) -> gen_names_to_cs x
-      | Policies, (_, x) -> cert_pol_to_cs x
+      | Subject_alt_name, (_, x) -> gen_names_to_str x
+      | Issuer_alt_name, (_, x) -> gen_names_to_str x
+      | Authority_key_id, (_, x) -> auth_key_id_to_str x
+      | Subject_key_id, (_, x) -> subj_key_id_to_str  x
+      | Key_usage, (_, x) -> key_usage_to_str x
+      | Basic_constraints, (_, x) -> basic_constr_to_str x
+      | CRL_number, (_, x) -> int_to_str x
+      | Delta_CRL_indicator, (_, x) -> int_to_str x
+      | Ext_key_usage, (_, x) -> e_key_usage_to_str x
+      | Priv_key_period, (_, x) -> pr_key_peri_to_str x
+      | Name_constraints, (_, x) -> name_con_to_str x
+      | CRL_distribution_points, (_, x) -> crl_distrib_to_str x
+      | Issuing_distribution_point, (_, x) -> issuing_dp_to_str x
+      | Freshest_CRL, (_, x) -> crl_distrib_to_str x
+      | Reason, (_, x) -> crl_reason_to_str x
+      | Invalidity_date, (_, x) -> time_to_str x
+      | Certificate_issuer, (_, x) -> gen_names_to_str x
+      | Policies, (_, x) -> cert_pol_to_str x
       | Unsupported _, (_, x) -> x
     in
     to_oid k, critical k v, v'

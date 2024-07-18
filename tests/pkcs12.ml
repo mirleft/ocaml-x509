@@ -1,9 +1,14 @@
 open X509
 
-let cs_mmap file =
-  Unix_cstruct.of_fd Unix.(openfile file [O_RDONLY] 0)
+let mmap file =
+  let ic = open_in file in
+  let ln = in_channel_length ic in
+  let rs = Bytes.create ln in
+  really_input ic rs 0 ln;
+  close_in ic;
+  Bytes.unsafe_to_string rs
 
-let data file = cs_mmap ("./pkcs12/" ^ file)
+let data file = mmap ("./pkcs12/" ^ file)
 
 let cert = match Certificate.decode_pem (data "certificate.pem") with
   | Ok c -> c
@@ -23,11 +28,11 @@ let cert_and_key xs =
 
 let openssl1 () =
   match PKCS12.decode_der (data "ossl.p12") with
-  | Error _ -> Alcotest.fail "failed to decode ossl.p12"
+  | Error `Msg m -> Alcotest.fail ("failed to decode ossl.p12: " ^ m)
   | Ok data ->
     match PKCS12.verify pass data with
     | Ok xs -> cert_and_key xs
-    | Error _ -> Alcotest.fail "failed to verify ossl.p12"
+    | Error `Msg m -> Alcotest.fail ("failed to verify ossl.p12: " ^ m)
 
 let openssl2 () =
   match PKCS12.decode_der (data "ossl_aes.p12") with

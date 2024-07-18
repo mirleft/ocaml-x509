@@ -3,26 +3,26 @@
  *)
 type tBSCertificate = {
   version    : [ `V1 | `V2 | `V3 ] ;
-  serial     : Z.t ;
+  serial     : string ;
   signature  : Algorithm.t ;
   issuer     : Distinguished_name.t ;
   validity   : Ptime.t * Ptime.t ;
   subject    : Distinguished_name.t ;
   pk_info    : Public_key.t ;
-  issuer_id  : Cstruct.t option ;
-  subject_id : Cstruct.t option ;
+  issuer_id  : string option ;
+  subject_id : string option ;
   extensions : Extension.t
 }
 
 type certificate = {
   tbs_cert       : tBSCertificate ;
   signature_algo : Algorithm.t ;
-  signature_val  : Cstruct.t
+  signature_val  : string
 }
 
 (*
- * There are two reasons to carry Cstruct.t around:
- * - we still need to hack on the cstruct to get bytes to hash
+ * There are two reasons to carry octets around:
+ * - we still need to hack on the octets to get bytes to hash
  *   ( this needs to go )
  * - we need a cs to send to the peer
  * It's a bit ugly to have two levels, and both are better solved by extending
@@ -31,7 +31,7 @@ type certificate = {
  *)
 type t = {
   asn : certificate ;
-  raw : Cstruct.t
+  raw : string
 }
 
 module Asn = struct
@@ -42,8 +42,6 @@ module Asn = struct
     map (function 2 -> `V3 | 1 -> `V2 | 0 -> `V1 | _ -> parse_error "unknown version")
       (function `V3 -> 2 | `V2 -> 1 | `V1 -> 0)
       int
-
-  let certificate_sn = integer
 
   let time =
     let f = function `C1 t -> t | `C2 t -> t
@@ -57,12 +55,11 @@ module Asn = struct
       (required ~label:"not before" time)
       (required ~label:"not after"  time)
 
-  let unique_identifier = bit_string_cs
+  let unique_identifier = bit_string_octets
 
   let tBSCertificate =
     let f = fun (a, (b, (c, (d, (e, (f, (g, (h, (i, j))))))))) ->
-      let extn = match j with None -> Extension.empty | Some xs -> xs
-      in
+      let extn = match j with None -> Extension.empty | Some xs -> xs in
       { version    = def `V1 a ; serial     = b ;
         signature  = c         ; issuer     = d ;
         validity   = e         ; subject    = f ;
@@ -74,14 +71,13 @@ module Asn = struct
         validity   = e ; subject    = f ;
         pk_info    = g ; issuer_id  = h ;
         subject_id = i ; extensions = j } ->
-      let extn = if Extension.is_empty j then None else Some j
-      in
+      let extn = if Extension.is_empty j then None else Some j in
       (def' `V1 a, (b, (c, (d, (e, (f, (g, (h, (i, extn)))))))))
     in
     map f g @@
     sequence @@
     (optional ~label:"version"       @@ explicit 0 version) (* default v1 *)
-    @ (required ~label:"serialNumber"  @@ certificate_sn)
+    @ (required ~label:"serialNumber"  @@ serial)
     @ (required ~label:"signature"     @@ Algorithm.identifier)
     @ (required ~label:"issuer"        @@ Distinguished_name.Asn.name)
     @ (required ~label:"validity"      @@ validity)
@@ -94,7 +90,7 @@ module Asn = struct
       (* v3 if present *)
    -@ (optional ~label:"extensions"    @@ explicit 3 Extension.Asn.extensions_der)
 
-  let (tbs_certificate_of_cstruct, tbs_certificate_to_cstruct) =
+  let (tbs_certificate_of_octets, tbs_certificate_to_octets) =
     projections_of Asn.der tBSCertificate
 
   let certificate =
@@ -108,9 +104,9 @@ module Asn = struct
     sequence3
       (required ~label:"tbsCertificate"     tBSCertificate)
       (required ~label:"signatureAlgorithm" Algorithm.identifier)
-      (required ~label:"signatureValue"     bit_string_cs)
+      (required ~label:"signatureValue"     bit_string_octets)
 
-  let (certificate_of_cstruct, certificate_to_cstruct) =
+  let (certificate_of_octets, certificate_to_octets) =
     projections_of Asn.der certificate
 
   let pkcs1_digest_info =
@@ -126,19 +122,19 @@ module Asn = struct
       (required ~label:"digestAlgorithm" Algorithm.identifier)
       (required ~label:"digest"          octet_string)
 
-  let (pkcs1_digest_info_of_cstruct, pkcs1_digest_info_to_cstruct) =
+  let (pkcs1_digest_info_of_octets, pkcs1_digest_info_to_octets) =
     projections_of Asn.der pkcs1_digest_info
 end
 
 let decode_pkcs1_digest_info cs =
-  Asn_grammars.err_to_msg (Asn.pkcs1_digest_info_of_cstruct cs)
+  Asn_grammars.err_to_msg (Asn.pkcs1_digest_info_of_octets cs)
 
-let encode_pkcs1_digest_info = Asn.pkcs1_digest_info_to_cstruct
+let encode_pkcs1_digest_info = Asn.pkcs1_digest_info_to_octets
 
 let ( let* ) = Result.bind
 
 let decode_der cs =
-  let* asn = Asn_grammars.err_to_msg (Asn.certificate_of_cstruct cs) in
+  let* asn = Asn_grammars.err_to_msg (Asn.certificate_of_octets cs) in
   Ok { asn ; raw = cs }
 
 let encode_der { raw ; _ } = raw
@@ -158,7 +154,7 @@ let encode_pem v =
   Pem.unparse ~tag:"CERTIFICATE" (encode_der v)
 
 let encode_pem_multiple cs =
-  Cstruct.concat (List.map encode_pem cs)
+  String.concat "" (List.map encode_pem cs)
 
 let pp_version ppf v =
   Fmt.string ppf (match v with `V1 -> "1" | `V2 -> "2" | `V3 -> "3")
@@ -175,7 +171,7 @@ let pp ppf { asn ; _ } =
   let tbs = asn.tbs_cert in
   let sigalg = Algorithm.to_signature_algorithm tbs.signature in
   Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %a"
-    pp_version tbs.version Z.pp_print tbs.serial
+    pp_version tbs.version Ohex.pp tbs.serial
     Fmt.(option ~none:(any "NONE") pp_sigalg) sigalg
     Distinguished_name.pp tbs.issuer
     (Ptime.pp_human ~tz_offset_s:0 ()) (fst tbs.validity)
@@ -183,7 +179,9 @@ let pp ppf { asn ; _ } =
     Distinguished_name.pp tbs.subject
     Extension.pp tbs.extensions
 
-let fingerprint hash cert = Mirage_crypto.Hash.digest hash cert.raw
+let fingerprint hash cert =
+  let module Hash = (val (Digestif.module_of_hash' hash)) in
+  Hash.(to_raw_string (digest_string cert.raw))
 
 let issuer { asn ; _ } = asn.tbs_cert.issuer
 

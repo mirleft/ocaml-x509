@@ -6,13 +6,13 @@
    some definitions from PKCS7 (RFC 2315) are implemented as well, as needed
 *)
 
-type content_info = Asn.oid * Cstruct.t
+type content_info = Asn.oid * string
 
-type digest_info = Algorithm.t * Cstruct.t
+type digest_info = Algorithm.t * string
 
-type mac_data = digest_info * Cstruct.t * int
+type mac_data = digest_info * string * int
 
-type t = Cstruct.t * mac_data
+type t = string * mac_data
 
 module Asn = struct
   open Asn_grammars
@@ -189,106 +189,108 @@ end
 
 let prepare_pw str =
   let l = String.length str in
-  let cs = Cstruct.create ((succ l) * 2) in
+  let cs = Bytes.make ((succ l) * 2) '\000' in
   for i = 0 to pred l do
-    Cstruct.set_char cs (succ (i * 2)) (String.get str i)
+    Bytes.set cs (succ (i * 2)) (String.get str i)
   done;
-  cs
+  Bytes.unsafe_to_string cs
 
 let id len purpose =
-  let b = Cstruct.create len in
   let id = match purpose with
     | `Encryption -> 1
     | `Iv -> 2
     | `Hmac -> 3
   in
-  Cstruct.memset b id;
-  b
+  String.make len (Char.unsafe_chr id)
 
 let v = function
   | `MD5 | `SHA1 | `SHA224 | `SHA256 -> 512 / 8
   | `SHA384 | `SHA512 -> 1024 / 8
 
 let fill ~data ~out =
-  let len = Cstruct.length out
-  and l = Cstruct.length data
+  let len = Bytes.length out
+  and l = String.length data
   in
   let rec c off =
     if off < len then begin
-      Cstruct.blit data 0 out off (min (len - off) l);
+      Bytes.blit_string data 0 out off (min (len - off) l);
       c (off + l)
     end
   in
   c 0
 
 let fill_or_empty size data =
-  let l = Cstruct.length data in
+  let l = String.length data in
   if l = 0 then data
   else
     let len = size * ((l + size - 1) / size) in
-    let buf = Cstruct.create len in
+    let buf = Bytes.make len '\000' in
     fill ~data ~out:buf;
-    buf
+    Bytes.unsafe_to_string buf
 
 let pbes algorithm purpose password salt iterations n =
+  let module Hash = (val (Digestif.module_of_hash' (algorithm :> Digestif.hash'))) in
   let pw = prepare_pw password
   and v = v algorithm
-  and u = Mirage_crypto.Hash.digest_size algorithm
+  and u = Hash.digest_size
   in
   let diversifier = id v purpose in
   let salt = fill_or_empty v salt in
   let pass = fill_or_empty v pw in
-  let out = Cstruct.create n in
+  let out = Bytes.make n '\000' in
   let rec one off i =
-    let ai = ref (Mirage_crypto.Hash.digest algorithm (Cstruct.append diversifier i)) in
+    let ai = ref Hash.(to_raw_string (digest_string (diversifier ^ i))) in
     for _j = 1 to pred iterations do
-      ai := Mirage_crypto.Hash.digest algorithm !ai;
+      ai := Hash.(to_raw_string (digest_string !ai));
     done;
-    Cstruct.blit !ai 0 out off (min (n - off) u);
+    Bytes.blit_string !ai 0 out off (min (n - off) u);
     if u >= n - off then () else
       (* 6B *)
-      let b = Cstruct.create v in
+      let b = Bytes.make v '\000' in
       fill ~data:!ai ~out:b;
       (* 6C *)
-      let i' = Cstruct.create (Cstruct.length i) in
-      for j = 0 to pred (Cstruct.length i / v) do
+      let i' = Bytes.create (String.length i) in
+      for j = 0 to pred (String.length i / v) do
         let c = ref 1 in
         for k = pred v downto 0 do
           let idx = j * v + k in
-          c := (!c + Cstruct.get_uint8 i idx + Cstruct.get_uint8 b k) land 0xFFFF;
-          Cstruct.set_uint8 i' idx (!c land 0xFF);
+          c := (!c + String.get_uint8 i idx + Bytes.get_uint8 b k) land 0xFFFF;
+          Bytes.set_uint8 i' idx (!c land 0xFF);
           c := !c lsr 8;
         done;
       done;
-      one (off + u) i'
+      one (off + u) (Bytes.to_string i')
   in
-  let i = Cstruct.append salt pass in
+  let i = salt ^ pass in
   one 0 i;
-  out
+  Bytes.unsafe_to_string out
+
+let split str off =
+  String.sub str 0 off,
+  String.sub str off (String.length str - off)
 
 (* TODO PKCS5/7 padding is "k - (l mod k)" i.e. always > 0!
    (and rc4 being a stream cipher has no padding!) *)
 let unpad x =
   (* TODO can there be bad padding in this scheme? *)
-  let l = Cstruct.length x in
+  let l = String.length x in
   if l > 0 then
-    let amount = Cstruct.get_uint8 x (pred l) in
+    let amount = String.get_uint8 x (pred l) in
     let split_point = if l > amount then l - amount else l in
-    let data, pad = Cstruct.split x split_point in
+    let data, pad = split x split_point in
     let good = ref true in
     for i = 0 to pred amount do
-      if Cstruct.get_uint8 pad i <> amount then good := false
+      if String.get_uint8 pad i <> amount then good := false
     done;
     if !good then data else x
   else
     x
 
 let pad bs x =
-  let l = Cstruct.length x in
+  let l = String.length x in
   let to_pad = bs - (l mod bs) in
-  let amount = Cstruct.create to_pad in
-  Cstruct.memset amount to_pad;
-  Cstruct.append x amount
+  let amount = String.make to_pad (Char.unsafe_chr to_pad) in
+  x ^ amount
 
 let ( let* ) = Result.bind
 
@@ -313,17 +315,16 @@ let pkcs12_decrypt algo password data =
   let key = pbes hash `Encryption password salt count key_len
   and iv = pbes hash `Iv password salt count iv_len
   in
+  let open Mirage_crypto in
   let* data =
     match algo with
     | SHA_RC2_40_CBC _ | SHA_RC2_128_CBC _ ->
       Ok (Rc2.decrypt_cbc ~effective:(key_len * 8) ~key ~iv data)
     | SHA_RC4_40 _ | SHA_RC4_128 _ ->
-      let open Mirage_crypto.Cipher_stream in
       let key = ARC4.of_secret key in
       let { ARC4.message ; _ } = ARC4.decrypt ~key data in
       Ok message
     | SHA_3DES_CBC _ ->
-      let open Mirage_crypto.Cipher_block in
       let key = DES.CBC.of_secret key in
       Ok (DES.CBC.decrypt ~key ~iv data)
     | _ -> Error (`Msg "encryption algorithm not supported")
@@ -349,14 +350,14 @@ let pkcs5_2_decrypt kdf enc password data =
       Ok (salt, iterations, prf)
     | _ -> Error (`Msg "expected kdf being pbkdf2")
   in
-  let password = Cstruct.of_string password in
   let key = Pbkdf.pbkdf2 ~prf ~password ~salt ~count ~dk_len in
-  let key = Mirage_crypto.Cipher_block.AES.CBC.of_secret key in
-  let msg = Mirage_crypto.Cipher_block.AES.CBC.decrypt ~key ~iv data in
+  let key = Mirage_crypto.AES.CBC.of_secret key in
+  let msg = Mirage_crypto.AES.CBC.decrypt ~key ~iv data in
   Ok (unpad msg)
 
 let pkcs5_2_encrypt (mac : [ `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ]) count algo password data =
-  let bs = Mirage_crypto.Cipher_block.AES.CBC.block_size in
+  let module Hash = (val (Digestif.module_of_hash' (mac :> Digestif.hash'))) in
+  let bs = Mirage_crypto.AES.CBC.block_size in
   let iv = Mirage_crypto_rng.generate bs in
   let enc, dk_len =
     match algo with
@@ -364,13 +365,12 @@ let pkcs5_2_encrypt (mac : [ `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ]) co
     | `AES192_CBC -> Algorithm.AES192_CBC iv, 24l
     | `AES256_CBC -> Algorithm.AES256_CBC iv, 32l
   in
-  let password = Cstruct.of_string password in
-  let salt = Mirage_crypto_rng.generate (Mirage_crypto.Hash.digest_size mac) in
-  let key = Pbkdf.pbkdf2 ~prf:(mac :> Mirage_crypto.Hash.hash) ~password ~salt ~count ~dk_len in
-  let key = Mirage_crypto.Cipher_block.AES.CBC.of_secret key in
+  let salt = Mirage_crypto_rng.generate Hash.digest_size in
+  let key = Pbkdf.pbkdf2 ~prf:(mac :> Digestif.hash') ~password ~salt ~count ~dk_len in
+  let key = Mirage_crypto.AES.CBC.of_secret key in
   let padded_data = pad bs data in
   let enc_data =
-    Mirage_crypto.Cipher_block.AES.CBC.encrypt ~key ~iv padded_data
+    Mirage_crypto.AES.CBC.encrypt ~key ~iv padded_data
   in
   let kdf = Algorithm.PBKDF2 (salt, count, None, Algorithm.of_hmac mac) in
   Algorithm.PBES2 (kdf, enc), enc_data
@@ -395,11 +395,12 @@ let verify password (data, ((algorithm, digest), salt, iterations)) =
       ~none:(`Msg "unsupported hash algorithm")
       (Algorithm.to_hash algorithm)
   in
+  let module Hash = (val (Digestif.module_of_hash' (hash :> Digestif.hash'))) in
   let key =
-    pbes hash `Hmac password salt iterations (Mirage_crypto.Hash.digest_size hash)
+    pbes hash `Hmac password salt iterations Hash.digest_size
   in
-  let computed = Mirage_crypto.Hash.mac hash ~key data in
-  if Cstruct.equal computed digest then begin
+  let computed = Hash.(to_raw_string (hmac_string ~key data)) in
+  if String.equal computed digest then begin
     let* content = Asn_grammars.err_to_msg (Asn.auth_safe_of_cs data) in
     let* safe_contents =
       List.fold_left (fun acc c ->
@@ -423,7 +424,7 @@ let verify password (data, ((algorithm, digest), salt, iterations)) =
             | `Encrypted_private_key (algo, enc_data), _ ->
               let* data = decrypt algo password enc_data in
               let* p =
-                Asn_grammars.err_to_msg (Private_key.Asn.private_of_cstruct data)
+                Asn_grammars.err_to_msg (Private_key.Asn.private_of_octets data)
               in
               Ok (`Decrypted_private_key p :: acc))
           (Ok acc) bags)
@@ -436,7 +437,7 @@ let create ?(mac = `SHA256) ?(algorithm = `AES256_CBC) ?(iterations = 2048) pass
   let priv_fp = key_fp (Private_key.public private_key) in
   let attributes = [ Registry.PKCS9.local_key_id, [ priv_fp ]] in
   let maybe_attr c =
-    if Cstruct.equal priv_fp (key_fp (Certificate.public_key c)) then
+    if String.equal priv_fp (key_fp (Certificate.public_key c)) then
       Some attributes
     else
       None
@@ -444,7 +445,7 @@ let create ?(mac = `SHA256) ?(algorithm = `AES256_CBC) ?(iterations = 2048) pass
   let cert_sc =
     Asn.safe_contents_to_cs (List.map (fun c -> `Certificate c, maybe_attr c) certificates)
   and priv_sc =
-    let data = Private_key.Asn.private_to_cstruct private_key in
+    let data = Private_key.Asn.private_to_octets private_key in
     let algo, data = pkcs5_2_encrypt mac iterations algorithm password data in
     Asn.safe_contents_to_cs [ `Encrypted_private_key (algo, data), Some attributes ]
   in
@@ -455,10 +456,11 @@ let create ?(mac = `SHA256) ?(algorithm = `AES256_CBC) ?(iterations = 2048) pass
   let auth_data =
     Asn.auth_safe_to_cs [ `Encrypted cert_sc_enc ; `Data priv_sc ]
   in
-  let mac_size = Mirage_crypto.Hash.digest_size mac in
+  let module Hash = (val (Digestif.module_of_hash' (mac :> Digestif.hash'))) in
+  let mac_size = Hash.digest_size in
   let salt = Mirage_crypto_rng.generate mac_size in
   let key = pbes mac `Hmac password salt iterations mac_size in
-  let digest = Mirage_crypto.Hash.mac mac ~key auth_data in
+  let digest = Hash.(to_raw_string (hmac_string ~key auth_data)) in
   auth_data, ((Algorithm.of_hash mac, digest), salt, iterations)
 
 let decode_der cs = Asn_grammars.err_to_msg (Asn.pfx_of_cs cs)

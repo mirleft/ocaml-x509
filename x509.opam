@@ -12,24 +12,23 @@ homepage: "https://github.com/mirleft/ocaml-x509"
 doc: "https://mirleft.github.io/ocaml-x509/doc"
 bug-reports: "https://github.com/mirleft/ocaml-x509/issues"
 depends: [
-  "ocaml" {>= "4.08.0"}
+  "ocaml" {>= "4.13.0"}
   "dune" {>= "1.2"}
-  "cstruct" {>= "6.0.0"}
-  "asn1-combinators" {>= "0.2.0"}
+  "asn1-combinators" {>= "0.3.1"}
   "ptime"
   "base64" {>= "3.3.0"}
-  "mirage-crypto"
+  "mirage-crypto" {>= "1.0.0"}
   "mirage-crypto-pk"
   "mirage-crypto-ec" {>= "0.10.7"}
   "mirage-crypto-rng"
   "mirage-crypto-rng" {with-test & >= "0.11.0"}
   "fmt" {>= "0.8.7"}
   "alcotest" {with-test}
-  "cstruct-unix" {with-test & >= "3.0.0"}
   "gmap" {>= "0.3.0"}
   "domain-name" {>= "0.3.0"}
   "logs"
-  "pbkdf"
+  "pbkdf" {>= "2.0.0"}
+  "ohex" {>= "0.2.0"}
   "ipaddr" {>= "5.2.0"}
 ]
 conflicts: [ "result" {< "1.5"} ]

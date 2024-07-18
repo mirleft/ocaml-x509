@@ -72,7 +72,7 @@ end
 (** Types of keys *)
 module Key_type : sig
   (** The polymorphic variant of key types. *)
-  type t = [ `RSA | `ED25519 | `P224 | `P256 | `P384 | `P521 ]
+  type t = [ `RSA | `ED25519 | `P256 | `P384 | `P521 ]
 
   val strings : (string * t) list
   (** [strings] is an associative list of string and key_type pairs. Useful for
@@ -112,7 +112,6 @@ module Public_key : sig
   type t = [
     | `RSA of Mirage_crypto_pk.Rsa.pub
     | `ED25519 of Mirage_crypto_ec.Ed25519.pub
-    | `P224 of Mirage_crypto_ec.P224.Dsa.pub
     | `P256 of Mirage_crypto_ec.P256.Dsa.pub
     | `P384 of Mirage_crypto_ec.P384.Dsa.pub
     | `P521 of Mirage_crypto_ec.P521.Dsa.pub
@@ -128,12 +127,12 @@ module Public_key : sig
       unused bits) for publicKeyInfo of [public_key].
 
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.2}RFC 5280, 4.2.1.2, variant (1)} *)
-  val id : t -> Cstruct.t
+  val id : t -> string
 
   (** [fingerprint ?hash public_key] is [digest], the hash (by
       default SHA256) of the DER encoded public key (equivalent to
       [openssl x509 -noout -pubkey | openssl pkey -pubin -outform DER | openssl dgst -HASH]).  *)
-  val fingerprint : ?hash:Mirage_crypto.Hash.hash -> t -> Cstruct.t
+  val fingerprint : ?hash:Digestif.hash' -> t -> string
 
   (** [key_type public_key] is its [key_type]. *)
   val key_type : t -> Key_type.t
@@ -144,25 +143,25 @@ module Public_key : sig
       on [data] is valid using the [key], or not. The [signature] must be in
       ASN.1 DER encoding. The [scheme] defaults to [`RSA_PSS] for RSA,
       [`ED25519] for ED25519, and [`ECDSA] for other EC keys. *)
-  val verify : Mirage_crypto.Hash.hash ->
+  val verify : Digestif.hash' ->
     ?scheme:Key_type.signature_scheme ->
-    signature:Cstruct.t -> t ->
-    [ `Message of Cstruct.t | `Digest of Cstruct.t ] ->
+    signature:string -> t ->
+    [ `Message of string | `Digest of string ] ->
     (unit, [> `Msg of string ]) result
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
   (** [encode_der pk] is [buffer], the ASN.1 encoding of the given public key. *)
-  val encode_der : t -> Cstruct.t
+  val encode_der : t -> string
 
   (** [decode_der buffer] is [pubkey], the public key of the ASN.1 encoded buffer. *)
-  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_der : string -> (t, [> `Msg of string ]) result
 
   (** [decode_pem pem] is [t], where the public key of [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_pem : string -> (t, [> `Msg of string ]) result
 
   (** [encode_pem public_key] is [pem], the pem encoded public key. *)
-  val encode_pem : t -> Cstruct.t
+  val encode_pem : t -> string
 end
 
 (** Private keys *)
@@ -177,7 +176,6 @@ module Private_key : sig
   type t = [
     | `RSA of Mirage_crypto_pk.Rsa.priv
     | `ED25519 of Mirage_crypto_ec.Ed25519.priv
-    | `P224 of Mirage_crypto_ec.P224.Dsa.priv
     | `P256 of Mirage_crypto_ec.P256.Dsa.priv
     | `P384 of Mirage_crypto_ec.P384.Dsa.priv
     | `P521 of Mirage_crypto_ec.P521.Dsa.priv
@@ -189,15 +187,15 @@ module Private_key : sig
       key type. The argument [bits] is only used for the bit length of RSA keys.
       If [seed] is provided, this is used to seed the random number generator.
   *)
-  val generate : ?seed:Cstruct.t -> ?bits:int -> Key_type.t -> t
+  val generate : ?seed:string -> ?bits:int -> Key_type.t -> t
 
-  (** [of_cstruct data type] decodes the buffer as private key. Only supported
+  (** [of_octets data type] decodes the buffer as private key. Only supported
       for elliptic curve keys. *)
-  val of_cstruct : Cstruct.t -> Key_type.t -> (t, [> `Msg of string ]) result
+  val of_octets : string -> Key_type.t -> (t, [> `Msg of string ]) result
 
   (** [of_string ~seed_or_data ~bits type data] attempts to decode the data as a
       private key. If [seed_or_data] is provided and [`Seed], the [data] is
-      taken as seed and {!generate} is used. If it is [`Data], {!of_cstruct} is
+      taken as seed and {!generate} is used. If it is [`Data], {!of_octets} is
       used with the Base64 decoded [data]. By default, if [type] is RSA, the
       data is used as seed, otherwise directly as the private key data. *)
   val of_string : ?seed_or_data:[`Seed | `Data] -> ?bits:int -> Key_type.t ->
@@ -217,28 +215,28 @@ module Private_key : sig
       [scheme]. If [data] is [`Message _], the [hash] will be applied before
       the signature. The [scheme] defaults to [`RSA_PSS] for RSA keys,
       [`ED25519] for ED25519, and [`ECDSA] for other EC keys. *)
-  val sign : Mirage_crypto.Hash.hash ->
+  val sign : Digestif.hash' ->
     ?scheme:Key_type.signature_scheme ->
-    t -> [ `Digest of Cstruct.t | `Message of Cstruct.t ] ->
-    (Cstruct.t, [> `Msg of string ]) result
+    t -> [ `Digest of string | `Message of string ] ->
+    (string, [> `Msg of string ]) result
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
   (** [decode_der der] is [t], where the private key of [der] is
       extracted. It must be in PKCS8 (RFC 5208, Section 5) PrivateKeyInfo
       structure. *)
-  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_der : string -> (t, [> `Msg of string ]) result
 
   (** [encode_der key] is [der], the encoded private key as PKCS8 (RFC 5208,
       Section 5) PrivateKeyInfo structure. *)
-  val encode_der : t -> Cstruct.t
+  val encode_der : t -> string
 
   (** [decode_pem pem] is [t], where the private key of [pem] is
       extracted. Both RSA PRIVATE KEY and PRIVATE KEY stanzas are supported. *)
-  val decode_pem : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_pem : string -> (t, [> `Msg of string ]) result
 
   (** [encode_pem key] is [pem], the encoded private key (using [PRIVATE KEY]). *)
-  val encode_pem : t -> Cstruct.t
+  val encode_pem : t -> string
 end
 
 (** X.500 distinguished name *)
@@ -322,11 +320,11 @@ module Distinguished_name : sig
   val common_name : t -> string option
 
   (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs]. *)
-  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_der : string -> (t, [> `Msg of string ]) result
 
-  (** [encode_der dn] is [cstruct], the ASN.1 encoded representation of the
+  (** [encode_der dn] is [octets], the ASN.1 encoded representation of the
       distinguished name [dn]. *)
-  val encode_der : t -> Cstruct.t
+  val encode_der : t -> string
 end
 
 (** A list of [general_name]s is the value of both
@@ -343,7 +341,7 @@ module General_name : sig
     | Directory : Distinguished_name.t list k
     | EDI_party : (string option * string) list k
     | URI : string list k
-    | IP : Cstruct.t list k
+    | IP : string list k
     | Registered_id : Asn.oid list k
 
   include Gmap.S with type 'a key = 'a k
@@ -388,7 +386,7 @@ module Extension : sig
   (** The authority key identifier, as present in the
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.1}Authority Key Identifier}
       extension. *)
-  type authority_key_id = Cstruct.t option * General_name.t * Z.t option
+  type authority_key_id = string option * General_name.t * string option
 
   (** The private key usage period, as defined in
       {{:https://tools.ietf.org/html/rfc3280#section-4.2.1.4}RFC 3280}. *)
@@ -443,10 +441,10 @@ module Extension : sig
       {{:https://tools.ietf.org/html/rfc5280#section-4.2}X509v3} and
       {{:https://tools.ietf.org/html/rfc5280#section-5.2}CRL} extensions. *)
   type _ k =
-    | Unsupported : Asn.oid -> Cstruct.t extension k
+    | Unsupported : Asn.oid -> string extension k
     | Subject_alt_name : General_name.t extension k
     | Authority_key_id : authority_key_id extension k
-    | Subject_key_id : Cstruct.t extension k
+    | Subject_key_id : string extension k
     | Issuer_alt_name : General_name.t extension k
     | Key_usage : key_usage list extension k
     | Ext_key_usage : extended_key_usage list extension k
@@ -477,12 +475,12 @@ module Certificate : sig
 
   (** [decode_pkcs1_digest_info buffer] is [hash, signature], the hash and raw
       signature of the given [buffer] in ASN.1 DER encoding, or an error. *)
-  val decode_pkcs1_digest_info : Cstruct.t ->
-    (Mirage_crypto.Hash.hash * Cstruct.t, [> `Msg of string ]) result
+  val decode_pkcs1_digest_info : string ->
+    ([ `MD5 | `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ] * string, [> `Msg of string ]) result
 
   (** [encode_pkcs1_digest_info (hash, signature)] is [data], the ASN.1 DER
       encoded hash and signature. *)
-  val encode_pkcs1_digest_info : Mirage_crypto.Hash.hash * Cstruct.t -> Cstruct.t
+  val encode_pkcs1_digest_info : [ `MD5 | `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ] * string -> string
 
   (** {1 Abstract certificate type} *)
 
@@ -494,27 +492,27 @@ module Certificate : sig
 
   (** {1 Encoding and decoding in ASN.1 DER and PEM format} *)
 
-  (** [decode_der cstruct] is [certificate], the ASN.1 decoded [certificate]
+  (** [decode_der octets] is [certificate], the ASN.1 decoded [certificate]
       or an error. *)
-  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_der : string -> (t, [> `Msg of string ]) result
 
-  (** [encode_der certificate] is [cstruct], the ASN.1 encoded representation of
+  (** [encode_der certificate] is [octets], the ASN.1 encoded representation of
       the [certificate]. *)
-  val encode_der  : t -> Cstruct.t
+  val encode_der  : t -> string
 
   (** [decode_pem_multiple pem] is [t list], where all certificates of the [pem]
        are extracted *)
-  val decode_pem_multiple : Cstruct.t -> (t list, [> `Msg of string ]) result
+  val decode_pem_multiple : string -> (t list, [> `Msg of string ]) result
 
   (** [decode_pem pem] is [t], where the single certificate of the
       [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_pem : string -> (t, [> `Msg of string ]) result
 
   (** [encode_pem_multiple certificates] is [pem], the pem encoded certificates. *)
-  val encode_pem_multiple : t list -> Cstruct.t
+  val encode_pem_multiple : t list -> string
 
   (** [encode_pem certificate] is [pem], the pem encoded certificate. *)
-  val encode_pem : t -> Cstruct.t
+  val encode_pem : t -> string
 
   (** {1 Operations on certificates} *)
 
@@ -527,7 +525,7 @@ module Certificate : sig
 
   (** [signature_algorithm certificate] is the algorithm used for the signature. *)
   val signature_algorithm : t ->
-    (Key_type.signature_scheme * Mirage_crypto.Hash.hash) option
+    (Key_type.signature_scheme * Digestif.hash') option
 
   (** [hostnames certficate] is the set of domain names this
       [certificate] is valid for.  Currently, these are the DNS names of the
@@ -550,7 +548,7 @@ module Certificate : sig
 
   (** [fingerprint hash cert] is [digest], the digest of [cert] using the
       specified [hash] algorithm *)
-  val fingerprint : Mirage_crypto.Hash.hash -> t -> Cstruct.t
+  val fingerprint : Digestif.hash' -> t -> string
 
   (** [subject certificate] is [dn], the subject as distinguished name of
       the [certificate]. *)
@@ -561,7 +559,7 @@ module Certificate : sig
   val issuer : t -> Distinguished_name.t
 
   (** [serial certificate] is [sn], the serial number of the [certificate]. *)
-  val serial : t -> Z.t
+  val serial : t -> string
 
   (** [validity certificate] is [from, until], the validity of the certificate. *)
   val validity : t -> Ptime.t * Ptime.t
@@ -592,8 +590,8 @@ module Validation : sig
   (** The type of signature verification errors. *)
   type signature_error = [
     | `Bad_signature of Distinguished_name.t * string
-    | `Bad_encoding of Distinguished_name.t * string * Cstruct.t
-    | `Hash_not_allowed of Distinguished_name.t * Mirage_crypto.Hash.hash
+    | `Bad_encoding of Distinguished_name.t * string * string
+    | `Hash_not_allowed of Distinguished_name.t * [ `MD5 | `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ]
     | `Unsupported_keytype of Distinguished_name.t * Public_key.t
     | `Unsupported_algorithm of Distinguished_name.t * string
     | `Msg of string
@@ -623,12 +621,12 @@ module Validation : sig
       extensions are not present (if X.509 version 1 certificate), or are
       appropriate for a CA (BasicConstraints is present and true, KeyUsage
       extension contains keyCertSign). *)
-  val valid_ca : ?allowed_hashes:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
+  val valid_ca : ?allowed_hashes:Digestif.hash' list -> ?time:Ptime.t ->
     Certificate.t -> (unit, [> ca_error ]) result
 
   (** [valid_cas ~allowed_hashes ~time certificates] is [valid_certificates],
       only those certificates which pass the {!valid_ca} check. *)
-  val valid_cas : ?allowed_hashes:Mirage_crypto.Hash.hash list -> ?time:Ptime.t ->
+  val valid_cas : ?allowed_hashes:Digestif.hash' list -> ?time:Ptime.t ->
     Certificate.t list -> Certificate.t list
 
   (** {1 Chain of trust verification} *)
@@ -690,13 +688,13 @@ module Validation : sig
   val verify_chain : ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
-    ?allowed_hashes:Mirage_crypto.Hash.hash list ->
+    ?allowed_hashes:Digestif.hash' list ->
     anchors:(Certificate.t list) -> Certificate.t list ->
     (Certificate.t, [> chain_error ]) result
 
   (** The polymorphic variant of a fingerprint validation error. *)
   type fingerprint_validation_error = [
-    | `InvalidFingerprint of Certificate.t * Cstruct.t * Cstruct.t
+    | `InvalidFingerprint of Certificate.t * string * string
   ]
 
   (** The polymorphic variant of validation errors. *)
@@ -726,7 +724,7 @@ module Validation : sig
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
-    ?allowed_hashes:Mirage_crypto.Hash.hash list ->
+    ?allowed_hashes:Digestif.hash' list ->
     anchors:(Certificate.t list) -> Certificate.t list -> r
 
   (** {1 Fingerprint verification} *)
@@ -740,8 +738,8 @@ module Validation : sig
       checked to include this IP address (using {!Certificate.ips}). *)
   val trust_key_fingerprint :
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
-    time:(unit -> Ptime.t option) -> hash:Mirage_crypto.Hash.hash ->
-    fingerprint:Cstruct.t -> Certificate.t list -> r
+    time:(unit -> Ptime.t option) -> hash:Digestif.hash' ->
+    fingerprint:string -> Certificate.t list -> r
 
   (** [trust_cert_fingerprint host ~time ~hash ~fingerprint certificates] is
       [result], the first element of [certificates] is verified to match the
@@ -756,8 +754,8 @@ module Validation : sig
       over certificate pinning. *)
   val trust_cert_fingerprint :
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
-    time:(unit -> Ptime.t option) -> hash:Mirage_crypto.Hash.hash ->
-    fingerprint:Cstruct.t -> Certificate.t list -> r
+    time:(unit -> Ptime.t option) -> hash:Digestif.hash' ->
+    fingerprint:string -> Certificate.t list -> r
 end
 
 (** Certificate Signing request *)
@@ -772,21 +770,21 @@ module Signing_request : sig
 
   (** {1 Decoding and encoding in ASN.1 DER and PEM format} *)
 
-  (** [decode_der ~allowed_hashes cstruct] is [signing_request], the ASN.1
-      decoded [cstruct] or an error. The signature on the signing request
+  (** [decode_der ~allowed_hashes octets] is [signing_request], the ASN.1
+      decoded [octets] or an error. The signature on the signing request
       is validated, and its hash algorithm must be in [allowed_hashes] (by
       default only SHA-2 is accepted). *)
-  val decode_der : ?allowed_hashes:Mirage_crypto.Hash.hash list -> Cstruct.t ->
+  val decode_der : ?allowed_hashes:Digestif.hash' list -> string ->
     (t, [> `Msg of string ]) result
 
-  (** [encode_der sr] is [cstruct], the ASN.1 encoded representation of the [sr]. *)
-  val encode_der : t -> Cstruct.t
+  (** [encode_der sr] is [octets], the ASN.1 encoded representation of the [sr]. *)
+  val encode_der : t -> string
 
   (** [decode_pem pem] is [t], where the single signing request of the [pem] is extracted *)
-  val decode_pem : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_pem : string -> (t, [> `Msg of string ]) result
 
   (** [encode_pem signing_request] is [pem], the pem encoded signing request. *)
-  val encode_pem : t -> Cstruct.t
+  val encode_pem : t -> string
 
   (** {1 Construction of a signing request} *)
 
@@ -817,7 +815,7 @@ module Signing_request : sig
 
   (** [signature_algorithm signing_request] is the algorithm used for the signature. *)
   val signature_algorithm : t ->
-    (Key_type.signature_scheme * Mirage_crypto.Hash.hash) option
+    (Key_type.signature_scheme * Digestif.hash') option
 
   (** [hostnames signing_request] is the set of domain names this
       [signing_request] is requesting. This is either the content of the DNS
@@ -828,7 +826,7 @@ module Signing_request : sig
   (** [create subject ~digest ~extensions private] creates [signing_request],
       a certification request using the given [subject], [digest] (defaults to
       [`SHA256]) and list of [extensions]. *)
-  val create : Distinguished_name.t -> ?digest:Mirage_crypto.Hash.hash ->
+  val create : Distinguished_name.t -> ?digest:Digestif.hash' ->
     ?extensions:Ext.t -> Private_key.t -> (t, [> `Msg of string ]) result
 
   (** {1 Provision a signing request to a certificate} *)
@@ -850,8 +848,8 @@ module Signing_request : sig
 | Error _ -> Extension.empty
 ]} *)
   val sign : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
-    ?allowed_hashes:Mirage_crypto.Hash.hash list ->
-    ?digest:Mirage_crypto.Hash.hash -> ?serial:Z.t -> ?extensions:Extension.t ->
+    ?allowed_hashes:Digestif.hash' list ->
+    ?digest:Digestif.hash' -> ?serial:string -> ?extensions:Extension.t ->
     ?subject:Distinguished_name.t ->
     Private_key.t -> Distinguished_name.t ->
     (Certificate.t, Validation.signature_error) result
@@ -874,11 +872,11 @@ module CRL : sig
 
   (** [encode_der crl] is [buffer], the ASN.1 DER encoding of the given
       certificate revocation list. *)
-  val encode_der : t -> Cstruct.t
+  val encode_der : t -> string
 
   (** [decode_der buffer] is [crl], the certificate revocation list of the
       ASN.1 encoded buffer. *)
-  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_der : string -> (t, [> `Msg of string ]) result
 
   (** {1 Operations on CRLs} *)
 
@@ -897,7 +895,7 @@ module CRL : sig
       {{:https://tools.ietf.org/html/rfc5280#section-5.3}RFC 5280 section 5.3}
       for allowed extensions (not enforced). *)
   type revoked_cert = {
-    serial : Z.t ;
+    serial : string ;
     date : Ptime.t ;
     extensions : Extension.t
   }
@@ -919,13 +917,13 @@ module CRL : sig
 
   (** [signature_algorithm t] is the algorithm used for the signature. *)
   val signature_algorithm : t ->
-    (Key_type.signature_scheme * Mirage_crypto.Hash.hash) option
+    (Key_type.signature_scheme * Digestif.hash') option
 
   (** {1 Validation and verification of CRLs} *)
 
   (** [validate t ~allowed_hashes pk] validates the digital signature of the
       revocation list. The [allowed_hashes] defaults to SHA-2. *)
-  val validate : t -> ?allowed_hashes:Mirage_crypto.Hash.hash list ->
+  val validate : t -> ?allowed_hashes:Digestif.hash' list ->
     Public_key.t -> (unit, [> Validation.signature_error ]) result
 
   (** The type of CRL verification errors. *)
@@ -945,21 +943,21 @@ module CRL : sig
       revocation list.  The used hash algorithm must be in the [allowed_hashes]
       (defaults to SHA-2). If [time] is provided, it must be after [this_update]
       and before [next_update] of [t]. *)
-  val verify : t -> ?allowed_hashes:Mirage_crypto.Hash.hash list ->
+  val verify : t -> ?allowed_hashes:Digestif.hash' list ->
     ?time:Ptime.t -> Certificate.t -> (unit, [> verification_error ]) result
 
   (** [is_revoked ~allowed_hashes ~issuer ~cert crls] is [true] if there exists
       a revocation of [cert] in [crls] which is signed by the [issuer].  The
       subject of [issuer] must match the issuer of the crl.  The hash algorithm
       used for signing must be in the [allowed_hashes] (defaults to SHA-2).  *)
-  val is_revoked : ?allowed_hashes:Mirage_crypto.Hash.hash list ->
+  val is_revoked : ?allowed_hashes:Digestif.hash' list ->
     issuer:Certificate.t -> cert:Certificate.t -> t list -> bool
 
   (** {1 Construction and signing of CRLs} *)
 
   (** [revoked ~digest ~issuer ~this_update ~next_update ~extensions certs priv]
       constructs a revocation list with the given parameters. *)
-  val revoke : ?digest:Mirage_crypto.Hash.hash ->
+  val revoke : ?digest:Digestif.hash' ->
     issuer:Distinguished_name.t ->
     this_update:Ptime.t -> ?next_update:Ptime.t ->
     ?extensions:Extension.t ->
@@ -1000,14 +998,14 @@ module Authenticator : sig
       {!Validation.verify_chain_of_trust}.  The given trust anchors are not
       validated, you can filter them with {!Validation.valid_cas} if desired. *)
   val chain_of_trust : time:(unit -> Ptime.t option) -> ?crls:CRL.t list ->
-    ?allowed_hashes:Mirage_crypto.Hash.hash list -> Certificate.t list -> t
+    ?allowed_hashes:Digestif.hash' list -> Certificate.t list -> t
 
   (** [server_key_fingerprint ~time hash fingerprint] is an [authenticator]
       that uses the given [time] and [fingerprint] to verify that the
       fingerprint of the first element of the certificate chain matches the
       given fingerprint, using {!Validation.trust_key_fingerprint}. *)
   val server_key_fingerprint : time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
+    hash:Digestif.hash' -> fingerprint:string -> t
 
   (** [server_cert_fingerprint ~time hash fingerprint] is an [authenticator]
       that uses the given [time] and [fingerprint] to verify the first
@@ -1017,7 +1015,7 @@ module Authenticator : sig
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
   val server_cert_fingerprint : time:(unit -> Ptime.t option) ->
-    hash:Mirage_crypto.Hash.hash -> fingerprint:Cstruct.t -> t
+    hash:Digestif.hash' -> fingerprint:string -> t
 
   (** [of_string str] tries to parse the given [str] to an
       {!type:Authenticator.t}. The format of it is:
@@ -1045,10 +1043,10 @@ module PKCS12 : sig
   type t
 
   (** [decode_der buffer] is [t], the PKCS12 archive of [buffer]. *)
-  val decode_der : Cstruct.t -> (t, [> `Msg of string ]) result
+  val decode_der : string -> (t, [> `Msg of string ]) result
 
   (** [encode_der t] is [buf], the PKCS12 encoded archive of [t]. *)
-  val encode_der : t -> Cstruct.t
+  val encode_der : t -> string
 
   (** [verify password t] verifies and decrypts the PKCS12 archive [t]. The
       result is the contents of the archive. *)
@@ -1078,11 +1076,11 @@ module OCSP : sig
   type cert_id
 
   (** [create_cert_id issuer serial] creates cert_id for this serial *)
-  val create_cert_id : ?hash:Mirage_crypto.Hash.hash -> Certificate.t -> Z.t ->
+  val create_cert_id : ?hash:[ `MD5 | `SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ] -> Certificate.t -> string ->
     cert_id
 
   (** [cert_id_serial certid] is serial number of this certid *)
-  val cert_id_serial : cert_id -> Z.t
+  val cert_id_serial : cert_id -> string
 
   (** [pp_cert_id ppf cert_id] pretty prints cert_id *)
   val pp_cert_id : cert_id Fmt.t
@@ -1100,13 +1098,13 @@ module OCSP : sig
         for given [certids] and, if [key] is provided, signs it using [digest].
         [requestorName] may be used by responder to distinguish requesters.
         [certs] may be used by responder to check requestor authority. *)
-    val create : ?certs:Certificate.t list -> ?digest:Mirage_crypto.Hash.hash ->
+    val create : ?certs:Certificate.t list -> ?digest:Digestif.hash' ->
       ?requestor_name:General_name.b -> ?key:Private_key.t -> cert_id list ->
       (t, [> `Msg of string ]) result
 
     (** [validate request key] validates the signature of [request]
         with the pulic [key]. *)
-    val validate : t -> ?allowed_hashes:Mirage_crypto.Hash.hash list ->
+    val validate : t -> ?allowed_hashes:Digestif.hash' list ->
       Public_key.t ->
       (unit, [> Validation.signature_error | `No_signature ]) result
 
@@ -1117,10 +1115,10 @@ module OCSP : sig
     val cert_ids : t -> cert_id list
 
     (** [decode_der buffer] decodes request in buffer *)
-    val decode_der : Cstruct.t -> (t, Asn.error) result
+    val decode_der : string -> (t, Asn.error) result
 
     (** [encode_der request] encodes request into buffer *)
-    val encode_der : t -> Cstruct.t
+    val encode_der : t -> string
   end
 
   (** Module for encoding and decoding OCSP responses. *)
@@ -1171,12 +1169,12 @@ module OCSP : sig
 
     (** type for ResponderID *)
     type responder_id = [
-      | `ByKey of Cstruct.t
+      | `ByKey of string
       | `ByName of Distinguished_name.t
     ]
 
     (** [create_responder_id pubkey] creates responderID identified by this key.
-        Note: Cstruct here contains SHA1 hash of public key, not itself. *)
+        Note: octets here contains SHA1 hash of public key, not itself. *)
     val create_responder_id : Public_key.t -> responder_id
 
     (** [pp_responder_id ppf responderID] pretty prints [responderID] *)
@@ -1189,7 +1187,7 @@ module OCSP : sig
         responderID producedAt responses] creates response and signs it with
         [priv_key]. [producedAt] should be current timestamp. *)
     val create_success :
-      ?digest:Mirage_crypto.Hash.hash ->
+      ?digest:Digestif.hash' ->
       ?certs:Certificate.t list ->
       ?response_extensions:Extension.t ->
       Private_key.t ->
@@ -1220,14 +1218,14 @@ module OCSP : sig
     val responses : t -> (single_response list, [> `Msg of string ]) result
 
     (** [decode_der buffer] decodes response in buffer *)
-    val decode_der : Cstruct.t -> (t, Asn.error) result
+    val decode_der : string -> (t, Asn.error) result
 
     (** [encode_der request] encodes response into buffer *)
-    val encode_der : t -> Cstruct.t
+    val encode_der : t -> string
 
     (** [validate response key] validates the signature of [response]
         with the pulic [key]. *)
-    val validate : t -> ?allowed_hashes:Mirage_crypto.Hash.hash list ->
+    val validate : t -> ?allowed_hashes:Digestif.hash' list ->
       ?now:Ptime.t -> Public_key.t ->
       (unit, [> Validation.signature_error | `No_signature | `Time_invalid ]) result
   end
