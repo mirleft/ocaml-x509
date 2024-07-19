@@ -4,6 +4,11 @@
 * Remove P224 (@dinosaure, @hannes, #166)
 * The serial number of certificates is a `string` and enforced to be a positive
   integer of at most 20 bytes in length (@hannesm, #167)
+* **breaking change** `Authenticator.server_key_fingerprint` and
+  `Authenticator.server_cert_fingerprint` are now known as
+  `Authenticator.key_fingerprint` and `Authenticator.cert_fingerprint`
+  respectively to better reflect that they do not check extended key usage is
+  "server" and may as well be used for authenticating clients (@reynir, #164)
 
 ## v0.16.5 (2023-07-03)
 
