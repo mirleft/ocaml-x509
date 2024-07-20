@@ -146,6 +146,18 @@ let decode_pem_multiple cs =
   in
   Pem.foldM (fun (_, cs) -> decode_der cs) certs
 
+let fold_decode_pem_multiple fn acc cs =
+  List.fold_left
+    (fun acc data ->
+      let data = match data with
+        | Ok ("CERTIFICATE", cs) -> decode_der cs
+        | Ok _ -> Error (`Msg "ignore non certificate")
+        | Error e -> Error e
+      in
+      fn acc data)
+    acc
+    (Pem.parse_with_errors cs)
+
 let decode_pem cs =
   let* certs = decode_pem_multiple cs in
   Pem.exactly_one ~what:"certificate" certs
