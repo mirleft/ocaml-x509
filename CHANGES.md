@@ -1,14 +1,15 @@
-## v1.0.0 (2024-07-17)
+## v1.0.0 (2024-07-20)
 
 * **breaking change** Replace `Cstruct.t` by `string` (@dinosaure, @hannesm, #167)
-* Remove P224 (@dinosaure, @hannes, #166)
-* The serial number of certificates is a `string` and enforced to be a positive
+* Remove P224 (@dinosaure, @hannes, #166) - which was removed in mirage-crypto-ec 1.0.0
+* **breaking change** The serial number of certificates is a `string` and enforced to be a positive
   integer of at most 20 bytes in length (@hannesm, #167)
 * **breaking change** `Authenticator.server_key_fingerprint` and
   `Authenticator.server_cert_fingerprint` are now known as
   `Authenticator.key_fingerprint` and `Authenticator.cert_fingerprint`
   respectively to better reflect that they do not check extended key usage is
   "server" and may as well be used for authenticating clients (@reynir, #164)
+* Add Certificate.fold_decode_pem_multiple to decode multiple pem encoded certificates and make the error handling explicit (ignore, log, fail on first error). Motivated by mirage/ca-certs#30 (@art-w #169)
 
 ## v0.16.5 (2023-07-03)
 
