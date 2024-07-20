@@ -1015,7 +1015,7 @@ module Authenticator : sig
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
   val cert_fingerprint : time:(unit -> Ptime.t option) ->
-    hash:Digestif.hash' -> fingerprint:Cstruct.t -> t
+    hash:Digestif.hash' -> fingerprint:string -> t
 
   (** [of_string str] tries to parse the given [str] to an
       {!type:Authenticator.t}. The format of it is:
