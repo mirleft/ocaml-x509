@@ -57,17 +57,17 @@ let of_string str =
   | [ "key-fp" ; hash ; tls_key_fingerprint ] ->
     let* hash = hash_of_string (String.lowercase_ascii hash) in
     let* fingerprint = fingerprint_of_string tls_key_fingerprint in
-    Ok (fun time -> server_key_fingerprint ~time ~hash ~fingerprint)
+    Ok (fun time -> key_fingerprint ~time ~hash ~fingerprint)
   | [ "key-fp" ; tls_key_fingerprint ] ->
     let* fingerprint = fingerprint_of_string tls_key_fingerprint in
-    Ok (fun time -> server_key_fingerprint ~time ~hash:`SHA256 ~fingerprint)
+    Ok (fun time -> key_fingerprint ~time ~hash:`SHA256 ~fingerprint)
   | [ "cert-fp" ; hash ; tls_cert_fingerprint ] ->
     let* hash = hash_of_string (String.lowercase_ascii hash) in
     let* fingerprint = fingerprint_of_string tls_cert_fingerprint in
-    Ok (fun time -> server_cert_fingerprint ~time ~hash ~fingerprint)
+    Ok (fun time -> cert_fingerprint ~time ~hash ~fingerprint)
   | [ "cert-fp" ; tls_cert_fingerprint ] ->
     let* fingerprint = fingerprint_of_string tls_cert_fingerprint in
-    Ok (fun time -> server_cert_fingerprint ~time ~hash:`SHA256 ~fingerprint)
+    Ok (fun time -> cert_fingerprint ~time ~hash:`SHA256 ~fingerprint)
   | "trust-anchor" :: certs ->
     let* anchors =
       List.fold_left (fun acc s ->
