@@ -1,3 +1,7 @@
+## v1.0.1 (2024-08-06)
+
+* Speedup PEM decoding and encoding significantly (@hannesm #170)
+
 ## v1.0.0 (2024-07-20)
 
 * **breaking change** Replace `Cstruct.t` by `string` (@dinosaure, @hannesm, #167)
