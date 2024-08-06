@@ -3,20 +3,6 @@ let ( let* ) = Result.bind
 module Cs = struct
   open String
 
-  let split str off =
-    String.sub str 0 off,
-    String.sub str off (String.length str - off)
-
-  let shift str off = snd (split str off)
-
-  let begins_with cs target =
-    let l1 = length cs and l2 = length target in
-    l1 >= l2 && equal (sub cs 0 l2) target
-
-  let ends_with cs target =
-    let l1 = length cs and l2 = length target in
-    l1 >= l2 && equal (sub cs (l1 - l2) l2) target
-
   let null cs = length cs = 0
 
   let open_begin = "-----BEGIN "
@@ -28,25 +14,20 @@ module Cs = struct
       `Empty
     else if get cs 0 = '#' then
       `Empty
-    else if begins_with cs open_begin && ends_with cs close then
+    else if starts_with ~prefix:open_begin cs && ends_with ~suffix:close cs then
       `Begin (sub cs 11 (length cs - 16))
-    else if begins_with cs open_end && ends_with cs close then
+    else if starts_with ~prefix:open_end cs && ends_with ~suffix:close cs then
       `End (sub cs 9 (length cs - 14))
     else
       `Data cs
 
-  let chop cs off len =
-    let (a, b) = split cs off in (a, shift b len)
-
-  let rec lines cs =
-    let rec eol i =
-      match get cs i with
-      | '\r' when get cs (i + 1) = '\n' -> chop cs i 2
-      | '\n' -> chop cs i 1
-      | _    -> eol (i + 1) in
-    match eol 0 with
-    | exception Invalid_argument _ -> [ tok_of_line cs ]
-    | a, b -> tok_of_line a :: lines b
+  let lines data =
+    List.map tok_of_line
+      (List.map
+         (fun line ->
+            let ll = length line in
+            if ll > 0 && get line (ll - 1) = '\r' then sub line 0 (ll - 1) else line)
+         (String.split_on_char '\n' data))
 
   let combine ilines =
     let rec accumulate t acc = function
@@ -69,7 +50,7 @@ module Cs = struct
       | `Begin t :: tail ->
         let body, tail = accumulate t [] tail in
         block (body :: acc) tail
-      | _::xs -> block acc xs
+      | _ :: xs -> block acc xs
       | [] -> List.rev acc
     in
     block [] ilines
@@ -77,13 +58,19 @@ module Cs = struct
   let parse_with_errors data = combine (lines data)
 
   let unparse ~tag value =
-    let rec split_at_64 acc = function
-      | x when length x <= 64 -> List.rev (x :: acc)
-      | x -> let here, rest = split x 64 in
-        split_at_64 (here :: acc) rest
+    let split_at_64 data =
+      let dlen = length data in
+      let rec go acc off =
+        if dlen - off <= 64 then
+          List.rev (sub data off (dlen - off) :: acc)
+        else
+          let chunk = sub data off 64 in
+          go (chunk :: acc) (off + 64)
+      in
+      go [] 0
     in
     let raw = Base64.encode_string value in
-    let pieces = split_at_64 [] raw in
+    let pieces = split_at_64 raw in
     let nl = "\n" in
     let lines = List.flatten (List.map (fun x -> [ x ; nl ]) pieces)
     in
