@@ -1,3 +1,8 @@
+## v1.0.2 (2024-08-25)
+
+* Fix RSA public and private key encoding and decoding (@hannesm #172, reported
+  by @anmonteiro #171)
+
 ## v1.0.1 (2024-08-06)
 
 * Speedup PEM decoding and encoding significantly (@hannesm #170)
