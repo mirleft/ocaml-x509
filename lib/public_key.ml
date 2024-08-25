@@ -29,8 +29,8 @@ module Asn = struct
     and g ({ Rsa.n; e } : Rsa.pub) = (Z_extra.to_octets_be n, Z_extra.to_octets_be e) in
     map f g @@
     sequence2
-      (required ~label:"modulus"        integer)
-      (required ~label:"publicExponent" integer)
+      (required ~label:"modulus"        unsigned_integer)
+      (required ~label:"publicExponent" unsigned_integer)
 
   let (rsa_public_of_octets, rsa_public_to_octets) =
     projections_of Asn.der rsa_public_key

@@ -116,12 +116,12 @@ module Asn = struct
   let other_prime_infos =
     sequence_of @@
       (sequence3
-        (required ~label:"prime"       integer)
-        (required ~label:"exponent"    integer)
-        (required ~label:"coefficient" integer))
+        (required ~label:"prime"       unsigned_integer)
+        (required ~label:"exponent"    unsigned_integer)
+        (required ~label:"coefficient" unsigned_integer))
 
   let rsa_private_key =
-    let integer = map Z_extra.of_octets_be Z_extra.to_octets_be integer in
+    let integer = map Z_extra.of_octets_be Z_extra.to_octets_be unsigned_integer in
     let f (v, (n, (e, (d, (p, (q, (dp, (dq, (q', other))))))))) =
       match (v, other) with
       | (0, None) ->
