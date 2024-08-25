@@ -283,6 +283,31 @@ let p256_sha384 () =
         Validation.pp_ca_error e
     | Ok () -> ()
 
+let rsa_pub () =
+  let file = "rsa_pub" in
+  let data = regression file in
+  match Public_key.decode_pem data with
+  | Error (`Msg msg) ->
+    Alcotest.failf "RSA public key %s, decoding error %s" file msg
+  | Ok pub ->
+    let pem = Public_key.encode_pem pub in
+    Alcotest.(check string "PEM encoding of RSA public key is identical"
+                data pem)
+
+let rsa_priv () =
+  let file = "rsa_priv" in
+  let data = regression file in
+  match Private_key.decode_pem data with
+  | Error (`Msg msg) ->
+    Alcotest.failf "RSA private key %s, decoding error %s" file msg
+  | Ok priv ->
+    let pem = Private_key.encode_pem priv in
+    Alcotest.(check string "PEM encoding of RSA private key is identical"
+                data pem);
+    let pub = regression "rsa_pub" in
+    Alcotest.(check string "PEM encoding of RSA public key (derived from private key) is identical"
+                pub (Public_key.encode_pem (Private_key.public priv)))
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca_fail ;
@@ -305,6 +330,8 @@ let regression_tests = [
   "p256 key", `Quick, p256_key ;
   "ip_address", `Quick, ip_address ;
   "p256 with sha384", `Quick, p256_sha384 ;
+  "rsa public key", `Quick, rsa_pub ;
+  "rsa private key", `Quick, rsa_priv ;
 ]
 
 let host_set_test =
