@@ -308,6 +308,29 @@ let rsa_priv () =
     Alcotest.(check string "PEM encoding of RSA public key (derived from private key) is identical"
                 pub (Public_key.encode_pem (Private_key.public priv)))
 
+let ec_pub file () =
+  let data = regression file in
+  match Public_key.decode_pem data with
+  | Error (`Msg msg) ->
+    Alcotest.failf "EC public key %s, decoding error %s" file msg
+  | Ok pub ->
+    let pem = Public_key.encode_pem pub in
+    Alcotest.(check string "PEM encoding of EC public key is identical"
+                data pem)
+
+let ec_priv file pub_file () =
+  let data = regression file in
+  match Private_key.decode_pem data with
+  | Error (`Msg msg) ->
+    Alcotest.failf "EC private key %s, decoding error %s" file msg
+  | Ok priv ->
+    let pem = Private_key.encode_pem priv in
+    Alcotest.(check string "PEM encoding of EC private key is identical"
+                data pem);
+    let pub = regression pub_file in
+    Alcotest.(check string "PEM encoding of EC public key (derived from private key) is identical"
+                pub (Public_key.encode_pem (Private_key.public priv)))
+
 let regression_tests = [
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca_fail ;
@@ -332,7 +355,10 @@ let regression_tests = [
   "p256 with sha384", `Quick, p256_sha384 ;
   "rsa public key", `Quick, rsa_pub ;
   "rsa private key", `Quick, rsa_priv ;
-]
+] @ List.flatten (List.map (fun file ->
+    [ "public " ^ file, `Quick, ec_pub ("pub_" ^ file) ;
+      "private " ^ file, `Quick, ec_priv ("priv_" ^ file) ("pub_" ^ file)
+    ]) [ "p521" ; "p384" ; "p256_2" ])
 
 let host_set_test =
   let module M = struct
