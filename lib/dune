@@ -6,5 +6,5 @@
                   extension pem signing_request general_name host rc2 p12
                   key_type)
  (libraries asn1-combinators fmt ptime mirage-crypto mirage-crypto-pk
-            gmap domain-name base64 logs mirage-crypto-ec pbkdf
+            gmap domain-name base64 logs mirage-crypto-ec kdf.pbkdf
             mirage-crypto-rng ipaddr ohex))
