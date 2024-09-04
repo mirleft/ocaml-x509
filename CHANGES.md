@@ -1,3 +1,7 @@
+## v1.0.3 (2024-09-04)
+
+* Use the opam package kdf instead of pbkdf (@hannesm #174)
+
 ## v1.0.2 (2024-08-25)
 
 * Fix RSA public and private key encoding and decoding (@hannesm #172, reported
