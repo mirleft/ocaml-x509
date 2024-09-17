@@ -192,7 +192,7 @@ type _ k =
   | Certificate_issuer : General_name.t extension k
   | Policies : policy list extension k
 
-let pp_one : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
+let pp_one' : type a. (Format.formatter -> Asn.oid * string -> unit) -> a k -> Format.formatter -> a -> unit = fun custom k ppf v ->
   let c_to_str b = if b then "critical " else "" in
   match k, v with
   | Subject_alt_name, (crit, alt) ->
@@ -245,8 +245,11 @@ let pp_one : type a. a k -> Format.formatter -> a -> unit = fun k ppf v ->
     Fmt.pf ppf "%spolicies %a" (c_to_str crit)
       Fmt.(list ~sep:(any "; ") pp_policy) pols
   | Unsupported oid, (crit, str) ->
-    Fmt.pf ppf "%sunsupported %a: %a" (c_to_str crit) Asn.OID.pp oid
-      Ohex.pp str
+    Fmt.pf ppf "%s%a" (c_to_str crit) custom (oid, str)
+
+let pp_one k fmt =
+  pp_one' (fun ppf (oid, str) -> Fmt.pf ppf "unsupported %a: %a" Asn.OID.pp oid Ohex.pp str)
+    k fmt
 
 module ID = Registry.Cert_extn
 
@@ -325,7 +328,14 @@ end
 
 include Gmap.Make(K)
 
-let pp ppf m = iter (fun (B (k, v)) -> pp_one k ppf v ; Fmt.sp ppf ()) m
+let pp' custom ppf m =
+  iter (fun (B (k, v)) -> pp_one' custom k ppf v ; Fmt.sp ppf ()) m
+
+let default_pp_custom_extension ppf (oid, str) =
+  Fmt.pf ppf "unsupported %a: %a" Asn.OID.pp oid Ohex.pp str
+
+let pp =
+  pp' default_pp_custom_extension
 
 let hostnames exts =
   match find Subject_alt_name exts with
