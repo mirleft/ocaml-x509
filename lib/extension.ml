@@ -247,9 +247,11 @@ let pp_one' : type a. (Format.formatter -> Asn.oid * string -> unit) -> a k -> F
   | Unsupported oid, (crit, str) ->
     Fmt.pf ppf "%s%a" (c_to_str crit) custom (oid, str)
 
+let default_pp_custom_extension ppf (oid, str) =
+  Fmt.pf ppf "unsupported %a: %a" Asn.OID.pp oid Ohex.pp str
+
 let pp_one k fmt =
-  pp_one' (fun ppf (oid, str) -> Fmt.pf ppf "unsupported %a: %a" Asn.OID.pp oid Ohex.pp str)
-    k fmt
+  pp_one' default_pp_custom_extension k fmt
 
 module ID = Registry.Cert_extn
 
@@ -331,11 +333,7 @@ include Gmap.Make(K)
 let pp' custom ppf m =
   iter (fun (B (k, v)) -> pp_one' custom k ppf v ; Fmt.sp ppf ()) m
 
-let default_pp_custom_extension ppf (oid, str) =
-  Fmt.pf ppf "unsupported %a: %a" Asn.OID.pp oid Ohex.pp str
-
-let pp =
-  pp' default_pp_custom_extension
+let pp = pp' default_pp_custom_extension
 
 let hostnames exts =
   match find Subject_alt_name exts with
