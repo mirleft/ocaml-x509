@@ -267,6 +267,7 @@ let identifier =
       (PKCS1.md5_rsa_encryption      , null_or_none MD5_RSA      ) ;
       (PKCS1.ripemd160_rsa_encryption, null_or_none RIPEMD160_RSA) ;
       (PKCS1.sha1_rsa_encryption     , null_or_none SHA1_RSA     ) ;
+      (sha1_rsa_encryption           , null_or_none SHA1_RSA     ) ;
       (PKCS1.sha256_rsa_encryption   , null_or_none SHA256_RSA   ) ;
       (PKCS1.sha384_rsa_encryption   , null_or_none SHA384_RSA   ) ;
       (PKCS1.sha512_rsa_encryption   , null_or_none SHA512_RSA   ) ;
