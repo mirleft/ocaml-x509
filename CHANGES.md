@@ -1,3 +1,7 @@
+## v1.0.4
+
+* Recognize 1.3.14.3.2.29 OID for SHA1 with RSA encryption (@mefyl #176)
+
 ## v1.0.3 (2024-09-04)
 
 * Use the opam package kdf instead of pbkdf (@hannesm #174)
