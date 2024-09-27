@@ -45,7 +45,7 @@ let custom_pp ppf (oid, data) =
     Fmt.pf ppf "unsupported %a: %a" Asn.OID.pp oid (Ohex.pp_hexdump ()) data
 
 let () =
-  let fullpath = "./testcertificates/fido.pem" in
+  let fullpath = "../testcertificates/fido.pem" in
   let fd = open_in fullpath in
   let ln = in_channel_length fd in
   let buf = Bytes.create ln in

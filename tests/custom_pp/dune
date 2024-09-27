@@ -1,0 +1,12 @@
+(executable
+  (name custom_pp)
+  (modules custom_pp)
+  (libraries x509 asn1-combinators fmt))
+
+(rule
+  (with-stdout-to custom_pp.output (run ./custom_pp.exe)))
+
+(rule
+  (alias runtest)
+  (deps (source_tree ../testcertificates))
+  (action (diff custom_pp.expected custom_pp.output)))
