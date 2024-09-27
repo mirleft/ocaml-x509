@@ -1027,7 +1027,7 @@ module Authenticator : sig
       that uses the given [time] and [fingerprint] to verify the first
       element of the certificate chain, using
       {!Validation.trust_cert_fingerprint}.  Note that
-      {{!server_key_fingerprint}public key pinning} has
+      {{!key_fingerprint}public key pinning} has
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
       over certificate pinning. *)
   val cert_fingerprint : time:(unit -> Ptime.t option) ->
