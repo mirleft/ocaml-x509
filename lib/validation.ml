@@ -3,7 +3,7 @@ let ( let* ) = Result.bind
 let sha2 = [ `SHA256 ; `SHA384 ; `SHA512 ]
 let all_hashes = [ `MD5 ; `SHA1 ; `SHA224 ] @ sha2
 
-let src = Logs.Src.create "x509" ~doc:"X509 validation"
+let src = Logs.Src.create "x509.validation" ~doc:"X509 validation"
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type signature_error = [
