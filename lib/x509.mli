@@ -571,7 +571,10 @@ module Certificate : sig
       the [certificate]. *)
   val issuer : t -> Distinguished_name.t
 
-  (** [serial certificate] is [sn], the serial number of the [certificate]. *)
+  (** [serial certificate] is [sn], the serial number of the [certificate].
+      A serial is a positive number of at most 20 octets. 0 is supported. A
+      negative serial number is supported when decoding a certificate, but when
+      encoding, an octet of 0 is prepended making it positive. *)
   val serial : t -> string
 
   (** [validity certificate] is [from, until], the validity of the certificate. *)
