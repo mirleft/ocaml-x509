@@ -46,7 +46,7 @@ module Asn = struct
 
   let tBSCertList =
     let f (a, (b, (c, (d, (e, (f, g)))))) =
-      { version = def `V1 a ; signature = b ; issuer = c ;
+      { version = Option.value ~default:`V1 a ; signature = b ; issuer = c ;
         this_update = d ; next_update = e ;
         revoked_certs = (match f with None -> [] | Some xs -> xs) ;
         extensions = (match g with None -> Extension.empty | Some xs -> xs) }
@@ -56,7 +56,7 @@ module Asn = struct
       let f = match f with [] -> None | xs -> Some xs
       and g = if Extension.is_empty g then None else Some g
       in
-      (def' `V1 a, (b, (c, (d, (e, (f, g))))))
+      ((if a = `V1 then None else Some a), (b, (c, (d, (e, (f, g))))))
     in
     map f g @@
     sequence @@

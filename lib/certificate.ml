@@ -60,7 +60,7 @@ module Asn = struct
   let tBSCertificate =
     let f = fun (a, (b, (c, (d, (e, (f, (g, (h, (i, j))))))))) ->
       let extn = match j with None -> Extension.empty | Some xs -> xs in
-      { version    = def `V1 a ; serial     = b ;
+      { version    = Option.value ~default:`V1 a ; serial     = b ;
         signature  = c         ; issuer     = d ;
         validity   = e         ; subject    = f ;
         pk_info    = g         ; issuer_id  = h ;
@@ -72,7 +72,8 @@ module Asn = struct
         pk_info    = g ; issuer_id  = h ;
         subject_id = i ; extensions = j } ->
       let extn = if Extension.is_empty j then None else Some j in
-      (def' `V1 a, (b, (c, (d, (e, (f, (g, (h, (i, extn)))))))))
+      ((if a = `V1 then None else Some a),
+       (b, (c, (d, (e, (f, (g, (h, (i, extn)))))))))
     in
     map f g @@
     sequence @@

@@ -1,9 +1,6 @@
 let src = Logs.Src.create "x509.decoding" ~doc:"X509 decoding"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let def  x = function None -> x | Some y -> y
-let def' x = fun y -> if y = x then None else Some y
-
 let ( let* ) = Result.bind
 
 let decode codec cs =

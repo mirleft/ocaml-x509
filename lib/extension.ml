@@ -418,8 +418,8 @@ module Asn = struct
     map (List.map f) (List.map g) @@ sequence_of oid
 
   let basic_constraints =
-    map (fun (a, b) -> (def  false a, b))
-        (fun (a, b) -> (def' false a, b))
+    map (fun (a, b) -> (Option.value ~default:false a, b))
+        (fun (a, b) -> ((if a = false then None else Some a), b))
     @@
     sequence2
       (optional ~label:"cA"      bool)
@@ -427,9 +427,9 @@ module Asn = struct
 
   let authority_key_id =
     map (fun (a, b, c) ->
-        (a, def  General_name.empty b, c))
+        (a, Option.value ~default:General_name.empty b, c))
       (fun (a, b, c) ->
-         (a, def' General_name.empty b, c))
+         (a, (if General_name.is_empty b then None else Some b), c))
     @@
     sequence3
       (optional ~label:"keyIdentifier"  @@ implicit 0 octet_string)
@@ -453,16 +453,19 @@ module Asn = struct
 
   let name_constraints =
     let subtree =
-      map (fun (base, min, max) -> (base, def  0 min, max))
-          (fun (base, min, max) -> (base, def' 0 min, max))
+      map
+        (fun (base, min, max) -> (base, Option.value ~default:0 min, max))
+        (fun (base, min, max) -> (base, (if min = 0 then None else Some min), max))
       @@
       sequence3
         (required ~label:"base"       General_name.Asn.general_name)
         (optional ~label:"minimum" @@ implicit 0 int)
         (optional ~label:"maximum" @@ implicit 1 int)
     in
-    map (fun (a, b) -> (def  [] a, def  [] b))
-        (fun (a, b) -> (def' [] a, def' [] b))
+    map
+      (fun (a, b) -> (Option.value ~default:[] a, Option.value ~default:[] b))
+      (fun (a, b) -> ((if a = [] then None else Some a),
+                      (if b = [] then None else Some b)))
     @@
     sequence2
       (optional ~label:"permittedSubtrees" @@ implicit 0 (sequence_of subtree))
@@ -536,8 +539,21 @@ module Asn = struct
   let crl_distribution_points = sequence_of distribution_point
 
   let issuing_distribution_point =
-    map (fun (a, b, c, d, e, f) -> (a, def  false b, def  false c, d, def  false e, def  false f))
-        (fun (a, b, c, d, e, f) -> (a, def' false b, def' false c, d, def' false e, def' false f))
+    map
+      (fun (a, b, c, d, e, f) ->
+        (a,
+         Option.value ~default:false b,
+         Option.value ~default:false c,
+         d,
+         Option.value ~default:false e,
+         Option.value ~default:false f))
+      (fun (a, b, c, d, e, f) ->
+         (a,
+          (if b = false then None else Some b),
+          (if c = false then None else Some c),
+          d,
+          (if e = false then None else Some e),
+          (if f = false then None else Some f)))
     @@
     sequence6
       (optional ~label:"distributionPoint"          @@ explicit 0 distribution_point_name)
@@ -648,10 +664,10 @@ module Asn = struct
   let extensions_der =
     let extension =
       let f (oid, crit, cs) =
-        reparse_extension_exn (def false crit) (oid, cs)
+        reparse_extension_exn (Option.value ~default:false crit) (oid, cs)
       and g b =
         let oid, crit, cs = unparse_extension b in
-        (oid, def' false crit, cs)
+        (oid, (if crit = false then None else Some crit), cs)
       in
       map f g @@
       sequence3
