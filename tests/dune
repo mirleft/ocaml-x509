@@ -2,3 +2,15 @@
  (name tests)
  (deps (source_tree regression) (source_tree testcertificates) (source_tree crl) (source_tree csr) (source_tree pkcs12) (source_tree ocsp))
  (libraries x509 alcotest ptime.clock.os mirage-crypto-pk mirage-crypto-ec mirage-crypto-rng.unix))
+
+(executable
+  (name custom_pp)
+  (modules custom_pp)
+  (libraries x509 asn1-combinators fmt))
+
+(rule
+  (with-stdout-to custom_pp.output (run ./custom_pp.exe)))
+
+(rule
+  (alias runtest)
+  (action (diff custom_pp.expected custom_pp.output)))

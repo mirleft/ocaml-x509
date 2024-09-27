@@ -179,7 +179,7 @@ let pp_hash ppf hash =
 let pp_sigalg ppf (asym, hash) =
   Fmt.pf ppf "%a-%a" Key_type.pp_signature_scheme asym pp_hash hash
 
-let pp ppf { asn ; _ } =
+let pp' pp_custom_extensions ppf { asn ; _ } =
   let tbs = asn.tbs_cert in
   let sigalg = Algorithm.to_signature_algorithm tbs.signature in
   Fmt.pf ppf "X.509 certificate@.version %a@.serial %a@.algorithm %a@.issuer %a@.valid from %a until %a@.subject %a@.extensions %a"
@@ -189,7 +189,9 @@ let pp ppf { asn ; _ } =
     (Ptime.pp_human ~tz_offset_s:0 ()) (fst tbs.validity)
     (Ptime.pp_human ~tz_offset_s:0 ()) (snd tbs.validity)
     Distinguished_name.pp tbs.subject
-    Extension.pp tbs.extensions
+    (Extension.pp' pp_custom_extensions) tbs.extensions
+
+let pp = pp' Extension.default_pp_custom_extension
 
 let fingerprint hash cert =
   let module Hash = (val (Digestif.module_of_hash' hash)) in

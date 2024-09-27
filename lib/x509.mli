@@ -468,6 +468,10 @@ module Extension : sig
 
   (** [pp ppf ext_map] pretty-prints the extension map. *)
   val pp : t Fmt.t
+
+  (** [pp' custom ppf ext_map] pretty-prints the extension map using [custom]
+      to print [Unsupported _] extensions. *)
+  val pp' : (Asn.oid * string) Fmt.t -> t Fmt.t
 end
 
 (** X509v3 certificate *)
@@ -489,6 +493,10 @@ module Certificate : sig
 
   (** [pp ppf cert] pretty-prints the certificate. *)
   val pp : t Fmt.t
+
+  (** [pp' pp_custom_extensions ppf cert] pretty-prints the certificate using
+      [pp_custom_extensions] for [Extension.Unsupported _] extension. *)
+  val pp' : (Asn.oid * string) Fmt.t -> t Fmt.t
 
   (** {1 Encoding and decoding in ASN.1 DER and PEM format} *)
 
