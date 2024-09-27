@@ -270,6 +270,13 @@ let ip_address () =
   | Error ce -> Alcotest.failf "validation of IP address failed: %a"
                   Validation.pp_chain_error ce
 
+let alternate_sha1rsa_oid () =
+  let file = "alternate-sha1rsa-oid" in
+  match Certificate.decode_pem (regression file) with
+  | Error (`Msg msg) ->
+    Alcotest.failf "alternate SHA1RSA OID certificate %s, decoding error %s" file msg
+  | Ok _cert -> ()
+
 let p256_sha384 () =
   let file = "p256_sha384" in
   match Certificate.decode_pem (regression file) with
@@ -352,6 +359,7 @@ let regression_tests = [
   "p384 certificate", `Quick, le_p384_root ;
   "p256 key", `Quick, p256_key ;
   "ip_address", `Quick, ip_address ;
+  "alternative SHA1RSA OID", `Quick, alternate_sha1rsa_oid;
   "p256 with sha384", `Quick, p256_sha384 ;
   "rsa public key", `Quick, rsa_pub ;
   "rsa private key", `Quick, rsa_priv ;
