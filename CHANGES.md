@@ -1,3 +1,11 @@
+## v1.0.4 (2024-09-27)
+
+* Allow decoding of negative serial numbers (#177 @hannesm)
+* Add alternate SHA1RSA OID 1.3.14.3.2.29 (#176 @mefyl)
+* Allow custom pretty printers for unknown X509 extensions (#175 @reynir)
+* Minor code cleanups: remove unused algorithms, remove `def` and `def'`
+  (#177 @hannesm)
+
 ## v1.0.3 (2024-09-04)
 
 * Use the opam package kdf instead of pbkdf (@hannesm #174)
