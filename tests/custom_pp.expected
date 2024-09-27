@@ -1,6 +1,6 @@
 Certificate: X.509 certificate
 version 3
-serial d795 49bd 1a67 1751  
+serial 00d7 9549 bd1a 6717  51
 algorithm ECDSA-SHA256
 issuer /CN=FT FIDO 0200
 valid from 2019-02-26 00:00:00 +00:00 until 2034-02-25 23:59:59 +00:00
