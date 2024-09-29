@@ -1,10 +1,11 @@
-## v1.0.4 (2024-09-27)
+## v1.0.4 (2024-09-29)
 
 * **breaking change** Allow decoding of negative serial numbers (#177 @hannesm)
   Now, `serial` returns the entire (integer) value as a string - previously the
   potentially leading 0 byte was removed. So:
   -serial d795 49bd 1a67 1751
   +serial 00d7 9549 bd1a 6717  51
+  fixes in 38cc70a54d2d98526564733838769d82b10679fc and #179 (#178 @dinosaure)
 * Add alternate SHA1RSA OID 1.3.14.3.2.29 (#176 @mefyl)
 * Allow custom pretty printers for unknown X509 extensions (#175 @reynir)
 * Minor code cleanups: remove unused algorithms, remove `def` and `def'`
