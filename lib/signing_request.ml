@@ -183,11 +183,19 @@ let create subject ?digest ?(extensions = Ext.empty) (key : Private_key.t) =
   let raw = Asn.signing_request_to_str asn in
   Ok { asn ; raw }
 
+let rec random_serial () =
+  let value = Mirage_crypto_rng.generate 10 in
+  let w0 = String.get_uint16_be value 0 in
+  if w0 land 0xff80 = 0x0000
+  || w0 land 0xff80 = 0xff80
+  then random_serial ()
+  else value
+
 let sign signing_request
     ~valid_from ~valid_until
     ?(allowed_hashes = Validation.sha2)
     ?digest
-    ?(serial = Mirage_crypto_rng.generate 10)
+    ?(serial = random_serial ())
     ?(extensions = Extension.empty)
     ?(subject = signing_request.asn.info.subject)
     key issuer =
