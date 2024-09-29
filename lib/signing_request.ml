@@ -187,11 +187,22 @@ let sign signing_request
     ~valid_from ~valid_until
     ?(allowed_hashes = Validation.sha2)
     ?digest
-    ?(serial = Mirage_crypto_rng.generate 10)
+    ?serial
     ?(extensions = Extension.empty)
     ?(subject = signing_request.asn.info.subject)
     key issuer =
   let hash = default_digest digest key in
+  let serial = match serial with
+    | Some s -> s
+    | None ->
+      (* we generate a positive integer, asn1-encoded: so if the high bit is
+         set, we prepend a 0 byte *)
+      let s = Mirage_crypto_rng.generate 10 in
+      if String.get_uint8 s 0 = 0x7f then
+        "\x00" ^ s
+      else
+        s
+  in
   let* () = validate_signature allowed_hashes signing_request in
   let signature_algo =
     let scheme = Key_type.x509_default_scheme (Private_key.key_type key) in
