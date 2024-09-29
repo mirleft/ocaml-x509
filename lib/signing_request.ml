@@ -197,9 +197,14 @@ let sign signing_request
     | None ->
       (* we generate a positive integer, asn1-encoded: so if the high bit is
          set, we prepend a 0 byte *)
+      (* if it starts with 0x00 followed by 0xNN with NN <= 0x7f, we prepend
+         0x7f to make the integer valid *)
       let s = Mirage_crypto_rng.generate 10 in
-      if String.get_uint8 s 0 = 0x7f then
+      let start = String.get_uint8 s 0 in
+      if start > 0x7f then
         "\x00" ^ s
+      else if start = 0x00 && String.get_uint8 s 1 <= 0x7f then
+        "\x7f" ^ s
       else
         s
   in
