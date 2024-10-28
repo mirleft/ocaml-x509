@@ -1,3 +1,8 @@
+## v1.0.5 (2024-10-28)
+
+* Removed links to nqsb (we're no longer in charge of that domain)
+  (6398b0c2a24e1a09d494d93ac65423eca9d7de24)
+
 ## v1.0.4 (2024-09-29)
 
 * **breaking change** Allow decoding of negative serial numbers (#177 @hannesm)
