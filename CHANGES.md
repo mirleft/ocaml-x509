@@ -1,3 +1,8 @@
+## v1.0.6 (2025-04-15)
+
+* Update tests to mirage-crypto-rng 1.2.0 API (@hannesm)
+* Certificate.fold_pem_multiple: improve error message (#180 @hannesm)
+
 ## v1.0.5 (2024-10-28)
 
 * Removed links to nqsb (we're no longer in charge of that domain)
