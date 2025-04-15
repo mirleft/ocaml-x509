@@ -152,7 +152,7 @@ let fold_decode_pem_multiple fn acc cs =
     (fun acc data ->
       let data = match data with
         | Ok ("CERTIFICATE", cs) -> decode_der cs
-        | Ok _ -> Error (`Msg "ignore non certificate")
+        | Ok (hdr, _) -> Error (`Msg ("ignore non certificate (" ^ hdr ^ ")"))
         | Error e -> Error e
       in
       fn acc data)
