@@ -205,17 +205,21 @@ GjfhN8ieupCqSdF3iqDidK006KWs848y
     Private_key.decode_pem priv_data,
     Public_key.decode_pem pub_data
   with
-  | Ok (`P384 priv), Ok (`P384 pub) ->
-    let to_cs = Mirage_crypto_ec.P384.Dsa.pub_to_octets in
-    let pub' = Mirage_crypto_ec.P384.Dsa.pub_of_priv priv in
+  | Ok priv, Ok pub ->
+    Alcotest.(check bool __LOC__ true
+      ("p384" = Key_type.to_string (Private_key.key_type priv)));
+    Alcotest.(check bool __LOC__ true
+      ("p384" = Key_type.to_string (Public_key.key_type pub)));
+    let to_cs = Public_key.encode_der in
+    let pub' = Private_key.public priv in
     Alcotest.(check bool __LOC__ true (String.equal (to_cs pub) (to_cs pub')));
-    let pub_data' = Public_key.encode_pem (`P384 pub) in
+    let pub_data' = Public_key.encode_pem pub in
     Alcotest.(check bool __LOC__ true
                 (String.equal pub_data pub_data'));
-    let priv_data' = Private_key.encode_pem (`P384 priv) in
+    let priv_data' = Private_key.encode_pem priv in
     begin match Private_key.decode_pem priv_data' with
-      | Ok (`P384 priv) ->
-        let pub' = Mirage_crypto_ec.P384.Dsa.pub_of_priv priv in
+      | Ok priv ->
+        let pub' = Private_key.public priv in
         Alcotest.(check bool __LOC__ true
                     (String.equal (to_cs pub) (to_cs pub')))
       | _ -> Alcotest.failf "cannot decode re-encoded P384 private key"
