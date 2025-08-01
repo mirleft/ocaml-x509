@@ -23,7 +23,9 @@ let pass = "1234"
 let cert_and_key xs =
   match xs with
   | [ `Certificate c ; `Decrypted_private_key k ] ->
-    Alcotest.(check bool __LOC__ true (c = cert && k = key))
+    let a = Certificate.encode_der c = Certificate.encode_der cert in
+    let b = Private_key.encode_der k = Private_key.encode_der key in
+    Alcotest.(check bool __LOC__ true (a && b))
   | _ -> Alcotest.fail "expected certificate and key"
 
 let openssl1 () =

@@ -164,9 +164,12 @@ let encode_pem v =
 let digest_of_key = function
   | `RSA _ -> `SHA256
   | `ED25519 _ -> `SHA512
-  | `P256 _ -> `SHA256
-  | `P384 _ -> `SHA384
-  | `P521 _ -> `SHA512
+  | `ECDSA Private_key.(Ecdsa k) ->
+    let (module Curve) = k.curve in
+    let l = Curve.Dsa.bit_length in
+    if l < 384 then `SHA256
+    else if l < 512 then `SHA384
+    else `SHA512
 
 let default_digest digest key =
   match digest with None -> digest_of_key key | Some x -> x

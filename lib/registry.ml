@@ -59,6 +59,28 @@ module ANSI_X9_62 = struct
   let secp256r1 = curves <| 7
   let secp384r1 = certicom <| 34
   let secp521r1 = certicom <| 35
+
+  (* secp256k1 from SEC 2 *)
+  let secp256k1 = certicom <| 10
+
+  (* Brainpool curves from RFC 5639 *)
+  let teletrust = base 1 3 <| 36
+  let brainpool_base = teletrust <| 3 <| 3 <| 2 <| 8 <| 1 <| 1
+
+  let brainpoolP160r1 = brainpool_base <| 1
+  let brainpoolP160t1 = brainpool_base <| 2
+  let brainpoolP192r1 = brainpool_base <| 3
+  let brainpoolP192t1 = brainpool_base <| 4
+  let brainpoolP224r1 = brainpool_base <| 5
+  let brainpoolP224t1 = brainpool_base <| 6
+  let brainpoolP256r1 = brainpool_base <| 7
+  let brainpoolP256t1 = brainpool_base <| 8
+  let brainpoolP320r1 = brainpool_base <| 9
+  let brainpoolP320t1 = brainpool_base <| 10
+  let brainpoolP384r1 = brainpool_base <| 11
+  let brainpoolP384t1 = brainpool_base <| 12
+  let brainpoolP512r1 = brainpool_base <| 13
+  let brainpoolP512t1 = brainpool_base <| 14
 end
 
 module PKCS1 = struct

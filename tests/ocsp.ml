@@ -39,6 +39,8 @@ let mmap file =
 
 let data file = mmap ("./ocsp/" ^ file)
 
+let _ = Dsa_curves.register "p521" Dsa_curves.OIDs.secp521r1 (module Mirage_crypto_ec.P521.Dsa)
+
 let responder_cert = match Certificate.decode_pem (data "certificate.pem") with
   | Ok c -> c
   | Error _ -> assert false
