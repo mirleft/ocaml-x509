@@ -191,7 +191,7 @@ let intermediate_cas = [
   (false, "cacert-no-bc") ;
   (false, "cacert-no-keyusage") ;
   (true, "cacert-ku-critical") ;
-  (true, "cacert-timestamp") ; (* if we require CAs to have ext_key_usage any, github.com doesn't talk to us *)
+  (false, "cacert-timestamp") ;
   (false, "cacert-unknown") ;
   (false, "cacert-v1")
 ]
