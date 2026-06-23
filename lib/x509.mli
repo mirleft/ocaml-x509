@@ -700,7 +700,10 @@ module Validation : sig
       {!Certificate.hostnames}. If [ip] is specified, the certificate is checked
       to contain the given [ip], using {!Certificate.ips}. The returned
       certificate is the root of the chain, a member of the given list of
-      [anchors]. *)
+      [anchors].
+
+      Note that the KeyUsage and ExtendedKeyUsage extensions are not restricted
+      - they need to be checked by the client of the API! *)
   val verify_chain : ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
@@ -735,7 +738,10 @@ module Validation : sig
       the given [host] (using {!Certificate.hostnames}) or [ip] if specified
       (using {!Certificate.ips}; if some path is valid, using
       {!verify_chain}, the result will be [Ok] and contain the actual
-      certificate chain and the trust anchor. *)
+      certificate chain and the trust anchor.
+
+      Note that the KeyUsage and ExtendedKeyUsage extensions are not restricted
+      - they need to be checked by the client of the API! *)
   val verify_chain_of_trust :
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
@@ -751,7 +757,9 @@ module Validation : sig
       provided, the certificate has to be valid at the given timestamp.  If
       [host] is provided, the certificate is checked for the given [host]
       (using {!Certificate.hostnames}). If [ip] is provided, the certificate is
-      checked to include this IP address (using {!Certificate.ips}). *)
+      checked to include this IP address (using {!Certificate.ips}).
+
+      Note that X509v3 extensions are not taken into consideration. *)
   val trust_key_fingerprint :
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) -> hash:Digestif.hash' ->
@@ -767,7 +775,9 @@ module Validation : sig
       {!Certificate.ips}). Note that
       {{!trust_key_fingerprint}public key pinning} has
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
-      over certificate pinning. *)
+      over certificate pinning.
+
+      Note that X509v3 extensions are not taken into consideration. *)
   val trust_cert_fingerprint :
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) -> hash:Digestif.hash' ->
