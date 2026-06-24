@@ -700,7 +700,10 @@ module Validation : sig
       {!Certificate.hostnames}. If [ip] is specified, the certificate is checked
       to contain the given [ip], using {!Certificate.ips}. The returned
       certificate is the root of the chain, a member of the given list of
-      [anchors]. *)
+      [anchors].
+
+      Note that the KeyUsage and ExtendedKeyUsage extensions are not restricted
+      - they need to be checked by the client of the API! *)
   val verify_chain : ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
@@ -735,7 +738,10 @@ module Validation : sig
       the given [host] (using {!Certificate.hostnames}) or [ip] if specified
       (using {!Certificate.ips}; if some path is valid, using
       {!verify_chain}, the result will be [Ok] and contain the actual
-      certificate chain and the trust anchor. *)
+      certificate chain and the trust anchor.
+
+      Note that the KeyUsage and ExtendedKeyUsage extensions are not restricted
+      - they need to be checked by the client of the API! *)
   val verify_chain_of_trust :
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
@@ -751,7 +757,9 @@ module Validation : sig
       provided, the certificate has to be valid at the given timestamp.  If
       [host] is provided, the certificate is checked for the given [host]
       (using {!Certificate.hostnames}). If [ip] is provided, the certificate is
-      checked to include this IP address (using {!Certificate.ips}). *)
+      checked to include this IP address (using {!Certificate.ips}).
+
+      Note that X509v3 extensions are not taken into consideration. *)
   val trust_key_fingerprint :
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) -> hash:Digestif.hash' ->
@@ -767,7 +775,9 @@ module Validation : sig
       {!Certificate.ips}). Note that
       {{!trust_key_fingerprint}public key pinning} has
       {{:https://www.imperialviolet.org/2011/05/04/pinning.html} advantages}
-      over certificate pinning. *)
+      over certificate pinning.
+
+      Note that X509v3 extensions are not taken into consideration. *)
   val trust_cert_fingerprint :
     ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) -> hash:Digestif.hash' ->
@@ -846,6 +856,33 @@ module Signing_request : sig
     ?extensions:Ext.t -> Private_key.t -> (t, [> `Msg of string ]) result
 
   (** {1 Provision a signing request to a certificate} *)
+
+  (** [sign_certificate signing_request ~valid_from ~valid_until ~allowed_hashes
+      ~digest ~serial ~extensions ~subject private certificate] creates
+      [certificate], a signed certificate.  Signing can fail if the signature on
+      the [signing_request] is invalid, or its hash algorithm does not occur in
+      [allowed_hashes] (default all SHA-2 algorithms). If [private] and
+      [certificate] do not match, or the validity of [valid_from, valid_until]
+      is not within [certificate]. Or if the [certificate] contains a
+      [Name_constraint] extension that does not cover the hostnames and IP
+      addresses. The Public key and subject are taken from the [signing_request]
+      unless [subject] is passed, the [extensions] are added to the X.509
+      certificate.  The [private] key is used to sign the certificate, the
+      issuer of the [certificate] is recorded in the certificate.  The digest
+      defaults to [`SHA256].  The [serial] defaults to a random value between 1
+      and 2^64.  Certificate version is always 3.  Please note that the
+      extensions in the [signing_request] are ignored, you can pass them using:
+
+{[match Ext.find Extensions (info csr).extensions with
+| Ok ext -> ext
+| Error _ -> Extension.empty
+]} *)
+  val sign_certificate : t -> valid_from:Ptime.t -> valid_until:Ptime.t ->
+    ?allowed_hashes:Digestif.hash' list ->
+    ?digest:Digestif.hash' -> ?serial:string -> ?extensions:Extension.t ->
+    ?subject:Distinguished_name.t ->
+    Private_key.t -> Certificate.t ->
+    (Certificate.t, Validation.signature_error) result
 
   (** [sign signing_request ~valid_from ~valid_until ~allowed_hashes ~digest ~serial ~extensions ~subject private issuer]
       creates [certificate], a signed certificate.  Signing can fail if the

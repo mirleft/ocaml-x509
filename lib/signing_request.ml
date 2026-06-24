@@ -218,7 +218,7 @@ let sign signing_request
     version = `V3 ;
     serial ;
     signature = signature_algo ;
-    issuer = issuer ;
+    issuer ;
     validity = (valid_from, valid_until) ;
     subject ;
     pk_info = info.public_key ;
@@ -236,3 +236,40 @@ let sign signing_request
   } in
   let raw = Certificate.Asn.certificate_to_octets asn in
   Ok { Certificate.asn ; raw }
+
+let sign_certificate signing_request
+    ~valid_from ~valid_until
+    ?allowed_hashes
+    ?digest
+    ?serial
+    ?(extensions = Extension.empty)
+    ?subject
+    key certificate =
+  let* () =
+    let from, until = Certificate.validity certificate in
+    if Ptime.is_later ~than:valid_from from then
+      Error (`Msg "certificate is valid from an earlier time than the issuing certificate")
+    else if Ptime.is_later ~than:until valid_until then
+      Error (`Msg "certificate is valid until a later time than the issuing certificate")
+    else
+      Ok ()
+  in
+  let* () =
+    let pk = Public_key.fingerprint (Private_key.public key)
+    and issuer_pk = Public_key.fingerprint (Certificate.public_key certificate)
+    in
+    if not (String.equal pk issuer_pk) then
+      Error (`Msg "provided private key and certificate do not match")
+    else
+      Ok ()
+  in
+  let* () =
+    let hosts = hostnames signing_request
+    and ips = match Extension.ips extensions with
+      | None -> Ipaddr.Set.empty
+      | Some ips -> ips
+    in
+    Validation.validate_name_constraints hosts ips certificate
+  in
+  sign signing_request ~valid_from ~valid_until ?allowed_hashes ?digest ?serial
+    ~extensions ?subject key (Certificate.issuer certificate)
