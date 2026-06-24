@@ -9,7 +9,7 @@
 * Restrict server certificates to not have a Name_constraints extension
   (#182 @hannesm)
 * Add validation of name constraints when validating the chain of trust
-  (#182 @hannesm)
+  (#182 @hannesm, fixes #65)
 
 The last 3 fixes were tested with bettertls from Netflix.
 
