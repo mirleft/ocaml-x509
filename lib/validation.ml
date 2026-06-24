@@ -188,6 +188,7 @@ let validate_server_extensions cert =
       | Extension.Ext_key_usage, _ -> true
       | Extension.Subject_alt_name, _ -> true
       | Extension.Policies, (crit, ps) -> not crit || List.mem `Any ps
+      | Extension.Name_constraints, _ -> false (* 4.2.1.10 MUST be used only in a CA certificate *)
       (* we've to deal with _all_ extensions marked critical! *)
       | _, _ -> not (Extension.critical k v))
     cert.Certificate.asn.tbs_cert.extensions
