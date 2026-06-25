@@ -52,10 +52,11 @@ module Asn = struct
   open Registry
 
   let attributes =
-    let f = function[@ocaml.warning "-8"]
+    let f = function
       | (oid, [`C1 p]) when oid = PKCS9.challenge_password -> Ext.B (Password, p)
       | (oid, [`C1 n]) when oid = PKCS9.unstructured_name -> Ext.B (Name, n)
       | (oid, [`C2 es]) when oid = PKCS9.extension_request -> Ext.B (Extensions, es)
+      | _ -> parse_error "unsupported certificate request attribute"
     and g (Ext.B (k, v)) : Asn.oid * [ `C1 of string | `C2 of Extension.t ] list = match k, v with
       | Ext.Password, v -> (PKCS9.challenge_password, [`C1 v])
       | Ext.Name, v -> (PKCS9.unstructured_name, [`C1 v])
