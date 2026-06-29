@@ -1,3 +1,8 @@
+## v1.1.1 (2026-06-29)
+
+* Signing_request.decode_der: avoid exception, return an error when an unknown
+  OID is used in attributes (#183 @samoht)
+
 ## v1.1.0 (2026-06-24)
 
 * Add Signing_request.sign_certificate which takes the issuer as certificate and
