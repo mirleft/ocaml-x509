@@ -65,6 +65,33 @@ let verify () =
   | Ok _ -> ()
   | Error _ -> Alcotest.fail "expected verification to succeed"
 
+let sign_with_intermediate () =
+  let now = Ptime_clock.now () in
+  let ca, capub, capriv = selfsigned now in
+  let intermediate, _ipub, ipriv =
+    cert ~name:"intermediate" now true capub capriv (Certificate.subject ca)
+  in
+  let _, leaf_priv = key () in
+  let name =
+    [ Distinguished_name.(Relative_distinguished_name.singleton (CN "leaf")) ]
+  in
+  let req = match Signing_request.create name leaf_priv with
+    | Ok req -> req
+    | Error _ -> Alcotest.fail "couldn't create signing request"
+  in
+  let valid_from, valid_until = validity now in
+  match Signing_request.sign_certificate req ~valid_from ~valid_until
+          ~extensions:leaf_exts ipriv intermediate with
+  | Error _ -> Alcotest.fail "couldn't sign certificate"
+  | Ok leaf ->
+    let dn = Alcotest.testable Distinguished_name.pp Distinguished_name.equal in
+    Alcotest.check dn "issuer is intermediate subject"
+      (Certificate.subject intermediate) (Certificate.issuer leaf) ;
+    match Validation.verify_chain ~host:None ~time ~anchors:[ca]
+            [leaf ; intermediate] with
+    | Ok _ -> ()
+    | Error _ -> Alcotest.fail "expected verification to succeed"
+
 let crl () =
   let now = Ptime_clock.now () in
   let ca, capub, capriv = selfsigned now in
@@ -182,6 +209,7 @@ let crl'' () =
     | Error _ -> Alcotest.fail "expected proper verification!"
 
 let revoke_tests = [
+  "Sign with an intermediate CA", `Quick, sign_with_intermediate ;
   "Verify with a chain works", `Quick, verify ;
   "Verify with a revoked leaf fails", `Quick, crl ;
   "Verify with a longer chain works", `Quick, verify' ;
