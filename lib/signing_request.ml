@@ -273,4 +273,4 @@ let sign_certificate signing_request
     Validation.validate_name_constraints hosts ips certificate
   in
   sign signing_request ~valid_from ~valid_until ?allowed_hashes ?digest ?serial
-    ~extensions ?subject key (Certificate.issuer certificate)
+    ~extensions ?subject key (Certificate.subject certificate)

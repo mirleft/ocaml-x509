@@ -868,7 +868,7 @@ module Signing_request : sig
       addresses. The Public key and subject are taken from the [signing_request]
       unless [subject] is passed, the [extensions] are added to the X.509
       certificate.  The [private] key is used to sign the certificate, the
-      issuer of the [certificate] is recorded in the certificate.  The digest
+      subject of [certificate] is recorded as the issued certificate's issuer. The digest
       defaults to [`SHA256].  The [serial] defaults to a random value between 1
       and 2^64.  Certificate version is always 3.  Please note that the
       extensions in the [signing_request] are ignored, you can pass them using:
