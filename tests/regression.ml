@@ -338,7 +338,53 @@ let ec_priv file pub_file () =
     Alcotest.(check string "PEM encoding of EC public key (derived from private key) is identical"
                 pub (Public_key.encode_pem (Private_key.public priv)))
 
+let sign_with_intermediate () =
+  let key () = `RSA (Mirage_crypto_pk.Rsa.generate ~bits:1024 ())
+  and name value =
+    Distinguished_name.[Relative_distinguished_name.singleton (CN value)]
+  and get what = function
+    | Ok value -> value
+    | Error _ -> Alcotest.fail ("couldn't " ^ what)
+  in
+  let valid_from = Ptime.epoch in
+  let valid_until = match Ptime.add_span valid_from (Ptime.Span.of_int_s 3600) with
+    | Some time -> time
+    | None -> assert false
+  in
+  let ca_extensions = Extension.(
+      add Key_usage (true, [`Key_cert_sign])
+        (singleton Basic_constraints (true, (true, None))))
+  and leaf_extensions = Extension.(
+      add Key_usage (true, [`Digital_signature; `Key_encipherment])
+        (add Ext_key_usage (true, [`Server_auth])
+           (singleton Basic_constraints (true, (false, None)))))
+  in
+  let sign_ca subject subject_key issuer_key issuer =
+    let request = Signing_request.create subject subject_key |> get "create CA CSR" in
+    Signing_request.sign request ~valid_from ~valid_until
+      ~extensions:ca_extensions issuer_key issuer |> get "sign CA certificate"
+  in
+  let root_key = key ()
+  and intermediate_key = key () in
+  let root = sign_ca (name "root") root_key root_key (name "root") in
+  let intermediate =
+    sign_ca (name "intermediate") intermediate_key root_key (Certificate.subject root)
+  in
+  let request = Signing_request.create (name "leaf") (key ()) |> get "create leaf CSR" in
+  let leaf =
+    Signing_request.sign_certificate request ~valid_from ~valid_until
+      ~extensions:leaf_extensions intermediate_key intermediate |> get "sign leaf"
+  in
+  let dn = Alcotest.testable Distinguished_name.pp Distinguished_name.equal in
+  Alcotest.check dn "issuer is intermediate subject"
+    (Certificate.subject intermediate) (Certificate.issuer leaf);
+  match Validation.verify_chain ~host:None ~time ~anchors:[root] [leaf; intermediate] with
+  | Ok _ -> ()
+  | Error error -> Alcotest.failf "expected chain to validate: %a"
+                     Validation.pp_chain_error error
+
 let regression_tests = [
+  "Sign with an intermediate CA", `Quick, sign_with_intermediate ;
   "RSA: key too small (jc_jc)", `Quick, test_jc_jc ;
   "jc_ca", `Quick, test_jc_ca_fail ;
   "jc_ca", `Quick, test_jc_ca_all_hashes ;
