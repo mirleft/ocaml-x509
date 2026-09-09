@@ -242,38 +242,104 @@ end
 (** X.500 distinguished name *)
 module Distinguished_name : sig
 
-  (** The variant of a relative distinguished name component, as defined in
-    X.500: an attribute type and value. *)
-  type attribute =
-    | CN of string
-    | Serialnumber of string
-    | C of string
-    | L of string
-    | ST of string
-    | O of string
-    | OU of string
-    | T of string
-    | DNQ of string
-    | Mail of string
-    | DC of string
-    | Given_name of string
-    | Surname of string
-    | Initials of string
-    | Pseudonym of string
-    | Generation of string
-    | Street of string
-    | Userid of string
-    | Other of Asn.oid * string
+  (** ASN.1 string contents and encoding. *)
+  module Encoded_string : sig
+    type encoding = [ `UTF8 | `Printable | `IA5 | `Universal | `Teletex | `BMP ]
+    type directory_encoding = [ `UTF8 | `Printable | `Universal | `Teletex | `BMP ]
+    type +'encoding t
 
-  (** Relative_distinguished_name is a set of attributes. *)
+    (** [of_octets ~encoding octets] associates the content octets with their
+        encoding. The contents are not validated, transcoded or normalized. *)
+    val of_octets :
+      encoding:([< encoding ] as 'encoding) -> string ->
+      ('encoding t, [> `Msg of string ]) result
+
+    (** [to_octets t] is the content of [t] in its declared encoding. *)
+    val to_octets : 'encoding t -> string
+
+    (** [encoding t] is the encoding of [t]. *)
+    val encoding : 'encoding t -> 'encoding
+  end
+
+  (** Attribute values with encoding-specific constructors. String repertoires
+      and attribute-specific length bounds are not checked. *)
+  module type Attribute_value = sig
+    type encoding
+    type t
+
+    (** [of_octets octets] uses UTF8String for DirectoryString attributes,
+        PrintableString for country names and serial numbers, and IA5String for
+        email addresses. *)
+    val of_octets : string -> (t, [ `Msg of string ]) result
+
+    (** [of_encoded value] retains the encoding and content octets. *)
+    val of_encoded : encoding Encoded_string.t -> (t, [ `Msg of string ]) result
+    val encoded : t -> encoding Encoded_string.t
+    val to_octets : t -> string
+  end
+
+  module Common_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+  module Serial_number : Attribute_value with type encoding = [ `Printable ]
+  module Country_name : Attribute_value with type encoding = [ `Printable ]
+  module Locality_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+  module State_or_province_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+  module Organization_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+  module Organizational_unit_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+  module Title : Attribute_value with type encoding = Encoded_string.directory_encoding
+  module Email_address : Attribute_value with type encoding = [ `IA5 ]
+  (** Values used by givenName, surname, initials and generationQualifier. *)
+  module Personal_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+  module Pseudonym : Attribute_value with type encoding = Encoded_string.directory_encoding
+  module Street_address : Attribute_value with type encoding = Encoded_string.directory_encoding
+  module User_id : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** Attributes whose OIDs have no named constructor. *)
+  module Other_attribute : sig
+    type t
+    (** [create oid value] rejects OIDs represented by a named constructor.
+        No attribute-specific constraints are checked for unknown OIDs. *)
+    val create : Asn.oid -> Encoded_string.encoding Encoded_string.t -> (t, [ `Msg of string ]) result
+    val oid : t -> Asn.oid
+    val value : t -> Encoded_string.encoding Encoded_string.t
+  end
+
+  (** An X.500 attribute type and value. *)
+  type attribute =
+    | CN of Common_name.t
+    | Serialnumber of Serial_number.t
+    | C of Country_name.t
+    | L of Locality_name.t
+    | ST of State_or_province_name.t
+    | O of Organization_name.t
+    | OU of Organizational_unit_name.t
+    | T of Title.t
+    | DNQ of [ `Printable ] Encoded_string.t
+    | Mail of Email_address.t
+    | DC of [ `IA5 ] Encoded_string.t
+    | Given_name of Personal_name.t
+    | Surname of Personal_name.t
+    | Initials of Personal_name.t
+    | Pseudonym of Pseudonym.t
+    | Generation of Personal_name.t
+    | Street of Street_address.t
+    | Userid of User_id.t
+    | Other of Other_attribute.t
+
+  (** A set of attributes. String encodings participate in comparison. *)
   module Relative_distinguished_name : Set.S with type elt = attribute
 
   (** A distinguished name is a list of relative distinguished names, starting
       with the most significant component. *)
   type t = Relative_distinguished_name.t list
 
-  (** [equal a b] is [true] if the distinguished names [a] and [b] are equal. *)
+  (** [equal a b] compares the RDN sequences, treating each RDN as a set of
+      attributes identified by type and content octets, ignoring string encodings.
+      No transcoding, case folding, or Unicode normalization is performed. *)
   val equal : t -> t -> bool
+
+  (** [equal_representation a b] compares the RDN sequences, including the
+      string encodings of their attributes. *)
+  val equal_representation : t -> t -> bool
 
   (** [make_pp ()] creates a customized pretty-printer for {!t}.
 
@@ -303,7 +369,7 @@ module Distinguished_name : sig
 
       The pretty-printer can be wrapped in a box to control line breaking and
       set it apart, otherwise the RDN components will flow with the surrounding
-      text. *)
+      text. String contents are not transcoded, and encoding tags are omitted. *)
   val make_pp :
     format: [`RFC4514 | `OpenSSL | `OSF] ->
     ?spacing: [`Tight | `Medium | `Loose] ->
@@ -317,13 +383,16 @@ module Distinguished_name : sig
 
   (** [common_name t] is a CN value from the most specific RDN containing one,
       or [None] if [t] has no CN. *)
-  val common_name : t -> string option
+  val common_name : t -> Common_name.t option
 
-  (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs]. *)
+  (** [decode_der cs] is [dn], the ASN.1 decoded distinguished name of [cs].
+      Known attributes must use their permitted string types. String contents
+      are decoded using the ASN.1 string primitives, without additional repertoire
+      or character-count checks. *)
   val decode_der : string -> (t, [> `Msg of string ]) result
 
   (** [encode_der dn] is [octets], the ASN.1 encoded representation of the
-      distinguished name [dn]. *)
+      distinguished name [dn]. String encodings and content octets are preserved. *)
   val encode_der : t -> string
 end
 

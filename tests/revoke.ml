@@ -1,5 +1,10 @@
 open X509
 
+let common_name_value name =
+  match Distinguished_name.Common_name.of_octets name with
+  | Ok value -> value
+  | Error (`Msg message) -> Alcotest.failf "common name: %s" message
+
 let time () = None
 
 (* some revocation scenarios to convince myself *)
@@ -36,7 +41,7 @@ let key () =
 
 let selfsigned ?(name = "test") now =
   let pub, priv = key () in
-  let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN name)) ] in
+  let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN (common_name_value name))) ] in
   match Signing_request.create name priv with
   | Error _ -> assert false
   | Ok req ->
@@ -47,7 +52,7 @@ let selfsigned ?(name = "test") now =
 
 let cert ?serial ?(name = "sub") now ca pubca privca issuer =
   let pub, priv = key () in
-  let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN name)) ] in
+  let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN (common_name_value name))) ] in
   match Signing_request.create name priv with
   | Error _ -> assert false
   | Ok req ->
