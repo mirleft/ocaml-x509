@@ -410,3 +410,146 @@ let hostname_tests = [
   "CSR bar.com hostnames", `Quick, csr_hostnames (csr "wild-bar") (Host.Set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "bar.com"))) (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]));
   "CSR foo.com hostnames", `Quick, csr_hostnames (csr "wild-foo-cn") (Host.Set.singleton (`Wildcard, Domain_name.(host_exn (of_string_exn "foo.com"))));
 ]
+
+let dns_subject_alt_names names =
+  let names = General_name.singleton General_name.DNS names in
+  Extension.add Extension.Subject_alt_name (false, names) Revoke.leaf_exts
+
+let dns_name_constraints ~permitted ~excluded =
+  let subtrees names =
+    List.map (fun name -> General_name.B (General_name.DNS, [name]), 0, None) names
+  in
+  Extension.add Extension.Name_constraints
+    (true, (subtrees permitted, subtrees excluded)) (Revoke.ca_exts ())
+
+let name_constraints_union () =
+  let now = Ptime_clock.now () in
+  let extensions =
+    dns_name_constraints ~permitted:["example.com" ; "example.net"] ~excluded:[]
+  in
+  let ca, capub, capriv = Revoke.selfsigned ~extensions now in
+  List.iter (fun name ->
+      let example, _, _ =
+        Revoke.cert ~name now false capub capriv (Certificate.subject ca)
+      in
+      match Validation.verify_chain ~host:None ~time ~anchors:[ca] [example] with
+      | Ok _ -> ()
+      | Error _ -> Alcotest.fail "expected permitted name to validate")
+    ["www.example.com" ; "www.example.net"] ;
+  let other, _, _ =
+    Revoke.cert ~name:"www.other.org" now false capub capriv (Certificate.subject ca)
+  in
+  match Validation.verify_chain ~host:None ~time ~anchors:[ca] [other] with
+  | Error (`Msg "domain name is not permitted") -> ()
+  | Error _ -> Alcotest.fail "expected a name constraint error"
+  | Ok _ -> Alcotest.fail "expected other name to be rejected"
+
+let name_constraints_all_dns_names () =
+  let now = Ptime_clock.now () in
+  let extensions =
+    dns_name_constraints ~permitted:["example.com" ; "example.net"] ~excluded:[]
+  in
+  let ca, capub, capriv = Revoke.selfsigned ~extensions now in
+  List.iter (fun (names, allowed) ->
+      let extensions = dns_subject_alt_names names in
+      let leaf, _, _ =
+        Revoke.cert ~name:"unused.invalid" ~extensions now false capub capriv
+          (Certificate.subject ca)
+      in
+      match Validation.verify_chain ~host:None ~time ~anchors:[ca] [leaf], allowed with
+      | Ok _, true -> ()
+      | Error (`Msg "domain name is not permitted"), false -> ()
+      | _ -> Alcotest.failf "unexpected validation result for DNS SANs %s"
+               (String.concat ", " names))
+    [ ["www.example.com"], true ;
+      ["www.example.net"], true ;
+      ["www.example.com" ; "www.example.net"], true ;
+      ["www.example.com" ; "www.other.org"], false ]
+
+let name_constraints_excluded () =
+  let now = Ptime_clock.now () in
+  let extensions =
+    dns_name_constraints ~permitted:["example.com" ; "example.net"]
+      ~excluded:["blocked.example.com"]
+  in
+  let ca, capub, capriv = Revoke.selfsigned ~extensions now in
+  List.iter (fun (name, allowed) ->
+      let extensions = dns_subject_alt_names [name] in
+      let leaf, _, _ =
+        Revoke.cert ~extensions now false capub capriv (Certificate.subject ca)
+      in
+      match Validation.verify_chain ~host:None ~time ~anchors:[ca] [leaf], allowed with
+      | Ok _, true -> ()
+      | Error (`Msg "domain name is excluded"), false -> ()
+      | _ -> Alcotest.failf "unexpected validation result for %s" name)
+    [ "www.example.com", true ;
+      "www.example.net", true ;
+      "blocked.example.com", false ;
+      "www.blocked.example.com", false ]
+
+let name_constraints_chain () =
+  let now = Ptime_clock.now () in
+  let root_extensions =
+    dns_name_constraints ~permitted:["example.com" ; "example.net"] ~excluded:[]
+  and intermediate_extensions =
+    dns_name_constraints ~permitted:["example.com" ; "example.org"] ~excluded:[]
+  in
+  let root, root_pub, root_priv =
+    Revoke.selfsigned ~name:"root" ~extensions:root_extensions now
+  in
+  let intermediate, intermediate_pub, intermediate_priv =
+    Revoke.cert ~name:"intermediate" ~extensions:intermediate_extensions now true
+      root_pub root_priv (Certificate.subject root)
+  in
+  List.iter (fun (name, allowed) ->
+      let extensions = dns_subject_alt_names [name] in
+      let leaf, _, _ =
+        Revoke.cert ~extensions now false intermediate_pub intermediate_priv
+          (Certificate.subject intermediate)
+      in
+      match Validation.verify_chain ~host:None ~time ~anchors:[root]
+              [leaf ; intermediate], allowed with
+      | Ok _, true -> ()
+      | Error (`Msg "domain name is not permitted"), false -> ()
+      | _ -> Alcotest.failf "unexpected validation result for %s" name)
+    [ "www.example.com", true ;
+      "www.example.net", false ;
+      "www.example.org", false ]
+
+let ip_name_constraints_union () =
+  let now = Ptime_clock.now () in
+  (* 192.0.2.0/24 and 198.51.100.0/24, encoded as address followed by mask. *)
+  let permitted =
+    List.map (fun prefix ->
+        General_name.B (General_name.IP, [Ohex.decode prefix]), 0, None)
+      ["c0000200ffffff00" ; "c6336400ffffff00"]
+  in
+  let extensions =
+    Extension.add Extension.Name_constraints (true, (permitted, [])) (Revoke.ca_exts ())
+  in
+  let ca, capub, capriv = Revoke.selfsigned ~extensions now in
+  let verify addresses =
+    let names = General_name.singleton General_name.IP (List.map Ohex.decode addresses) in
+    let extensions = Extension.add Extension.Subject_alt_name (false, names) Revoke.leaf_exts in
+    let leaf, _, _ =
+      Revoke.cert ~extensions now false capub capriv (Certificate.subject ca)
+    in
+    Validation.verify_chain ~host:None ~time ~anchors:[ca] [leaf]
+  in
+  List.iter (fun addresses ->
+      match verify addresses with
+      | Ok _ -> ()
+      | Error _ -> Alcotest.fail "expected permitted IP addresses to validate")
+    [["c0000201"] ; ["c6336401"] ; ["c0000201" ; "c6336401"]] ;
+  match verify ["c0000201" ; "cb007101"] with
+  | Error (`Msg "ip address is not permitted") -> ()
+  | Error _ -> Alcotest.fail "expected an IP name constraint error"
+  | Ok _ -> Alcotest.fail "expected outside IP address to be rejected"
+
+let name_constraints_tests = [
+  "Permitted name constraints form a union", `Quick, name_constraints_union ;
+  "Permitted IP name constraints form a union", `Quick, ip_name_constraints_union ;
+  "Every DNS SAN must be permitted", `Quick, name_constraints_all_dns_names ;
+  "Excluded names take precedence", `Quick, name_constraints_excluded ;
+  "Permitted names intersect across CAs", `Quick, name_constraints_chain ;
+]

@@ -1,6 +1,7 @@
 let suites =
   X509tests.x509_tests @ [
     "Regression", Regression.regression_tests ;
+    "Name Constraints", Regression.name_constraints_tests ;
     "Host names", Regression.hostname_tests ;
     "Revoke", Revoke.revoke_tests ;
     "CRL", Crltests.crl_tests ;
