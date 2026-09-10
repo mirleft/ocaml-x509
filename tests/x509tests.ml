@@ -174,7 +174,7 @@ let first_certs =
       exts
         ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ] () |>
       sign (Utils.cn "no-san.foobar.com"),
-      [ "no-san.foobar.com" ],
+      [],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       None );
     ( "first-basicconstraint-true", false,
@@ -321,11 +321,6 @@ let first_wildcard_certs =
       ~names:[ "*.foobar.com" ] () |>
     sign (Utils.cn "wildcard.foobar.com"),
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
-  ( "first-wildcard",
-    exts
-      ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ] () |>
-    sign (Utils.cn "*.foobar.com"),
-    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 
 let first_wildcard_cert_tests =
@@ -401,7 +396,7 @@ MC4CAQAwBQYDK2VwBCIEID1tIgjIqM2gFu+7kNfu+8TW+5Vug0nAHtuyMgPkKnT+
      exts
        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        () |> sign (Utils.cn "second.foobar.com"),
-     [ "second.foobar.com" ],
+     [],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
      None ) ;
     ("second-any", true,

@@ -230,17 +230,8 @@ let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
    URI-ID, as described under Section 6.4.1, Section 6.4.2, and
    Section 6.4.3. *)
 let hostnames { asn = cert ; _ } =
-  let subj =
-    match Distinguished_name.common_name cert.tbs_cert.subject with
-    | None -> Host.Set.empty
-    | Some x ->
-      match Host.host (Distinguished_name.Common_name.to_string x) with
-      | Some (wild, d) -> Host.Set.singleton (wild, d)
-      | None -> Host.Set.empty
-  in
-  match Extension.hostnames cert.tbs_cert.extensions with
-  | Some names -> names
-  | None -> subj
+  Option.value ~default:Host.Set.empty
+    (Extension.hostnames cert.tbs_cert.extensions)
 
 let supports_hostname cert name =
   let names = hostnames cert in

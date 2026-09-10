@@ -462,7 +462,7 @@ let ed25519_cert () =
       Alcotest.failf "verifying 25519 ca certificate failed %a"
         Validation.pp_ca_error e
     | Ok () ->
-      match Validation.verify_chain ~host:(host "www.example.com") ~time ~anchors:[cert] [cert] with
+      match Validation.verify_chain ~host:None ~time ~anchors:[cert] [cert] with
       | Ok _ -> ()
       | Error e ->
         Alcotest.failf "verifying 25519 certificate failed %a"
@@ -622,7 +622,6 @@ let sign_with_intermediate () =
   let expected = Host.Set.singleton
       (`Strict, Domain_name.host_exn (Domain_name.of_string_exn "leaf.example")) in
   Alcotest.check hostnames "CSR hostname fallback" expected (Signing_request.hostnames request);
-  Alcotest.check hostnames "certificate hostname fallback" expected (Certificate.hostnames leaf);
   let dn = Alcotest.testable Distinguished_name.pp Distinguished_name.equal in
   Alcotest.check dn "issuer is intermediate subject"
     (Certificate.subject intermediate) (Certificate.issuer leaf);
@@ -712,7 +711,7 @@ let host_set xs =
 
 let hostname_tests = [
   "cacert hostnames", `Quick, cert_hostnames cacert Host.Set.empty;
-  "izenpe hostnames", `Quick, cert_hostnames (read_cert "izenpe") (host_set ["izenpe.com"]);
+  "izenpe hostnames", `Quick, cert_hostnames (read_cert "izenpe") Host.Set.empty;
   "jabber.ccc.de hostnames", `Quick, cert_hostnames jc (host_set [ "jabber.ccc.de" ; "conference.jabber.ccc.de" ; "jabberd.jabber.ccc.de" ; "pubsub.jabber.ccc.de" ; "vjud.jabber.ccc.de" ]);
   "jaber.fu-berlin.de hostnames", `Quick, cert_hostnames (read_cert "jabber.fu-berlin.de") (host_set [ "jabber.fu-berlin.de" ; "conference.jabber.fu-berlin.de" ; "proxy.jabber.fu-berlin.de" ; "echo.jabber.fu-berlin.de" ; "file.jabber.fu-berlin.de" ; "jitsi-videobridge.jabber.fu-berlin.de" ; "multicast.jabber.fu-berlin.de" ; "pubsub.jabber.fu-berlin.de" ]);
   "pads.ccc.de hostnames", `Quick, cert_hostnames (read_cert "pads.ccc.de") (Host.Set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "pads.ccc.de"))) (host_set ["pads.ccc.de"]));
@@ -751,7 +750,8 @@ let name_constraints_union () =
       | Error _ -> Alcotest.fail "expected permitted name to validate")
     ["www.example.com" ; "www.example.net"] ;
   let other =
-    Utils.cert ~now ~ca_key:capriv ~priv ~name:(Utils.cn "www.other.org") Utils.leaf_exts (Certificate.subject ca)
+    let extensions = Extension.(add Subject_alt_name (false, General_name.(singleton DNS ["www.other.org"])) Utils.leaf_exts) in
+    Utils.cert ~now ~ca_key:capriv ~priv ~name:(Utils.cn "www.other.org") extensions (Certificate.subject ca)
   in
   match Validation.verify_chain ~host:None ~time ~anchors:[ca] [other] with
   | Error (`Msg "domain name is not permitted") -> ()
