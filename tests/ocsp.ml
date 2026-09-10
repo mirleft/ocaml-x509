@@ -64,6 +64,33 @@ let test_request () =
       Alcotest.(check string __LOC__ test1_serial serialNumber)
     | _ -> Alcotest.fail "something wrong with OCSP request"
 
+let test_issuer_name_hash () =
+  let issuer = match Certificate.decode_pem (mmap "./regression/PostaCARoot.pem") with
+    | Ok issuer -> issuer
+    | Error (`Msg message) -> Alcotest.fail message
+  in
+  let request = match OCSP.Request.create [OCSP.create_cert_id ~hash:`SHA1 issuer "\x2a"] with
+    | Ok request -> OCSP.Request.encode_der request
+    | Error _ -> Alcotest.fail "could not create OCSP request"
+  in
+  let grammar = Asn.S.(
+      let sequence1 field = sequence (single (required field)) in
+      let algorithm = sequence2 (required oid) (optional null) in
+      let cert_id = sequence4 (required algorithm) (required octet_string)
+          (required octet_string) (required integer) in
+      let request = sequence1 cert_id in
+      let request_list = sequence_of request in
+      let tbs_request = sequence1 request_list in
+      sequence1 tbs_request)
+  in
+  match Asn.decode (Asn.codec Asn.der grammar) request with
+  | Ok ([(_, name_hash, _, _)], "") ->
+    (* SHA1 of the subject Name DER in PostaCARoot.pem. *)
+    Alcotest.(check string "issuerNameHash"
+                (Ohex.decode "db8e64443b15571ab581d3526a683e2567151835") name_hash)
+  | Ok _ -> Alcotest.fail "unexpected unsigned OCSP request structure"
+  | Error error -> Alcotest.failf "OCSP request: %a" Asn.pp_error error
+
 let test_response () =
   let open OCSP.Response in
   match decode_der (data "response.der") with
@@ -123,6 +150,7 @@ let test_simple_responder () =
 
 let tests = [
   "OpenSSL request", `Quick, test_request ;
+  "Issuer name hash", `Quick, test_issuer_name_hash ;
   "OpenSSL response", `Quick, test_response ;
   "Simple OCSP responder", `Quick, test_simple_responder ;
 ]

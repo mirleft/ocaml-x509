@@ -99,7 +99,7 @@ module Asn = struct
                      | `C4 s -> s | `C5 s -> s | `C6 s -> s
     and g s = `C1 s
     in
-    Asn.S.map f g Distinguished_name.Asn.directory_name
+    Asn.S.map f g Distinguished_name.Asn.encoded_string
 
   let edi_party_name =
     sequence2

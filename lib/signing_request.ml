@@ -124,7 +124,7 @@ let hostnames csr =
     match Distinguished_name.common_name info.subject with
     | None -> Host.Set.empty
     | Some x ->
-      match Host.host x with
+      match Host.host (Distinguished_name.Common_name.to_string x) with
       | Some (typ, n) -> Host.Set.singleton (typ, n)
       | None -> Host.Set.empty
   in

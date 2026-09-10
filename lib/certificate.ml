@@ -234,7 +234,7 @@ let hostnames { asn = cert ; _ } =
     match Distinguished_name.common_name cert.tbs_cert.subject with
     | None -> Host.Set.empty
     | Some x ->
-      match Host.host x with
+      match Host.host (Distinguished_name.Common_name.to_string x) with
       | Some (wild, d) -> Host.Set.singleton (wild, d)
       | None -> Host.Set.empty
   in

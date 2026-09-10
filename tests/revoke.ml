@@ -36,7 +36,7 @@ let key () =
 
 let selfsigned ?(name = "test") ?(extensions = ca_exts ()) now =
   let pub, priv = key () in
-  let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN name)) ] in
+  let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN (Common_name.v name))) ] in
   match Signing_request.create name priv with
   | Error _ -> assert false
   | Ok req ->
@@ -47,7 +47,7 @@ let selfsigned ?(name = "test") ?(extensions = ca_exts ()) now =
 
 let cert ?serial ?(name = "sub") ?extensions now ca pubca privca issuer =
   let pub, priv = key () in
-  let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN name)) ] in
+  let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN (Common_name.v name))) ] in
   match Signing_request.create name priv with
   | Error _ -> assert false
   | Ok req ->
