@@ -8,5 +8,5 @@
 
 (rule
   (alias runtest)
-  (deps (source_tree ../testcertificates))
+  (deps (source_tree ../regression))
   (action (diff custom_pp.expected custom_pp.output)))
