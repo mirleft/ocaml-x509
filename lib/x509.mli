@@ -244,8 +244,14 @@ module Distinguished_name : sig
 
   (** ASN.1 string contents and encoding. *)
   module Encoded_string : sig
+
+    (** The polymorphic variant of different string tags. *)
     type encoding = [ `UTF8 | `Printable | `IA5 | `Universal | `Teletex | `BMP ]
+
+    (** The polymorphic variant of directory string tags. *)
     type directory_encoding = [ `UTF8 | `Printable | `Universal | `Teletex | `BMP ]
+
+    (** The type of string values with their encoding. *)
     type +'encoding t
 
     (** [of_octets ~encoding octets] associates the content octets with their
@@ -264,7 +270,10 @@ module Distinguished_name : sig
   (** Attribute values with encoding-specific constructors. String repertoires
       and attribute-specific length bounds are not checked. *)
   module type Attribute_value = sig
+    (** The variant of string tags. *)
     type encoding
+
+    (** The type of an encoded value. *)
     type t
 
     (** [of_octets octets] uses UTF8String for DirectoryString attributes,
@@ -274,32 +283,65 @@ module Distinguished_name : sig
 
     (** [of_encoded value] retains the encoding and content octets. *)
     val of_encoded : encoding Encoded_string.t -> (t, [ `Msg of string ]) result
+
+    (** [encoded t] is the [Encoded_string.t] of [t]. *)
     val encoded : t -> encoding Encoded_string.t
+
+    (** [to_octets t] is the content of [t] in its declared encoding. *)
     val to_octets : t -> string
   end
 
+  (** The module type for common name. *)
   module Common_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** The module type for serial number. *)
   module Serial_number : Attribute_value with type encoding = [ `Printable ]
+
+  (** The module type for country name. *)
   module Country_name : Attribute_value with type encoding = [ `Printable ]
+
+  (** The module type for locality name. *)
   module Locality_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** The module type for state or province name. *)
   module State_or_province_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** The module type for organization name. *)
   module Organization_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** The module type for organization unit name. *)
   module Organizational_unit_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** The module type for title. *)
   module Title : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** The module type for email address. *)
   module Email_address : Attribute_value with type encoding = [ `IA5 ]
+
   (** Values used by givenName, surname, initials and generationQualifier. *)
   module Personal_name : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** The module type for pseudonym. *)
   module Pseudonym : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** The module type for street address. *)
   module Street_address : Attribute_value with type encoding = Encoded_string.directory_encoding
+
+  (** The module type for user id. *)
   module User_id : Attribute_value with type encoding = Encoded_string.directory_encoding
 
   (** Attributes whose OIDs have no named constructor. *)
   module Other_attribute : sig
     type t
+
     (** [create oid value] rejects OIDs represented by a named constructor.
         No attribute-specific constraints are checked for unknown OIDs. *)
     val create : Asn.oid -> Encoded_string.encoding Encoded_string.t -> (t, [ `Msg of string ]) result
+
+    (** [oid t] is the ASN.1 OID of [t]. *)
     val oid : t -> Asn.oid
+
+    (** [value t] is the value of [t] with the string encoding. *)
     val value : t -> Encoded_string.encoding Encoded_string.t
   end
 
