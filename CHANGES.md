@@ -1,3 +1,17 @@
+## v1.2.0 (2026-09-11)
+
+* Signing_request.sign_certificate: use the subject of the certificate passed in
+  as _issuer_ of the certificate that is returned. (#184 @torinnd)
+* Distinguished_name.common_name: fix the lookup, adapt the documentation to be
+  exact - it is from the most specific RDN (#187 @torinnd)
+* Name constraints: treat permitted name subtress as union per name form -
+  previously some valid chains were not accepted (#185 @torinnd)
+* Distinguished_name: preserve string encoding by using typed attribute values
+  (API change) (#188 @torinnd)
+* Tests: remove certificates, generate them on the fly (#189 @hannesm)
+* Certificate.hostnames: adapt to RFC 9525 and only use SubjectAlternativeName
+  values for validation (#190 @hannesm)
+
 ## v1.1.1 (2026-06-29)
 
 * Signing_request.decode_der: avoid exception, return an error when an unknown
