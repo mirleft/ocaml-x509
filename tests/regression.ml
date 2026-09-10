@@ -89,6 +89,26 @@ let test_distinguished_name () =
   Alcotest.(check check_dn "complex subject is good"
               expected (Certificate.subject crt))
 
+let test_common_name_lookup () =
+  let open Distinguished_name in
+  let rdn = Relative_distinguished_name.of_list in
+  let check description expected name =
+    Alcotest.(check (option string) description expected (common_name name))
+  in
+  let attributes = [CN "a.example"; O "Example"; OU "Unit"; L "London"] in
+  List.iter (fun attributes ->
+      let set = List.fold_left (fun set attribute ->
+          Relative_distinguished_name.add attribute set)
+          Relative_distinguished_name.empty attributes in
+      check "CN in a multi-valued RDN" (Some "a.example") [set])
+    [attributes; List.rev attributes];
+  check "empty name" None [];
+  check "empty RDN" None [rdn []];
+  check "no CN" None [rdn [O "Example"]];
+  check "most specific CN" (Some "b")
+    [rdn [CN "a"]; rdn [CN "b"]; rdn [O "Example"]];
+  check "multiple CN values" (Some "a") [rdn [CN "z"; CN "a"]]
+
 let test_distinguished_name_pp () =
   let module Dn = struct
     include Distinguished_name
@@ -393,6 +413,7 @@ let regression_tests = [
   "SAN dir explicit or implicit", `Quick, test_izenpe ;
   "name constraint parsing (DNS: .gr)", `Quick, test_name_constraints ;
   "complex distinguished name", `Quick, test_distinguished_name ;
+  "common name lookup", `Quick, test_common_name_lookup ;
   "distinguished name pp", `Quick, test_distinguished_name_pp ;
   "algorithm without null", `Quick, test_yubico ;
   "valid until generalized_time with fractional seconds", `Quick, test_frac_s ;
