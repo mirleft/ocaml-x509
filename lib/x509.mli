@@ -254,14 +254,16 @@ module Distinguished_name : sig
     (** The type of string values with their encoding. *)
     type +'encoding t
 
-    (** [of_octets ~encoding octets] associates the content octets with their
-        encoding. The contents are not validated, transcoded or normalized. *)
-    val of_octets :
-      encoding:([< encoding ] as 'encoding) -> string ->
-      ('encoding t, [> `Msg of string ]) result
+    (** [of_string ~encoding s] associates [s] with its encoding. [s] contains
+        the string contents in that encoding, without an ASN.1 tag or length.
+        The contents are not validated, transcoded or normalized. *)
+    val of_string :
+      encoding:([< encoding ] as 'encoding) -> string -> 'encoding t
 
-    (** [to_octets t] is the content of [t] in its declared encoding. *)
-    val to_octets : 'encoding t -> string
+    (** [to_string t] is the content of [t] in its declared encoding, not
+        necessarily UTF-8. No transcoding is performed: a BMPString containing
+        ["A"] is returned as ["\x00A"]. *)
+    val to_string : 'encoding t -> string
 
     (** [encoding t] is the encoding of [t]. *)
     val encoding : 'encoding t -> 'encoding
@@ -276,19 +278,22 @@ module Distinguished_name : sig
     (** The type of an encoded value. *)
     type t
 
-    (** [of_octets octets] uses UTF8String for DirectoryString attributes,
-        PrintableString for country names and serial numbers, and IA5String for
-        email addresses. *)
-    val of_octets : string -> (t, [ `Msg of string ]) result
+    (** [v ~encoding s] constructs an attribute value from the string contents
+        [s] in [encoding], without validation, transcoding or normalization.
+        The default is UTF8String for DirectoryString attributes, PrintableString
+        for country names and serial numbers, and IA5String for email addresses. *)
+    val v : ?encoding:encoding -> string -> t
 
     (** [of_encoded value] retains the encoding and content octets. *)
-    val of_encoded : encoding Encoded_string.t -> (t, [ `Msg of string ]) result
+    val of_encoded : encoding Encoded_string.t -> t
 
     (** [encoded t] is the [Encoded_string.t] of [t]. *)
     val encoded : t -> encoding Encoded_string.t
 
-    (** [to_octets t] is the content of [t] in its declared encoding. *)
-    val to_octets : t -> string
+    (** [to_string t] is the content of [t] in its declared encoding, not
+        necessarily UTF-8. No transcoding is performed: a BMPString containing
+        ["A"] is returned as ["\x00A"]. *)
+    val to_string : t -> string
   end
 
   (** The module type for common name. *)
@@ -376,12 +381,12 @@ module Distinguished_name : sig
 
   (** [equal a b] compares the RDN sequences, treating each RDN as a set of
       attributes identified by type and content octets, ignoring string encodings.
-      No transcoding, case folding, or Unicode normalization is performed. *)
-  val equal : t -> t -> bool
+      Identical octets can therefore compare equal even when their encodings
+      give them different meanings.
 
-  (** [equal_representation a b] compares the RDN sequences, including the
-      string encodings of their attributes. *)
-  val equal_representation : t -> t -> bool
+      No transcoding, case folding, whitespace or Unicode normalization is
+      performed. This does not implement RFC 5280 section 7.1 name comparison. *)
+  val equal : t -> t -> bool
 
   (** [make_pp ()] creates a customized pretty-printer for {!t}.
 

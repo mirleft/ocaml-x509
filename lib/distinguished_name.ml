@@ -7,10 +7,10 @@ module Encoded_string = struct
     encoding : 'encoding ;
   }
 
-  let of_octets ~(encoding : [< encoding]) octets = Ok { octets ; encoding }
+  let of_string ~(encoding : [< encoding]) octets = { octets ; encoding }
 
   let encoding { encoding ; _ } = encoding
-  let to_octets { octets ; _ } = octets
+  let to_string { octets ; _ } = octets
   let compare_octets a b = String.compare a.octets b.octets
 
   let tag = function
@@ -30,30 +30,30 @@ end
 module type Attribute_value = sig
   type encoding
   type t
-  val of_octets : string -> (t, [ `Msg of string ]) result
-  val of_encoded : encoding Encoded_string.t -> (t, [ `Msg of string ]) result
+  val v : ?encoding:encoding -> string -> t
+  val of_encoded : encoding Encoded_string.t -> t
   val encoded : t -> encoding Encoded_string.t
-  val to_octets : t -> string
+  val to_string : t -> string
 end
 
 module type String_encoding = sig
   type t
-  val of_octets : string -> (t Encoded_string.t, [ `Msg of string ]) result
+  val default : t
 end
 
 module Directory_encoding = struct
   type t = Encoded_string.directory_encoding
-  let of_octets octets = Encoded_string.of_octets ~encoding:(`UTF8 : t) octets
+  let default : t = `UTF8
 end
 
 module Printable_encoding = struct
   type t = [ `Printable ]
-  let of_octets octets = Encoded_string.of_octets ~encoding:`Printable octets
+  let default = `Printable
 end
 
 module Ia5_encoding = struct
   type t = [ `IA5 ]
-  let of_octets octets = Encoded_string.of_octets ~encoding:`IA5 octets
+  let default = `IA5
 end
 
 module Make_value (Encoding : String_encoding)
@@ -61,10 +61,10 @@ module Make_value (Encoding : String_encoding)
   type encoding = Encoding.t
   type t = encoding Encoded_string.t
 
-  let of_encoded value = Ok value
-  let of_octets = Encoding.of_octets
+  let v ?(encoding = Encoding.default) octets = { Encoded_string.octets = octets ; encoding }
+  let of_encoded value = value
   let encoded t = t
-  let to_octets = Encoded_string.to_octets
+  let to_string = Encoded_string.to_string
 end
 
 module Common_name = Make_value (Directory_encoding)
@@ -166,7 +166,7 @@ let pp_string_hex ppf s =
   done
 
 let pp_attribute ?osf ?(ava_equal = Fmt.any "=") () ppf attr =
-  let value = Encoded_string.to_octets (attribute_value attr) in
+  let value = Encoded_string.to_string (attribute_value attr) in
   let aux a = Fmt.pf ppf "%s%a%a" a ava_equal () (pp_attribute_value ?osf ()) value in
   match attr with
   | CN _ -> aux "CN"
@@ -252,10 +252,6 @@ let matching_rdn rdn =
 (* TODO: each RDN should be a non-empty set. *)
 type t = Relative_distinguished_name.t list
 
-let equal_representation a b =
-  List.length a = List.length b &&
-  List.for_all2 Relative_distinguished_name.equal a b
-
 let equal a b =
   List.length a = List.length b &&
   List.for_all2 (fun a b -> Matching_rdn.equal (matching_rdn a) (matching_rdn b)) a b
@@ -313,32 +309,32 @@ module Asn = struct
     | Error (`Msg message) -> parse_error "%s" message
 
   let directory = function
-    | `C1 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`UTF8 : Encoded_string.directory_encoding) x)
-    | `C2 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`Printable : Encoded_string.directory_encoding) x)
+    | `C1 x -> Encoded_string.of_string ~encoding:(`UTF8 : Encoded_string.directory_encoding) x
+    | `C2 x -> Encoded_string.of_string ~encoding:(`Printable : Encoded_string.directory_encoding) x
     | `C3 _ -> parse_error "IA5String is not a DirectoryString"
-    | `C4 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`Universal : Encoded_string.directory_encoding) x)
-    | `C5 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`Teletex : Encoded_string.directory_encoding) x)
-    | `C6 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`BMP : Encoded_string.directory_encoding) x)
+    | `C4 x -> Encoded_string.of_string ~encoding:(`Universal : Encoded_string.directory_encoding) x
+    | `C5 x -> Encoded_string.of_string ~encoding:(`Teletex : Encoded_string.directory_encoding) x
+    | `C6 x -> Encoded_string.of_string ~encoding:(`BMP : Encoded_string.directory_encoding) x
 
   let printable = function
-    | `C2 x -> or_parse_error (Encoded_string.of_octets ~encoding:`Printable x)
+    | `C2 x -> Encoded_string.of_string ~encoding:`Printable x
     | _ -> parse_error "attribute requires PrintableString"
 
   let ia5 = function
-    | `C3 x -> or_parse_error (Encoded_string.of_octets ~encoding:`IA5 x)
+    | `C3 x -> Encoded_string.of_string ~encoding:`IA5 x
     | _ -> parse_error "attribute requires IA5String"
 
   let name =
     let open Registry in
     let of_c = function
-      | `C1 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`UTF8 : Encoded_string.encoding) x)
-      | `C2 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`Printable : Encoded_string.encoding) x)
-      | `C3 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`IA5 : Encoded_string.encoding) x)
-      | `C4 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`Universal : Encoded_string.encoding) x)
-      | `C5 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`Teletex : Encoded_string.encoding) x)
-      | `C6 x -> or_parse_error (Encoded_string.of_octets ~encoding:(`BMP : Encoded_string.encoding) x)
+      | `C1 x -> Encoded_string.of_string ~encoding:(`UTF8 : Encoded_string.encoding) x
+      | `C2 x -> Encoded_string.of_string ~encoding:(`Printable : Encoded_string.encoding) x
+      | `C3 x -> Encoded_string.of_string ~encoding:(`IA5 : Encoded_string.encoding) x
+      | `C4 x -> Encoded_string.of_string ~encoding:(`Universal : Encoded_string.encoding) x
+      | `C5 x -> Encoded_string.of_string ~encoding:(`Teletex : Encoded_string.encoding) x
+      | `C6 x -> Encoded_string.of_string ~encoding:(`BMP : Encoded_string.encoding) x
     and to_c x =
-      let octets = Encoded_string.to_octets x in
+      let octets = Encoded_string.to_string x in
       match Encoded_string.encoding x with
       | `UTF8 -> `C1 octets
       | `Printable -> `C2 octets
@@ -350,23 +346,23 @@ module Asn = struct
 
     let a_f = case_of_oid_f [
       (domain_component              , fun x -> DC (ia5 x)) ;
-      (X520.common_name              , fun x -> CN (or_parse_error (Common_name.of_encoded (directory x)))) ;
-      (X520.serial_number            , fun x -> Serialnumber (or_parse_error (Serial_number.of_encoded (printable x)))) ;
-      (X520.country_name             , fun x -> C (or_parse_error (Country_name.of_encoded (printable x)))) ;
-      (X520.locality_name            , fun x -> L (or_parse_error (Locality_name.of_encoded (directory x)))) ;
-      (X520.state_or_province_name   , fun x -> ST (or_parse_error (State_or_province_name.of_encoded (directory x)))) ;
-      (X520.organization_name        , fun x -> O (or_parse_error (Organization_name.of_encoded (directory x)))) ;
-      (X520.organizational_unit_name , fun x -> OU (or_parse_error (Organizational_unit_name.of_encoded (directory x)))) ;
-      (X520.title                    , fun x -> T (or_parse_error (Title.of_encoded (directory x)))) ;
+      (X520.common_name              , fun x -> CN (Common_name.of_encoded (directory x))) ;
+      (X520.serial_number            , fun x -> Serialnumber (Serial_number.of_encoded (printable x))) ;
+      (X520.country_name             , fun x -> C (Country_name.of_encoded (printable x))) ;
+      (X520.locality_name            , fun x -> L (Locality_name.of_encoded (directory x))) ;
+      (X520.state_or_province_name   , fun x -> ST (State_or_province_name.of_encoded (directory x))) ;
+      (X520.organization_name        , fun x -> O (Organization_name.of_encoded (directory x))) ;
+      (X520.organizational_unit_name , fun x -> OU (Organizational_unit_name.of_encoded (directory x))) ;
+      (X520.title                    , fun x -> T (Title.of_encoded (directory x))) ;
       (X520.dn_qualifier             , fun x -> DNQ (printable x)) ;
-      (PKCS9.email                   , fun x -> Mail (or_parse_error (Email_address.of_encoded (ia5 x)))) ;
-      (X520.given_name               , fun x -> Given_name (or_parse_error (Personal_name.of_encoded (directory x)))) ;
-      (X520.surname                  , fun x -> Surname (or_parse_error (Personal_name.of_encoded (directory x)))) ;
-      (X520.initials                 , fun x -> Initials (or_parse_error (Personal_name.of_encoded (directory x)))) ;
-      (X520.pseudonym                , fun x -> Pseudonym (or_parse_error (Pseudonym.of_encoded (directory x)))) ;
-      (X520.generation_qualifier     , fun x -> Generation (or_parse_error (Personal_name.of_encoded (directory x)))) ;
-      (X520.street_address           , fun x -> Street (or_parse_error (Street_address.of_encoded (directory x)))) ;
-      (userid                        , fun x -> Userid (or_parse_error (User_id.of_encoded (directory x))))]
+      (PKCS9.email                   , fun x -> Mail (Email_address.of_encoded (ia5 x))) ;
+      (X520.given_name               , fun x -> Given_name (Personal_name.of_encoded (directory x))) ;
+      (X520.surname                  , fun x -> Surname (Personal_name.of_encoded (directory x))) ;
+      (X520.initials                 , fun x -> Initials (Personal_name.of_encoded (directory x))) ;
+      (X520.pseudonym                , fun x -> Pseudonym (Pseudonym.of_encoded (directory x))) ;
+      (X520.generation_qualifier     , fun x -> Generation (Personal_name.of_encoded (directory x))) ;
+      (X520.street_address           , fun x -> Street (Street_address.of_encoded (directory x))) ;
+      (userid                        , fun x -> Userid (User_id.of_encoded (directory x)))]
       ~default:(fun oid x -> Other (or_parse_error (Other_attribute.create oid (of_c x))))
 
     and a_g attr =

@@ -76,17 +76,6 @@ let dn_error description = function
   | Error (`Msg _) -> ()
   | Ok _ -> Alcotest.failf "%s: expected rejection" description
 
-let encoded_string ~encoding octets =
-  dn_ok "encoded string" (Distinguished_name.Encoded_string.of_octets ~encoding octets)
-
-let common_name_value ?(encoding = `UTF8) octets =
-  dn_ok "common name"
-    (Distinguished_name.Common_name.of_encoded (encoded_string ~encoding octets))
-
-let organization_value ?(encoding = `UTF8) octets =
-  dn_ok "organization name"
-    (Distinguished_name.Organization_name.of_encoded (encoded_string ~encoding octets))
-
 let check_dn =
   (module Distinguished_name: Alcotest.TESTABLE with type t = Distinguished_name.t)
 
@@ -94,14 +83,14 @@ let test_distinguished_name () =
   let open Distinguished_name in
   let crt = cert "PostaCARoot" in
   let expected = [
-    Relative_distinguished_name.singleton (DC (encoded_string ~encoding:`IA5 "rs")) ;
-    Relative_distinguished_name.singleton (DC (encoded_string ~encoding:`IA5 "posta")) ;
-    Relative_distinguished_name.singleton (DC (encoded_string ~encoding:`IA5 "ca")) ;
-    Relative_distinguished_name.singleton (CN (common_name_value "Configuration")) ;
-    Relative_distinguished_name.singleton (CN (common_name_value "Services")) ;
-    Relative_distinguished_name.singleton (CN (common_name_value "Public Key Services")) ;
-    Relative_distinguished_name.singleton (CN (common_name_value "AIA")) ;
-    Relative_distinguished_name.singleton (CN (common_name_value "Posta CA Root"))
+    Relative_distinguished_name.singleton (DC (Encoded_string.of_string ~encoding:`IA5 "rs")) ;
+    Relative_distinguished_name.singleton (DC (Encoded_string.of_string ~encoding:`IA5 "posta")) ;
+    Relative_distinguished_name.singleton (DC (Encoded_string.of_string ~encoding:`IA5 "ca")) ;
+    Relative_distinguished_name.singleton (CN (Common_name.v "Configuration")) ;
+    Relative_distinguished_name.singleton (CN (Common_name.v "Services")) ;
+    Relative_distinguished_name.singleton (CN (Common_name.v "Public Key Services")) ;
+    Relative_distinguished_name.singleton (CN (Common_name.v "AIA")) ;
+    Relative_distinguished_name.singleton (CN (Common_name.v "Posta CA Root"))
   ] in
   Alcotest.(check check_dn "complex issuer is good"
               expected (Certificate.issuer crt)) ;
@@ -113,13 +102,13 @@ let test_common_name_lookup () =
   let rdn = Relative_distinguished_name.of_list in
   let check description expected name =
     Alcotest.(check (option string) description expected
-                (Option.map Common_name.to_octets (common_name name)))
+                (Option.map Common_name.to_string (common_name name)))
   in
   let attributes = [
-    CN (common_name_value "a.example");
-    O (organization_value "Example");
-    OU (dn_ok "organizational unit" (Organizational_unit_name.of_octets "Unit"));
-    L (dn_ok "locality" (Locality_name.of_octets "London"))
+    CN (Common_name.v "a.example");
+    O (Organization_name.v "Example");
+    OU (Organizational_unit_name.v "Unit");
+    L (Locality_name.v "London")
   ] in
   List.iter (fun attributes ->
       let set = List.fold_left (fun set attribute ->
@@ -129,20 +118,20 @@ let test_common_name_lookup () =
     [attributes; List.rev attributes];
   check "empty name" None [];
   check "empty RDN" None [rdn []];
-  check "no CN" None [rdn [O (organization_value "Example")]];
+  check "no CN" None [rdn [O (Organization_name.v "Example")]];
   check "most specific CN" (Some "b")
-    [rdn [CN (common_name_value "a")]; rdn [CN (common_name_value "b")];
-     rdn [O (organization_value "Example")]];
+    [rdn [CN (Common_name.v "a")]; rdn [CN (Common_name.v "b")];
+     rdn [O (Organization_name.v "Example")]];
   check "multiple CN values" (Some "a")
-    [rdn [CN (common_name_value "z"); CN (common_name_value "a")]]
+    [rdn [CN (Common_name.v "z"); CN (Common_name.v "a")]]
 
 let test_distinguished_name_pp () =
   let module Dn = struct
     include Distinguished_name
-    let cn s = Relative_distinguished_name.singleton (CN (common_name_value s))
-    let o s = Relative_distinguished_name.singleton (O (organization_value s))
+    let cn s = Relative_distinguished_name.singleton (CN (Common_name.v s))
+    let o s = Relative_distinguished_name.singleton (O (Organization_name.v s))
     let initials s =
-      Relative_distinguished_name.singleton (Initials (dn_ok "initials" (Personal_name.of_octets s)))
+      Relative_distinguished_name.singleton (Initials (Personal_name.v s))
     let (+) = Relative_distinguished_name.union
   end in
   let dn1 = "DN1", Dn.[o "Blanc";
@@ -185,7 +174,7 @@ let test_encoded_name_roundtrip () =
       | None -> Alcotest.fail "missing CN"
       | Some value ->
         Alcotest.(check string "CN content octets" octets
-                    (Common_name.to_octets value)) ;
+                    (Common_name.to_string value)) ;
         Alcotest.(check bool ("CN tag in " ^ hex) true
                     (encoding = Encoded_string.encoding (Common_name.encoded value))))
     [ `UTF8, "A", "300c310a300806035504030c0141" ;
@@ -197,7 +186,7 @@ let test_encoded_name_roundtrip () =
   dn_error "IA5String is not a DirectoryString"
     (decode_der (Ohex.decode "300c310a30080603550403160141")) ;
   let fresh = [Relative_distinguished_name.singleton
-                 (CN (dn_ok "common name" (Common_name.of_octets "A")))] in
+                 (CN (Common_name.v "A"))] in
   Alcotest.(check string "fresh CN defaults to UTF8String"
               (Ohex.decode "300c310a300806035504030c0141") (encode_der fresh))
 
@@ -214,19 +203,19 @@ let attribute_der oid tag octets =
 
 let directory_attributes =
   let open Distinguished_name in
-  [ "CN", "550403", (fun x -> Result.map (fun x -> CN x) (Common_name.of_encoded x)) ;
-    "L", "550407", (fun x -> Result.map (fun x -> L x) (Locality_name.of_encoded x)) ;
-    "ST", "550408", (fun x -> Result.map (fun x -> ST x) (State_or_province_name.of_encoded x)) ;
-    "O", "55040a", (fun x -> Result.map (fun x -> O x) (Organization_name.of_encoded x)) ;
-    "OU", "55040b", (fun x -> Result.map (fun x -> OU x) (Organizational_unit_name.of_encoded x)) ;
-    "T", "55040c", (fun x -> Result.map (fun x -> T x) (Title.of_encoded x)) ;
-    "Given_name", "55042a", (fun x -> Result.map (fun x -> Given_name x) (Personal_name.of_encoded x)) ;
-    "Surname", "550404", (fun x -> Result.map (fun x -> Surname x) (Personal_name.of_encoded x)) ;
-    "Initials", "55042b", (fun x -> Result.map (fun x -> Initials x) (Personal_name.of_encoded x)) ;
-    "Pseudonym", "550441", (fun x -> Result.map (fun x -> Pseudonym x) (Pseudonym.of_encoded x)) ;
-    "Generation", "55042c", (fun x -> Result.map (fun x -> Generation x) (Personal_name.of_encoded x)) ;
-    "Street", "550409", (fun x -> Result.map (fun x -> Street x) (Street_address.of_encoded x)) ;
-    "Userid", "0992268993f22c640101", (fun x -> Result.map (fun x -> Userid x) (User_id.of_encoded x)) ]
+  [ "CN", "550403", (fun ?encoding x -> CN (Common_name.v ?encoding x)) ;
+    "L", "550407", (fun ?encoding x -> L (Locality_name.v ?encoding x)) ;
+    "ST", "550408", (fun ?encoding x -> ST (State_or_province_name.v ?encoding x)) ;
+    "O", "55040a", (fun ?encoding x -> O (Organization_name.v ?encoding x)) ;
+    "OU", "55040b", (fun ?encoding x -> OU (Organizational_unit_name.v ?encoding x)) ;
+    "T", "55040c", (fun ?encoding x -> T (Title.v ?encoding x)) ;
+    "Given_name", "55042a", (fun ?encoding x -> Given_name (Personal_name.v ?encoding x)) ;
+    "Surname", "550404", (fun ?encoding x -> Surname (Personal_name.v ?encoding x)) ;
+    "Initials", "55042b", (fun ?encoding x -> Initials (Personal_name.v ?encoding x)) ;
+    "Pseudonym", "550441", (fun ?encoding x -> Pseudonym (Pseudonym.v ?encoding x)) ;
+    "Generation", "55042c", (fun ?encoding x -> Generation (Personal_name.v ?encoding x)) ;
+    "Street", "550409", (fun ?encoding x -> Street (Street_address.v ?encoding x)) ;
+    "Userid", "0992268993f22c640101", (fun ?encoding x -> Userid (User_id.v ?encoding x)) ]
 
 let test_attribute_encodings () =
   let open Distinguished_name in
@@ -234,22 +223,20 @@ let test_attribute_encodings () =
     let der = attribute_der oid tag octets in
     let expected = [Relative_distinguished_name.singleton attribute] in
     let decoded = decode_name der in
-    Alcotest.(check bool (description ^ ": decoded attribute and tag") true
-                (equal_representation expected decoded)) ;
     Alcotest.(check string (description ^ ": constructed DER") der (encode_der expected)) ;
     Alcotest.(check string (description ^ ": parsed DER") der (encode_der decoded))
   in
   (* BMPString is permitted for DirectoryString attributes, not fixed-string schemas. *)
-  let value = encoded_string ~encoding:`BMP "\x00A" in
   List.iter (fun (description, oid, attribute) ->
-      check_attribute description oid 0x1e "\x00A" (dn_ok description (attribute value)))
+      check_attribute description oid 0x0c "A" (attribute ?encoding:None "A") ;
+      check_attribute description oid 0x1e "\x00A" (attribute ?encoding:(Some `BMP) "\x00A"))
     directory_attributes ;
   let fixed = [
-    "Serialnumber", "550405", 0x13, "A", Serialnumber (dn_ok "serial" (Serial_number.of_octets "A")) ;
-    "C", "550406", 0x13, "GB", C (dn_ok "country" (Country_name.of_octets "GB")) ;
-    "DNQ", "55042e", 0x13, "A", DNQ (encoded_string ~encoding:`Printable "A") ;
-    "Mail", "2a864886f70d010901", 0x16, "a@example.com", Mail (dn_ok "email" (Email_address.of_octets "a@example.com")) ;
-    "DC", "0992268993f22c640119", 0x16, "A", DC (encoded_string ~encoding:`IA5 "A")
+    "Serialnumber", "550405", 0x13, "A", Serialnumber (Serial_number.v "A") ;
+    "C", "550406", 0x13, "GB", C (Country_name.v "GB") ;
+    "DNQ", "55042e", 0x13, "A", DNQ (Encoded_string.of_string ~encoding:`Printable "A") ;
+    "Mail", "2a864886f70d010901", 0x16, "a@example.com", Mail (Email_address.v "a@example.com") ;
+    "DC", "0992268993f22c640119", 0x16, "A", DC (Encoded_string.of_string ~encoding:`IA5 "A")
   ] in
   List.iter (fun (description, oid, tag, octets, attribute) ->
       check_attribute description oid tag octets attribute)
@@ -270,19 +257,18 @@ let test_other_attributes () =
              (base 0 9 <| 2342 <| 19200300 <| 100 <| 1 <| 1), `Printable]
   in
   List.iter (fun (oid, encoding) ->
-      let value = encoded_string ~encoding "GB" in
+      let value = Encoded_string.of_string ~encoding "GB" in
       dn_error (Fmt.str "known OID %a cannot use Other" Asn.OID.pp oid)
         (Other_attribute.create oid value))
     known_oids ;
   List.iter (fun (encoding, tag, octets) ->
-      let value = encoded_string ~encoding octets in
+      let value = Encoded_string.of_string ~encoding octets in
       let other = dn_ok "unknown attribute" (Other_attribute.create other_oid value) in
       let name = [Relative_distinguished_name.singleton (Other other)] in
       let der = attribute_der "2a0304" tag octets in
       let decoded = decode_name der in
       Alcotest.(check string "Other independently constructed DER" der (encode_der name)) ;
-      Alcotest.(check string "Other DER roundtrip" der (encode_der decoded)) ;
-      Alcotest.(check bool "Other decoded representation" true (equal_representation name decoded)))
+      Alcotest.(check string "Other DER roundtrip" der (encode_der decoded)))
     [ `UTF8, 0x0c, "\xc3\xa9" ;
       `Printable, 0x13, "A" ;
       `IA5, 0x16, "@_" ;
@@ -292,14 +278,15 @@ let test_other_attributes () =
 
 let test_name_matching_and_storage () =
   let open Distinguished_name in
-  let utf8 = CN (common_name_value "A")
-  and printable = CN (common_name_value ~encoding:`Printable "A")
-  and bmp = CN (common_name_value ~encoding:`BMP "\x00A") in
-  let name attr = [Relative_distinguished_name.singleton attr] in
+  let utf8 = CN (Common_name.v "A")
+  and printable = CN (Common_name.v ~encoding:`Printable "A")
+  and bmp = CN (Common_name.v ~encoding:`BMP "\x00A") in
+  let rdn = Relative_distinguished_name.singleton in
+  let name attr = [rdn attr] in
   Alcotest.(check bool "tag-agnostic matching" true
               (Distinguished_name.equal (name utf8) (name printable))) ;
-  Alcotest.(check bool "representation distinguishes tags" false
-              (equal_representation (name utf8) (name printable))) ;
+  Alcotest.(check bool "RDN sets distinguish tags" false
+              (Relative_distinguished_name.equal (rdn utf8) (rdn printable))) ;
   Alcotest.(check bool "matching does not transcode BMPString" false
               (Distinguished_name.equal (name utf8) (name bmp))) ;
   let mixed_der = Ohex.decode "30163114300806035504030c014130080603550403130141" in
@@ -312,7 +299,7 @@ let test_name_matching_and_storage () =
   Alcotest.(check string "multi-valued RDN DER" mixed_der (encode_der mixed)) ;
   Alcotest.(check bool "matching collapses tag-only duplicates" true
               (Distinguished_name.equal mixed (name printable))) ;
-  let organization = name (O (organization_value "Example")) in
+  let organization = name (O (Organization_name.v "Example")) in
   Alcotest.(check bool "RDN order still matters" false
               (Distinguished_name.equal (organization @ name utf8) (name utf8 @ organization)))
 
@@ -538,7 +525,7 @@ let sign_with_intermediate () =
   let key () = `RSA (Mirage_crypto_pk.Rsa.generate ~bits:1024 ())
   and name ?encoding value =
     Distinguished_name.[Relative_distinguished_name.singleton
-                          (CN (common_name_value ?encoding value))]
+                          (CN (Common_name.v ?encoding value))]
   and get what = function
     | Ok value -> value
     | Error _ -> Alcotest.fail ("couldn't " ^ what)
