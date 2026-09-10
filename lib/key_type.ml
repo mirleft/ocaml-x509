@@ -1,17 +1,22 @@
-type t = [ `RSA | `ED25519 | `P256 | `P384 | `P521  ]
+type t = [ `RSA | `ED25519 | `ECDSA of Dsa_curves.t]
 
-let strings =
-  [ ("rsa", `RSA) ; ("ed25519", `ED25519) ;
-    ("p256", `P256) ; ("p384", `P384) ; ("p521", `P521) ]
+let strings () =
+  ("rsa", `RSA) :: ("ed25519", `ED25519) :: (Dsa_curves.strings ())
 
-let to_string kt = fst (List.find (fun (_, k) -> kt = k) strings)
+let to_string = function
+  | `RSA -> "rsa"
+  | `ED25519 -> "ed25519"
+  | `ECDSA c -> Dsa_curves.get_name c
 
 let of_string s =
-  match List.assoc_opt (String.lowercase_ascii s) strings with
-  | Some kt -> Ok kt
-  | None ->
-    Error (`Msg (Fmt.str "unkown key type %s, supported are %a"
-                   s Fmt.(list ~sep:(any ", ") string) (List.map fst strings)))
+  match String.lowercase_ascii s with
+  | "rsa" -> Ok `RSA
+  | "ed25519" -> Ok `ED25519
+  | s -> match Dsa_curves.of_name s with
+    | Some c -> Ok (`ECDSA c)
+    | None ->
+      Error (`Msg (Fmt.str "unkown key type %s, supported are %a"
+        s Fmt.(list ~sep:(any ", ") string) (List.map fst (strings ()))))
 
 let pp ppf t = Fmt.string ppf (to_string t)
 
@@ -29,7 +34,7 @@ let supports_signature_scheme key_typ scheme =
   match key_typ, scheme with
   | `RSA, (`RSA_PSS | `RSA_PKCS1) -> true
   | `ED25519, `ED25519 -> true
-  | (`P256 | `P384 | `P521), `ECDSA -> true
+  | `ECDSA _, `ECDSA -> true
   | _ -> false
 
 let opt_signature_scheme ?scheme kt =
@@ -38,7 +43,7 @@ let opt_signature_scheme ?scheme kt =
   | None -> match kt with
     | `RSA -> `RSA_PSS
     | `ED25519 -> `ED25519
-    | `P256 | `P384 | `P521 -> `ECDSA
+    | `ECDSA _ -> `ECDSA
 
 (* the default of RSA keys should be PSS, but most deployed certificates still
    use PKCS1 (and this library uses pkcs1 by default as well) *)

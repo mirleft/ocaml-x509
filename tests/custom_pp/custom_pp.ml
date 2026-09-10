@@ -44,6 +44,8 @@ let custom_pp ppf (oid, data) =
   else
     Fmt.pf ppf "unsupported %a: %a" Asn.OID.pp oid (Ohex.pp_hexdump ()) data
 
+let _ = X509.(Dsa_curves.register "p256" Dsa_curves.OIDs.secp256r1 (module Mirage_crypto_ec.P256.Dsa))
+
 let () =
   let fullpath = "../testcertificates/fido.pem" in
   let fd = open_in fullpath in

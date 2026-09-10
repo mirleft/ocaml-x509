@@ -1,15 +1,14 @@
 let ( let* ) = Result.bind
 
-type ecdsa = [
-  | `P256 of Mirage_crypto_ec.P256.Dsa.pub
-  | `P384 of Mirage_crypto_ec.P384.Dsa.pub
-  | `P521 of Mirage_crypto_ec.P521.Dsa.pub
-]
+type ecdsa = Ecdsa : {
+  curve : (module Dsa_curves.S with type Dsa.pub = 'pub);
+  pub : 'pub
+} -> ecdsa
 
 type t = [
-  | ecdsa
   | `RSA of Mirage_crypto_pk.Rsa.pub
   | `ED25519 of Mirage_crypto_ec.Ed25519.pub
+  | `ECDSA of ecdsa
 ]
 
 module Asn_oid = Asn.OID
@@ -49,9 +48,12 @@ module Asn = struct
     function
     | (RSA      , cs) -> `RSA (rsa_pub_of_octets cs)
     | (ED25519  , cs) -> `ED25519 (to_err (Ed25519.pub_of_octets cs))
-    | (EC_pub `SECP256R1, cs) -> `P256 (to_err (P256.Dsa.pub_of_octets cs))
-    | (EC_pub `SECP384R1, cs) -> `P384 (to_err (P384.Dsa.pub_of_octets cs))
-    | (EC_pub `SECP521R1, cs) -> `P521 (to_err (P521.Dsa.pub_of_octets cs))
+    | (EC_pub (module Curve), cs) ->
+      let pub = Ecdsa {
+        curve = (module Curve);
+        pub = to_err (Curve.Dsa.pub_of_octets cs)
+       } in
+      `ECDSA pub
     | _ -> parse_error "unknown public key algorithm"
 
   let unparse_pk =
@@ -60,9 +62,9 @@ module Asn = struct
     function
     | `RSA pk    -> (RSA, rsa_pub_to_octets pk)
     | `ED25519 pk -> (ED25519, Ed25519.pub_to_octets pk)
-    | `P256 pk -> (EC_pub `SECP256R1, P256.Dsa.pub_to_octets pk)
-    | `P384 pk -> (EC_pub `SECP384R1, P384.Dsa.pub_to_octets pk)
-    | `P521 pk -> (EC_pub `SECP521R1, P521.Dsa.pub_to_octets pk)
+    | `ECDSA (Ecdsa k) ->
+      let (module Curve) = k.curve in
+      (EC_pub (module Curve), Curve.Dsa.pub_to_octets k.pub)
 
   let pk_info_der =
     map reparse_pk unparse_pk @@
@@ -78,9 +80,9 @@ let id k =
   let data = match k with
     | `RSA p -> Asn.rsa_public_to_octets p
     | `ED25519 pk -> Mirage_crypto_ec.Ed25519.pub_to_octets pk
-    | `P256 pk -> Mirage_crypto_ec.P256.Dsa.pub_to_octets pk
-    | `P384 pk -> Mirage_crypto_ec.P384.Dsa.pub_to_octets pk
-    | `P521 pk -> Mirage_crypto_ec.P521.Dsa.pub_to_octets pk
+    | `ECDSA Ecdsa k ->
+      let (module Curve) = k.curve in
+      Curve.Dsa.pub_to_octets k.pub
   in
   Digestif.(to_raw_string SHA1 (digest_string SHA1 data))
 
@@ -91,12 +93,12 @@ let fingerprint ?(hash = `SHA256) pub =
 let key_type = function
   | `RSA _ -> `RSA
   | `ED25519 _ -> `ED25519
-  | `P256 _ -> `P256
-  | `P384 _ -> `P384
-  | `P521 _ -> `P521
+  | `ECDSA Ecdsa k ->
+    let (module C) = k.curve in
+    `ECDSA ((module C) : Dsa_curves.t)
 
 let sig_alg = function
-  | #ecdsa -> `ECDSA
+  | `ECDSA _ -> `ECDSA
   | `RSA _ -> `RSA
   | `ED25519 _ -> `ED25519
 
@@ -142,14 +144,12 @@ let verify hash ?scheme ~signature key data =
       | `Message msg -> ok_if_true (Ed25519.verify ~key signature ~msg)
       | `Digest _ -> Error (`Msg "Ed25519 only suitable with raw message")
     end
-  | #ecdsa as key, `ECDSA ->
+  | `ECDSA Ecdsa k, `ECDSA ->
     let* d = hashed hash data in
     let* s = ecdsa_of_str signature in
-    ok_if_true
-      (match key with
-       | `P256 key -> P256.Dsa.verify ~key s (trunc P256.Dsa.byte_length d)
-       | `P384 key -> P384.Dsa.verify ~key s (trunc P384.Dsa.byte_length d)
-       | `P521 key -> P521.Dsa.verify ~key s (trunc P521.Dsa.byte_length d))
+    let (module Curve) = k.curve in
+    let key = k.pub in
+    ok_if_true Curve.Dsa.(verify ~key s (trunc byte_length d))
   | _ -> Error (`Msg "invalid key and signature scheme combination")
 
 let encode_der = Asn.pub_info_to_octets

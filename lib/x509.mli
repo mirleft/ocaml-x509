@@ -69,12 +69,45 @@ module Host : sig
   end
 end
 
+module Dsa_curves : sig
+  module type Dsa = Mirage_crypto_ec.Dsa
+  module type S = Dsa_curves.S
+
+  type t = (module S)
+
+  module OIDs : sig
+    val secp224r1 : Asn.oid
+    val secp256r1 : Asn.oid
+    val secp384r1 : Asn.oid
+    val secp521r1 : Asn.oid
+    val secp256k1 : Asn.oid
+    val brainpoolP160r1 : Asn.oid
+    val brainpoolP160t1 : Asn.oid
+    val brainpoolP192r1 : Asn.oid
+    val brainpoolP192t1 : Asn.oid
+    val brainpoolP224r1 : Asn.oid
+    val brainpoolP224t1 : Asn.oid
+    val brainpoolP256r1 : Asn.oid
+    val brainpoolP256t1 : Asn.oid
+    val brainpoolP320r1 : Asn.oid
+    val brainpoolP320t1 : Asn.oid
+    val brainpoolP384r1 : Asn.oid
+    val brainpoolP384t1 : Asn.oid
+    val brainpoolP512r1 : Asn.oid
+    val brainpoolP512t1 : Asn.oid
+  end
+
+  val register :
+    string -> Asn.oid -> (module Dsa) -> t
+
+end
+
 (** Types of keys *)
 module Key_type : sig
   (** The polymorphic variant of key types. *)
-  type t = [ `RSA | `ED25519 | `P256 | `P384 | `P521 ]
+  type t = [ `RSA | `ED25519 | `ECDSA of Dsa_curves.t]
 
-  val strings : (string * t) list
+  val strings : unit -> (string * t) list
   (** [strings] is an associative list of string and key_type pairs. Useful for
       {{:https://erratique.ch/software/cmdliner}cmdliner} (Arg.enum). *)
 
@@ -106,15 +139,18 @@ module Public_key : sig
 
   (** {1 The type for public keys} *)
 
+  type ecdsa = Ecdsa : {
+    curve : (module Dsa_curves.S with type Dsa.pub = 'pub);
+    pub : 'pub
+  } -> ecdsa
+
   (** The polymorphic variant of public keys, with
       {{:http://tools.ietf.org/html/rfc5208}PKCS 8} encoding and decoding to
       PEM. *)
   type t = [
     | `RSA of Mirage_crypto_pk.Rsa.pub
     | `ED25519 of Mirage_crypto_ec.Ed25519.pub
-    | `P256 of Mirage_crypto_ec.P256.Dsa.pub
-    | `P384 of Mirage_crypto_ec.P384.Dsa.pub
-    | `P521 of Mirage_crypto_ec.P521.Dsa.pub
+    | `ECDSA of ecdsa
   ]
 
   (** {1 Operations on public keys} *)
@@ -172,13 +208,16 @@ module Private_key : sig
 
   (** {1 The type for private keys} *)
 
+  type ecdsa = Ecdsa : {
+    curve : (module Dsa_curves.S with type Dsa.priv = 'priv);
+    priv : 'priv
+  } -> ecdsa
+
   (** The polymorphic variant of private keys. *)
   type t = [
     | `RSA of Mirage_crypto_pk.Rsa.priv
     | `ED25519 of Mirage_crypto_ec.Ed25519.priv
-    | `P256 of Mirage_crypto_ec.P256.Dsa.priv
-    | `P384 of Mirage_crypto_ec.P384.Dsa.priv
-    | `P521 of Mirage_crypto_ec.P521.Dsa.priv
+    | `ECDSA of ecdsa
   ]
 
   (** {1 Constructing private keys} *)
