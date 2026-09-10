@@ -466,34 +466,52 @@ let validate_name_constraints hosts ips { Certificate.asn = cert ; _ } =
           | _ -> Ok ())
         (Ok ()) excluded
     in
-    List.fold_left (fun acc (nc, min, max) ->
-        let* () = acc in
-        let* () = guard (min = 0) (`Msg "name constraint min <> 0") in
-        let* () = guard (max = None) (`Msg "name constraint max <> None") in
-        match nc with
-        | General_name.B (General_name.DNS, xs) ->
-          (* we need to match that all hosts are here, and the special match with .example.com *)
-          List.fold_left (fun acc name ->
-              let* dn = Domain_name.of_string name in
-              Host.Set.fold (fun n acc ->
-                  let* () = acc in
-                  guard (Domain_name.equal (snd n) dn || Domain_name.is_subdomain ~subdomain:(snd n) ~domain:dn)
-                    (`Msg "domain name is not permitted"))
-                hosts acc)
-            (Ok ()) xs
-        | B (General_name.IP, xs) ->
-          (* we need to match that all ips are here *)
-          List.fold_left (fun acc data ->
-              let* () = acc in
-              let* ip_prefix = ip_prefix_of_string data in
-              Ipaddr.Set.fold (fun ip acc ->
-                  let* () = acc in
-                  guard (Ipaddr.Prefix.mem ip ip_prefix)
-                    (`Msg "ip address is not permitted"))
-                ips acc)
-            (Ok ()) xs
-        | _ -> Ok ())
-      (Ok ()) permitted
+    let* permitted_dns, permitted_ips =
+      List.fold_left (fun acc (nc, min, max) ->
+          let* dns, ips = acc in
+          let* () = guard (min = 0) (`Msg "name constraint min <> 0") in
+          let* () = guard (max = None) (`Msg "name constraint max <> None") in
+          match nc with
+          | General_name.B (General_name.DNS, xs) ->
+            let* dns =
+              List.fold_left (fun acc name ->
+                  let* acc = acc in
+                  let* dn = Domain_name.of_string name in
+                  Ok (dn :: acc))
+                (Ok dns) xs
+            in
+            Ok (dns, ips)
+          | B (General_name.IP, xs) ->
+            let* ips =
+              List.fold_left (fun acc data ->
+                  let* acc = acc in
+                  let* ip = ip_prefix_of_string data in
+                  Ok (ip :: acc))
+                (Ok ips) xs
+            in
+            Ok (dns, ips)
+          | _ -> Ok (dns, ips))
+        (Ok ([], [])) permitted
+    in
+    let* () =
+      if permitted_dns = [] then Ok () else
+        Host.Set.fold (fun n acc ->
+            let* () = acc in
+            guard
+              (List.exists (fun dn ->
+                   Domain_name.equal (snd n) dn ||
+                   Domain_name.is_subdomain ~subdomain:(snd n) ~domain:dn)
+                 permitted_dns)
+              (`Msg "domain name is not permitted"))
+          hosts (Ok ())
+    in
+    if permitted_ips = [] then Ok () else
+      Ipaddr.Set.fold (fun ip acc ->
+          let* () = acc in
+          guard
+            (List.exists (fun prefix -> Ipaddr.Prefix.mem ip prefix) permitted_ips)
+            (`Msg "ip address is not permitted"))
+        ips (Ok ())
 
 let dns_names { Certificate.asn = cert ; _ } =
   match Extension.hostnames cert.tbs_cert.extensions with

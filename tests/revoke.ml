@@ -34,25 +34,29 @@ let key () =
   let key = Mirage_crypto_pk.Rsa.generate ~bits:1024 () in
   (`RSA (Mirage_crypto_pk.Rsa.pub_of_priv key), `RSA key)
 
-let selfsigned ?(name = "test") now =
+let selfsigned ?(name = "test") ?(extensions = ca_exts ()) now =
   let pub, priv = key () in
   let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN name)) ] in
   match Signing_request.create name priv with
   | Error _ -> assert false
   | Ok req ->
     let valid_from, valid_until = validity now in
-    match X509.Signing_request.sign req ~valid_from ~valid_until ~extensions:(ca_exts ()) priv name with
+    match X509.Signing_request.sign req ~valid_from ~valid_until ~extensions priv name with
     | Ok cacert -> (cacert, pub, priv)
     | Error _ -> assert false
 
-let cert ?serial ?(name = "sub") now ca pubca privca issuer =
+let cert ?serial ?(name = "sub") ?extensions now ca pubca privca issuer =
   let pub, priv = key () in
   let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN name)) ] in
   match Signing_request.create name priv with
   | Error _ -> assert false
   | Ok req ->
     let valid_from, valid_until = validity now in
-    let extensions = key_ids (if ca then ca_exts () else leaf_exts)  pub pubca in
+    let extensions = match extensions with
+      | Some extensions -> extensions
+      | None -> if ca then ca_exts () else leaf_exts
+    in
+    let extensions = key_ids extensions pub pubca in
     match X509.Signing_request.sign req ~valid_from ~valid_until ?serial ~extensions privca issuer with
     | Ok cert -> (cert, pub, priv)
     | Error _ -> assert false
