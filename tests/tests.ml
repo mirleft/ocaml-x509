@@ -10,7 +10,6 @@ let suites =
     "Private Key", Priv.tests ;
   ]
 
-
 let () =
   Printexc.record_backtrace true;
   Mirage_crypto_rng_unix.use_default ();
