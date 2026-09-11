@@ -1,16 +1,21 @@
 ## v1.2.0 (2026-09-11)
 
-* Signing_request.sign_certificate: use the subject of the certificate passed in
-  as _issuer_ of the certificate that is returned. (#184 @torinnd)
-* Distinguished_name.common_name: fix the lookup, adapt the documentation to be
-  exact - it is from the most specific RDN (#187 @torinnd)
-* Name constraints: treat permitted name subtress as union per name form -
-  previously some valid chains were not accepted (#185 @torinnd)
-* Distinguished_name: preserve string encoding by using typed attribute values
-  (API change) (#188 @torinnd)
+* BREAKING: Distinguished_name: separate equality from matching. Introduce
+  `matches` which compares the data, and treats ignores the tag UTF8 and
+  Printable - and redefine `equal` which now compares the tags. The function
+  `matches` is used for Validation.issuer_matches_subject and build_paths.
+  (#192 @torinnd)
+* BREAKING: Distinguished_name: preserve string encoding by using typed
+  attribute values (#188 @torinnd)
+* BREAKING: Certificate.hostnames: adapt to RFC 9525 Section 1 and only use
+  SubjectAlternativeName values for validation (#190 @hannesm)
+* BUGFIX: Signing_request.sign_certificate: use the subject of the certificate
+  passed in as _issuer_ of the certificate that is returned. (#184 @torinnd)
+* BUGFIX: Distinguished_name.common_name: fix the lookup, adapt the
+  documentation to be exact - it is from the most specific RDN (#187 @torinnd)
+* BUGFIX: Name constraints: treat permitted name subtress as union per name
+  form, previously some valid chains were not accepted (#185 @torinnd)
 * Tests: remove certificates, generate them on the fly (#189 @hannesm)
-* Certificate.hostnames: adapt to RFC 9525 and only use SubjectAlternativeName
-  values for validation (#190 @hannesm)
 
 ## v1.1.1 (2026-06-29)
 
