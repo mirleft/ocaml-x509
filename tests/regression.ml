@@ -1,5 +1,7 @@
 open X509
 
+open Utils
+
 let mmap file =
   let ic = open_in file in
   let ln = in_channel_length ic in
@@ -11,13 +13,13 @@ let mmap file =
 let regression file =
   mmap ("./regression/" ^ file ^ ".pem")
 
-let cert file =
+let read_cert file =
   match Certificate.decode_pem (regression file) with
   | Ok cert -> cert
   | Error (`Msg m) -> Alcotest.failf "certificate %s decoding error %s" file m
 
-let jc = cert "jabber.ccc.de"
-let cacert = cert "cacert"
+let jc = read_cert "jabber.ccc.de"
+let cacert = read_cert "cacert"
 
 let time () = None
 
@@ -40,8 +42,8 @@ let test_jc_ca_all_hashes () =
   | Ok _ -> ()
   | _ -> Alcotest.fail "something went wrong with jc_ca"
 
-let telesec = cert "telesec"
-let jfd = [ cert "jabber.fu-berlin.de" ; cert "fu-berlin" ; cert "dfn" ]
+let telesec = read_cert "telesec"
+let jfd = [ read_cert "jabber.fu-berlin.de" ; read_cert "fu-berlin" ; read_cert "dfn" ]
 
 let test_jfd_ca () =
   match Validation.verify_chain_of_trust ~host:(host "jabber.fu-berlin.de") ~time ~anchors:[telesec] (jfd@[telesec]) with
@@ -54,7 +56,7 @@ let test_jfd_ca' () =
   | _ -> Alcotest.fail "something went wrong with jfd_ca'"
 
 let test_izenpe () =
-  let crt = cert "izenpe" in
+  let crt = read_cert "izenpe" in
   let _, san = Extension.(get Subject_alt_name (Certificate.extensions crt)) in
   Alcotest.(check int "two SAN (mail + dir)" 2 (General_name.cardinal san));
   Alcotest.(check (list string) "mail in SAN is correct" [ "info@izenpe.com" ]
@@ -66,7 +68,7 @@ let test_izenpe () =
   Alcotest.(check string "directory in SAN is correct" expected data)
 
 let test_name_constraints () =
-  ignore (cert "name-constraints")
+  ignore (read_cert "name-constraints")
 
 let dn_ok description = function
   | Ok value -> value
@@ -81,7 +83,7 @@ let check_dn =
 
 let test_distinguished_name () =
   let open Distinguished_name in
-  let crt = cert "PostaCARoot" in
+  let crt = read_cert "PostaCARoot" in
   let expected = [
     Relative_distinguished_name.singleton (DC (Encoded_string.of_string ~encoding:`IA5 "rs")) ;
     Relative_distinguished_name.singleton (DC (Encoded_string.of_string ~encoding:`IA5 "posta")) ;
@@ -304,7 +306,7 @@ let test_name_matching_and_storage () =
               (Distinguished_name.equal (organization @ name utf8) (name utf8 @ organization)))
 
 let test_yubico () =
-  ignore (cert "yubico")
+  ignore (read_cert "yubico")
 
 let test_frac_s () =
   let file = "until_frac_s" in
@@ -443,8 +445,8 @@ let p256_key () =
   | Ok _ -> ()
 
 let ip_address () =
-  let c = cert "1.1.1.1" in
-  let ta = cert "digicert" in
+  let c = read_cert "1.1.1.1" in
+  let ta = read_cert "digicert" in
   match
     Validation.verify_chain ~ip:(Ipaddr.of_string_exn "1.1.1.1")
       ~host:None ~time:(fun () -> None) ~anchors:[ta] [c]
@@ -653,11 +655,11 @@ let host_set xs =
 
 let hostname_tests = [
   "cacert hostnames", `Quick, cert_hostnames cacert Host.Set.empty;
-  "izenpe hostnames", `Quick, cert_hostnames (cert "izenpe") (host_set ["izenpe.com"]);
+  "izenpe hostnames", `Quick, cert_hostnames (read_cert "izenpe") (host_set ["izenpe.com"]);
   "jabber.ccc.de hostnames", `Quick, cert_hostnames jc (host_set [ "jabber.ccc.de" ; "conference.jabber.ccc.de" ; "jabberd.jabber.ccc.de" ; "pubsub.jabber.ccc.de" ; "vjud.jabber.ccc.de" ]);
-  "jaber.fu-berlin.de hostnames", `Quick, cert_hostnames (cert "jabber.fu-berlin.de") (host_set [ "jabber.fu-berlin.de" ; "conference.jabber.fu-berlin.de" ; "proxy.jabber.fu-berlin.de" ; "echo.jabber.fu-berlin.de" ; "file.jabber.fu-berlin.de" ; "jitsi-videobridge.jabber.fu-berlin.de" ; "multicast.jabber.fu-berlin.de" ; "pubsub.jabber.fu-berlin.de" ]);
-  "pads.ccc.de hostnames", `Quick, cert_hostnames (cert "pads.ccc.de") (Host.Set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "pads.ccc.de"))) (host_set ["pads.ccc.de"]));
-  "first hostnames", `Quick, cert_hostnames (cert "first") (host_set ["foo.foobar.com"; "foobar.com"]);
+  "jaber.fu-berlin.de hostnames", `Quick, cert_hostnames (read_cert "jabber.fu-berlin.de") (host_set [ "jabber.fu-berlin.de" ; "conference.jabber.fu-berlin.de" ; "proxy.jabber.fu-berlin.de" ; "echo.jabber.fu-berlin.de" ; "file.jabber.fu-berlin.de" ; "jitsi-videobridge.jabber.fu-berlin.de" ; "multicast.jabber.fu-berlin.de" ; "pubsub.jabber.fu-berlin.de" ]);
+  "pads.ccc.de hostnames", `Quick, cert_hostnames (read_cert "pads.ccc.de") (Host.Set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "pads.ccc.de"))) (host_set ["pads.ccc.de"]));
+  "first hostnames", `Quick, cert_hostnames (read_cert "first") (host_set ["foo.foobar.com"; "foobar.com"]);
   "CSR your_new_domain hostnames", `Quick, csr_hostnames (csr "your-new-domain") (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]);
   "CSR your_new_domain_raw hostnames", `Quick, csr_hostnames (csr "your-new-domain-raw") (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]);
   "CSR bar.com hostnames", `Quick, csr_hostnames (csr "wild-bar") (Host.Set.add (`Wildcard, Domain_name.(host_exn (of_string_exn "bar.com"))) (host_set ["your-new-domain.com" ; "www.your-new-domain.com"]));
@@ -666,31 +668,33 @@ let hostname_tests = [
 
 let dns_subject_alt_names names =
   let names = General_name.singleton General_name.DNS names in
-  Extension.add Extension.Subject_alt_name (false, names) Revoke.leaf_exts
+  Extension.add Extension.Subject_alt_name (false, names) leaf_exts
 
 let dns_name_constraints ~permitted ~excluded =
   let subtrees names =
     List.map (fun name -> General_name.B (General_name.DNS, [name]), 0, None) names
   in
   Extension.add Extension.Name_constraints
-    (true, (subtrees permitted, subtrees excluded)) (Revoke.ca_exts ())
+    (true, (subtrees permitted, subtrees excluded)) (ca_exts ())
 
 let name_constraints_union () =
   let now = Ptime_clock.now () in
   let extensions =
     dns_name_constraints ~permitted:["example.com" ; "example.net"] ~excluded:[]
   in
-  let ca, capub, capriv = Revoke.selfsigned ~extensions now in
+  let _, capriv = key () in
+  let ca = selfsigned ~now ~priv:capriv extensions in
+  let _, priv = key () in
   List.iter (fun name ->
-      let example, _, _ =
-        Revoke.cert ~name now false capub capriv (Certificate.subject ca)
+      let example =
+        cert ~now ~ca_key:capriv ~priv ~name:(cn name) leaf_exts (Certificate.subject ca)
       in
       match Validation.verify_chain ~host:None ~time ~anchors:[ca] [example] with
       | Ok _ -> ()
       | Error _ -> Alcotest.fail "expected permitted name to validate")
     ["www.example.com" ; "www.example.net"] ;
-  let other, _, _ =
-    Revoke.cert ~name:"www.other.org" now false capub capriv (Certificate.subject ca)
+  let other =
+    cert ~now ~ca_key:capriv ~priv ~name:(cn "www.other.org") leaf_exts (Certificate.subject ca)
   in
   match Validation.verify_chain ~host:None ~time ~anchors:[ca] [other] with
   | Error (`Msg "domain name is not permitted") -> ()
@@ -702,11 +706,13 @@ let name_constraints_all_dns_names () =
   let extensions =
     dns_name_constraints ~permitted:["example.com" ; "example.net"] ~excluded:[]
   in
-  let ca, capub, capriv = Revoke.selfsigned ~extensions now in
+  let _, capriv = key () in
+  let ca = selfsigned ~now ~priv:capriv extensions in
+  let _, priv = key () in
   List.iter (fun (names, allowed) ->
       let extensions = dns_subject_alt_names names in
-      let leaf, _, _ =
-        Revoke.cert ~name:"unused.invalid" ~extensions now false capub capriv
+      let leaf =
+        cert ~now ~ca_key:capriv ~priv ~name:(cn "unused.invalid") extensions
           (Certificate.subject ca)
       in
       match Validation.verify_chain ~host:None ~time ~anchors:[ca] [leaf], allowed with
@@ -725,11 +731,13 @@ let name_constraints_excluded () =
     dns_name_constraints ~permitted:["example.com" ; "example.net"]
       ~excluded:["blocked.example.com"]
   in
-  let ca, capub, capriv = Revoke.selfsigned ~extensions now in
+  let _, capriv = key () in
+  let ca = selfsigned ~now ~priv:capriv extensions in
+  let _, priv = key () in
   List.iter (fun (name, allowed) ->
       let extensions = dns_subject_alt_names [name] in
-      let leaf, _, _ =
-        Revoke.cert ~extensions now false capub capriv (Certificate.subject ca)
+      let leaf =
+        cert ~now ~ca_key:capriv ~priv extensions (Certificate.subject ca)
       in
       match Validation.verify_chain ~host:None ~time ~anchors:[ca] [leaf], allowed with
       | Ok _, true -> ()
@@ -747,17 +755,21 @@ let name_constraints_chain () =
   and intermediate_extensions =
     dns_name_constraints ~permitted:["example.com" ; "example.org"] ~excluded:[]
   in
-  let root, root_pub, root_priv =
-    Revoke.selfsigned ~name:"root" ~extensions:root_extensions now
+  let _, root_priv = key () in
+  let root =
+    selfsigned ~now ~priv:root_priv ~name:(cn "root") root_extensions
   in
-  let intermediate, intermediate_pub, intermediate_priv =
-    Revoke.cert ~name:"intermediate" ~extensions:intermediate_extensions now true
-      root_pub root_priv (Certificate.subject root)
+  let _, intermediate_priv = key () in
+  let intermediate =
+    cert ~now ~ca_key:root_priv ~priv:intermediate_priv
+      ~name:(cn "intermediate") intermediate_extensions
+      (Certificate.subject root)
   in
+  let _, priv = key () in
   List.iter (fun (name, allowed) ->
       let extensions = dns_subject_alt_names [name] in
-      let leaf, _, _ =
-        Revoke.cert ~extensions now false intermediate_pub intermediate_priv
+      let leaf =
+        cert ~now ~ca_key:intermediate_priv ~priv extensions
           (Certificate.subject intermediate)
       in
       match Validation.verify_chain ~host:None ~time ~anchors:[root]
@@ -778,14 +790,16 @@ let ip_name_constraints_union () =
       ["c0000200ffffff00" ; "c6336400ffffff00"]
   in
   let extensions =
-    Extension.add Extension.Name_constraints (true, (permitted, [])) (Revoke.ca_exts ())
+    Extension.add Extension.Name_constraints (true, (permitted, [])) (ca_exts ())
   in
-  let ca, capub, capriv = Revoke.selfsigned ~extensions now in
+  let _, capriv = key () in
+  let ca = selfsigned ~now ~priv:capriv extensions in
+  let _, priv = key () in
   let verify addresses =
     let names = General_name.singleton General_name.IP (List.map Ohex.decode addresses) in
-    let extensions = Extension.add Extension.Subject_alt_name (false, names) Revoke.leaf_exts in
-    let leaf, _, _ =
-      Revoke.cert ~extensions now false capub capriv (Certificate.subject ca)
+    let extensions = Extension.add Extension.Subject_alt_name (false, names) leaf_exts in
+    let leaf =
+      cert ~now ~ca_key:capriv ~priv extensions (Certificate.subject ca)
     in
     Validation.verify_chain ~host:None ~time ~anchors:[ca] [leaf]
   in
