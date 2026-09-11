@@ -155,7 +155,7 @@ let verify ({ asn ; _ } as crl) ?allowed_hashes ?time cert =
   let subj = Certificate.subject cert in
   let* () =
     guard
-      (Distinguished_name.equal asn.tbs_crl.issuer subj)
+      (Distinguished_name.matches asn.tbs_crl.issuer subj)
       (`Issuer_subject_mismatch (asn.tbs_crl.issuer, subj))
   in
   let* () =
@@ -181,7 +181,7 @@ let reason (revoked : revoked_cert) =
 let is_revoked ?allowed_hashes ~issuer:super ~cert (crls : t list) =
   List.exists (fun crl ->
       if
-        Distinguished_name.equal (Certificate.subject super) (issuer crl)
+        Distinguished_name.matches (Certificate.subject super) (issuer crl)
       then
         match validate ?allowed_hashes crl (Certificate.public_key super) with
         | Ok () ->

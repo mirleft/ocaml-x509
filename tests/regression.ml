@@ -86,11 +86,11 @@ let test_distinguished_name () =
     Relative_distinguished_name.singleton (DC (Encoded_string.of_string ~encoding:`IA5 "rs")) ;
     Relative_distinguished_name.singleton (DC (Encoded_string.of_string ~encoding:`IA5 "posta")) ;
     Relative_distinguished_name.singleton (DC (Encoded_string.of_string ~encoding:`IA5 "ca")) ;
-    Relative_distinguished_name.singleton (CN (Common_name.v "Configuration")) ;
-    Relative_distinguished_name.singleton (CN (Common_name.v "Services")) ;
-    Relative_distinguished_name.singleton (CN (Common_name.v "Public Key Services")) ;
-    Relative_distinguished_name.singleton (CN (Common_name.v "AIA")) ;
-    Relative_distinguished_name.singleton (CN (Common_name.v "Posta CA Root"))
+    Relative_distinguished_name.singleton (CN (Common_name.v ~encoding:`Printable "Configuration")) ;
+    Relative_distinguished_name.singleton (CN (Common_name.v ~encoding:`Printable "Services")) ;
+    Relative_distinguished_name.singleton (CN (Common_name.v ~encoding:`Printable "Public Key Services")) ;
+    Relative_distinguished_name.singleton (CN (Common_name.v ~encoding:`Printable "AIA")) ;
+    Relative_distinguished_name.singleton (CN (Common_name.v ~encoding:`Printable "Posta CA Root"))
   ] in
   Alcotest.(check check_dn "complex issuer is good"
               expected (Certificate.issuer crt)) ;
@@ -278,30 +278,76 @@ let test_other_attributes () =
 
 let test_name_matching_and_storage () =
   let open Distinguished_name in
-  let utf8 = CN (Common_name.v "A")
-  and printable = CN (Common_name.v ~encoding:`Printable "A")
-  and bmp = CN (Common_name.v ~encoding:`BMP "\x00A") in
-  let rdn = Relative_distinguished_name.singleton in
-  let name attr = [rdn attr] in
-  Alcotest.(check bool "tag-agnostic matching" true
-              (Distinguished_name.equal (name utf8) (name printable))) ;
-  Alcotest.(check bool "RDN sets distinguish tags" false
-              (Relative_distinguished_name.equal (rdn utf8) (rdn printable))) ;
-  Alcotest.(check bool "matching does not transcode BMPString" false
-              (Distinguished_name.equal (name utf8) (name bmp))) ;
+  let cn ?encoding text = CN (Common_name.v ?encoding text) in
+  let name attr = [Relative_distinguished_name.singleton attr] in
+  let rdn attributes = [Relative_distinguished_name.of_list attributes] in
+  let check description expected a b =
+    Alcotest.(check bool description expected (matches a b));
+    Alcotest.(check bool (description ^ " (reverse)") expected (matches b a))
+  in
+  let utf8 = cn "A" and printable = cn ~encoding:`Printable "A" in
+  Alcotest.(check bool "equal distinguishes string tags" false
+              (Distinguished_name.equal (name utf8) (name printable)));
+  check "PrintableString and UTF8String" true (name utf8) (name printable);
+  check "same bytes, different Unicode text" false
+    (name (cn "AB")) (name (cn ~encoding:`BMP "AB"));
+  let bmp = name (cn ~encoding:`BMP "\x00A") in
+  check "identical BMPString" true bmp bmp;
+  check "legacy tags must agree" false (name utf8) (name (cn ~encoding:`Teletex "A"));
+  check "case is not folded" false (name utf8) (name (cn "a"));
+  check "spaces are not normalized" false (name utf8) (name (cn " A "));
   let mixed_der = Ohex.decode "30163114300806035504030c014130080603550403130141" in
   let mixed = decode_name mixed_der in
-  (match mixed with
-   | [rdn] ->
-     Alcotest.(check int "tag-only duplicates survive in storage" 2
-                 (Relative_distinguished_name.cardinal rdn))
-   | _ -> Alcotest.fail "expected one multi-valued RDN") ;
-  Alcotest.(check string "multi-valued RDN DER" mixed_der (encode_der mixed)) ;
-  Alcotest.(check bool "matching collapses tag-only duplicates" true
-              (Distinguished_name.equal mixed (name printable))) ;
+  Alcotest.(check string "multi-valued RDN DER" mixed_der (encode_der mixed));
+  check "attribute counts must agree" false mixed (name printable);
+  check "each matching attribute is counted" false mixed (rdn [utf8; cn "B"]);
+  check "equivalent encodings in a multi-valued RDN" true
+    (rdn [utf8; cn ~encoding:`Printable "B"])
+    (rdn [printable; cn "B"]);
   let organization = name (O (Organization_name.v "Example")) in
-  Alcotest.(check bool "RDN order still matters" false
-              (Distinguished_name.equal (organization @ name utf8) (name utf8 @ organization)))
+  check "RDN order matters" false (organization @ name utf8) (name utf8 @ organization);
+  check "attribute types matter" false (name utf8) (name (O (Organization_name.v "A")));
+  let oid = Asn.OID.(base 1 2 <| 3 <| 4) in
+  let other encoding = name (Other (dn_ok "other attribute"
+      (Other_attribute.create oid (Encoded_string.of_string ~encoding "A")))) in
+  check "unknown attributes require the same tag" false (other `UTF8) (other `Printable);
+  check "identical unknown attribute" true (other `UTF8) (other `UTF8)
+
+let test_crl_issuer_matching () =
+  let issuer = dn_ok "issuer" (Certificate.decode_pem (mmap "./ocsp/certificate.pem"))
+  and key = dn_ok "issuer key" (Private_key.decode_pem (mmap "./ocsp/key.pem"))
+  and leaf = dn_ok "leaf" (Certificate.decode_pem (mmap "./ocsp/test1.pem")) in
+  let name encoding = Distinguished_name.[
+      Relative_distinguished_name.singleton
+        (CN (Common_name.v ~encoding "example.com"))] in
+  Alcotest.(check check_dn "fixture issuer name" (name `UTF8) (Certificate.subject issuer));
+  let this_update, _ = Certificate.validity leaf in
+  let entry : CRL.revoked_cert =
+    { serial = Certificate.serial leaf; date = this_update; extensions = Extension.empty }
+  in
+  let revoke encoding =
+    let crl = dn_ok "create CRL"
+        (CRL.revoke ~issuer:(name encoding) ~this_update [entry] key) in
+    dn_ok "decode CRL" (CRL.decode_der (CRL.encode_der crl))
+  in
+  let printable_crl = revoke `Printable in
+  (match CRL.verify printable_crl issuer with
+   | Ok () -> ()
+   | Error error -> Alcotest.failf "PrintableString/UTF8String CRL issuer: %a"
+                      CRL.pp_verification_error error);
+  Alcotest.(check bool "matching CRL revokes the leaf" true
+              (CRL.is_revoked ~issuer ~cert:leaf [printable_crl]));
+  let legacy_crl = revoke `Teletex in
+  (match CRL.validate legacy_crl (Certificate.public_key issuer) with
+   | Ok () -> ()
+   | Error error -> Alcotest.failf "legacy CRL signature: %a"
+                      Validation.pp_signature_error error);
+  (match CRL.verify legacy_crl issuer with
+   | Error (`Issuer_subject_mismatch _) -> ()
+   | Error error -> Alcotest.failf "unexpected CRL error: %a" CRL.pp_verification_error error
+   | Ok () -> Alcotest.fail "different legacy issuer encoding matched");
+  Alcotest.(check bool "unmatched CRLs are ignored" false
+              (CRL.is_revoked ~issuer ~cert:leaf [legacy_crl]))
 
 let test_yubico () =
   ignore (read_cert "yubico")
@@ -580,10 +626,22 @@ let sign_with_intermediate () =
   let dn = Alcotest.testable Distinguished_name.pp Distinguished_name.equal in
   Alcotest.check dn "issuer is intermediate subject"
     (Certificate.subject intermediate) (Certificate.issuer leaf);
-  match Validation.verify_chain ~host:None ~time ~anchors:[root] [leaf; intermediate] with
+  let check_chain leaf =
+    match Validation.verify_chain ~host:None ~time ~anchors:[root] [leaf; intermediate] with
+    | Ok _ -> ()
+    | Error error -> Alcotest.failf "expected chain to validate: %a"
+                       Validation.pp_chain_error error
+  in
+  check_chain leaf;
+  let mixed_leaf = Signing_request.sign request ~valid_from ~valid_until
+      ~extensions:leaf_extensions intermediate_key (name ~encoding:`UTF8 "intermediate")
+      |> get "sign mixed-encoding leaf" in
+  check_chain mixed_leaf;
+  match Validation.verify_chain_of_trust ~host:None ~time ~anchors:[root]
+          [mixed_leaf; intermediate] with
   | Ok _ -> ()
-  | Error error -> Alcotest.failf "expected chain to validate: %a"
-                     Validation.pp_chain_error error
+  | Error error -> Alcotest.failf "expected mixed-encoding path to validate: %a"
+                     Validation.pp_validation_error error
 
 let regression_tests = [
   "Sign with an intermediate CA", `Quick, sign_with_intermediate ;
@@ -601,6 +659,7 @@ let regression_tests = [
   "attribute string encodings", `Quick, test_attribute_encodings ;
   "unknown and reserved attribute OIDs", `Quick, test_other_attributes ;
   "name matching and storage", `Quick, test_name_matching_and_storage ;
+  "CRL issuer name matching", `Quick, test_crl_issuer_matching ;
   "algorithm without null", `Quick, test_yubico ;
   "valid until generalized_time with fractional seconds", `Quick, test_frac_s ;
   "parse valid key where 1 <> d * e mod (p - 1) * (q - 1)", `Quick, test_gcloud_key ;
