@@ -379,14 +379,19 @@ module Distinguished_name : sig
       with the most significant component. *)
   type t = Relative_distinguished_name.t list
 
-  (** [equal a b] compares the RDN sequences, treating each RDN as a set of
-      attributes identified by type and content octets, ignoring string encodings.
-      Identical octets can therefore compare equal even when their encodings
-      give them different meanings.
-
-      No transcoding, case folding, whitespace or Unicode normalization is
-      performed. This does not implement RFC 5280 section 7.1 name comparison. *)
+  (** [equal a b] compares the stored RDN sequences, including the string
+      encodings and content octets of their attributes. *)
   val equal : t -> t -> bool
+
+  (** [matches a b] compares names using a restricted byte-based matching rule.
+      Attribute types, RDN order and stored attribute counts must agree. For known
+      DirectoryString attributes, PrintableString and UTF8String values with
+      identical content octets match. Other encodings and unknown attributes
+      require identical string tags and content octets.
+
+      This does not implement the StringPrep processing of RFC 5280 section 7.1:
+      no case folding, whitespace normalization or transcoding is performed. *)
+  val matches : t -> t -> bool
 
   (** [make_pp ()] creates a customized pretty-printer for {!t}.
 
@@ -1108,17 +1113,20 @@ module CRL : sig
   val pp_verification_error : verification_error Fmt.t
 
   (** [verify t ~allowed_hashes ~time cert] verifies that the issuer of [t]
-      matches the subject of [cert], and validates the digital signature of the
-      revocation list.  The used hash algorithm must be in the [allowed_hashes]
-      (defaults to SHA-2). If [time] is provided, it must be after [this_update]
+      matches the subject of [cert] using {!Distinguished_name.matches}, and
+      validates the digital signature of the revocation list. The used hash
+      algorithm must be in the [allowed_hashes] (defaults to SHA-2).
+      If [time] is provided, it must be after [this_update]
       and before [next_update] of [t]. *)
   val verify : t -> ?allowed_hashes:Digestif.hash' list ->
     ?time:Ptime.t -> Certificate.t -> (unit, [> verification_error ]) result
 
   (** [is_revoked ~allowed_hashes ~issuer ~cert crls] is [true] if there exists
       a revocation of [cert] in [crls] which is signed by the [issuer].  The
-      subject of [issuer] must match the issuer of the crl.  The hash algorithm
-      used for signing must be in the [allowed_hashes] (defaults to SHA-2).  *)
+      subject of [issuer] must match the issuer of the CRL using
+      {!Distinguished_name.matches}. Nonmatching CRLs are ignored; [false] does
+      not establish that [cert] is unrevoked. The hash algorithm used for signing
+      must be in [allowed_hashes] (defaults to SHA-2). *)
   val is_revoked : ?allowed_hashes:Digestif.hash' list ->
     issuer:Certificate.t -> cert:Certificate.t -> t list -> bool
 

@@ -21,10 +21,17 @@ module Encoded_string = struct
     | `Universal -> 28
     | `BMP -> 30
 
-  let compare a b =
+  let compare_with_tag tag a b =
     match compare_octets a b with
     | 0 -> Int.compare (tag a.encoding) (tag b.encoding)
     | n -> n
+
+  let compare = compare_with_tag tag
+
+  let compare_for_matching =
+    compare_with_tag (function
+        | `UTF8 | `Printable -> tag `UTF8
+        | encoding -> tag encoding)
 end
 
 module type Attribute_value = sig
@@ -240,21 +247,29 @@ module Relative_distinguished_name = Set.Make(struct
     let compare = compare_attribute Encoded_string.compare
   end)
 
-(* String encodings do not participate in name matching. *)
-module Matching_rdn = Set.Make(struct
-    type t = attribute
-    let compare = compare_attribute Encoded_string.compare_octets
-  end)
-
-let matching_rdn rdn =
-  Relative_distinguished_name.fold Matching_rdn.add rdn Matching_rdn.empty
+let compare_attribute_for_matching a b =
+  match a, b with
+  (* Unknown attributes have no known string matching rule. *)
+  | Other _, Other _ -> compare_attribute Encoded_string.compare a b
+  | _ -> compare_attribute Encoded_string.compare_for_matching a b
 
 (* TODO: each RDN should be a non-empty set. *)
 type t = Relative_distinguished_name.t list
 
 let equal a b =
   List.length a = List.length b &&
-  List.for_all2 (fun a b -> Matching_rdn.equal (matching_rdn a) (matching_rdn b)) a b
+  List.for_all2 Relative_distinguished_name.equal a b
+
+let matches a b =
+  let attributes rdn =
+    List.sort compare_attribute_for_matching (Relative_distinguished_name.elements rdn)
+  in
+  let rdn_matches a b =
+    Relative_distinguished_name.cardinal a = Relative_distinguished_name.cardinal b &&
+    List.for_all2 (fun a b -> compare_attribute_for_matching a b = 0)
+      (attributes a) (attributes b)
+  in
+  List.length a = List.length b && List.for_all2 rdn_matches a b
 
 let make_pp_rdn ?osf ?(spacing = `Tight) () =
   let ava_sep, ava_equal =
