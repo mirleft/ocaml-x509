@@ -315,28 +315,33 @@ let first_wildcard_certs =
     Utils.cert ~now ~ca_key ~priv:first_priv ~serial ~name exts ca_name
   in
   [
-  ( "first-wildcard-subjaltname",
+  ( "first-wildcard-subjaltname", true,
     exts
       ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
       ~names:[ "*.foobar.com" ] () |>
     sign (Utils.cn "wildcard.foobar.com"),
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
+  ( "first-wildcard", false,
+    exts
+      ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ] () |>
+    sign (Utils.cn "*.foobar.com"),
+    [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 
 let first_wildcard_cert_tests =
   List.mapi
-    (fun i (_name, cert, us, eus) ->
+    (fun i (_name, _valid, cert, us, eus) ->
      "wildcard certificate property testing " ^ string_of_int i, `Quick, test_cert cert us eus)
     first_wildcard_certs
 
 let first_wildcard_cert_ca_test (ca, x) =
   List.flatten
     (List.map
-       (fun (_name, c, _, _) ->
+       (fun (_name, valid, c, _, _) ->
         ("verification CA " ^ x ^ " cn blablbalbala", `Quick, test_valid_ca_cert c [] false "blablabalbal" [ca]) ::
         List.mapi (fun i cn ->
                    "wildcard certificate CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
-                   `Quick, test_valid_ca_cert c [] true cn [ca])
+                   `Quick, test_valid_ca_cert c [] valid cn [ca])
                   [ "foo.foobar.com" ; "bar.foobar.com" ; "www.foobar.com" ] @
         List.mapi (fun i cn ->
                    "wildcard certificate CA " ^ x ^ " and CN " ^ cn ^ " " ^ string_of_int i,
@@ -345,7 +350,24 @@ let first_wildcard_cert_ca_test (ca, x) =
        )
     first_wildcard_certs)
 
-let im_name =   [ Distinguished_name.(Relative_distinguished_name.singleton (CN (Common_name.v "signing CA"))) ]
+let first_no_san host cert () =
+  let anchors = [ cacert ]
+  and full_chain = [ cert ]
+  in
+  match Validation.verify_chain_of_trust ~time ~allowed_hashes ~host ~anchors full_chain with
+  | Ok _   -> Alcotest.fail "expected to fail, but didn't"
+  | Error `LeafInvalidName _ -> ()
+  | Error _ -> Alcotest.fail "expected to fail with invalidname, but didn't"
+
+let no_san_tests =
+  let _, _, cert, _, _, _ = List.find (fun (name, _, _, _, _, _) -> String.equal "first-no-san" name) first_certs in
+  let _, _, wc, _, _ = List.hd (List.tl first_wildcard_certs) in
+  [
+    "no san results in leafinvalidname", `Quick, first_no_san (Some (host "no-san.foobar.com")) cert;
+    "no san in wildcard also invalidname", `Quick, first_no_san (Some (host "no-san.foobar.com")) wc ;
+  ]
+
+let im_name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN (Common_name.v "signing CA"))) ]
 
 let im_priv =
     Result.get_ok
@@ -580,6 +602,7 @@ let x509_tests = [
   "CA tests with certificate", ca_tests first_cert_ca_test ;
   "Wildcard certificate", first_wildcard_cert_tests ;
   "CA tests with wildcard certificate", ca_tests first_wildcard_cert_ca_test ;
+  "No SAN tests", no_san_tests ;
   "Second certificate test", second_cert_tests ;
   "Intermediate CA with second certificate", im_ca_tests second_cert_ca_test ;
   "Intermediate CA with CA and second", im_ca_tests second_wildcard_cert_ca_test ;
