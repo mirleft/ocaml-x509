@@ -1,7 +1,5 @@
 open X509
 
-open Utils
-
 let host name = Domain_name.host_exn (Domain_name.of_string_exn name)
 
 let now = Ptime_clock.now ()
@@ -19,7 +17,7 @@ let ca_key =
 MC4CAQAwBQYDK2VwBCIEIEFPEg8sz2fIPOnLVeW3L5iZG3D95r+4dbiS3Uhtiwnc
 -----END PRIVATE KEY-----|})
 
-let ca_name = cn "cacert"
+let ca_name = Utils.cn "cacert"
 
 let serial = "hello123"
 
@@ -30,7 +28,7 @@ let invalid_cas =
       Extension.(add Basic_constraints (true, (false, None))
                    (singleton Key_usage (true, ku)))
     in
-    selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
+    Utils.selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
   and unknown_critical_ext =
     let ca_exts =
       let ku = [ `Key_cert_sign ; `CRL_sign ] in
@@ -39,14 +37,14 @@ let invalid_cas =
                    (add Basic_constraints (true, (true, Some 100))
                       (singleton Key_usage (true, ku))))
     in
-    selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
+    Utils.selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
   and keyusage_crlsign =
     let ca_exts =
       let ku = [ `CRL_sign ] in
       Extension.(add Basic_constraints (true, (true, None))
                    (singleton Key_usage (true, ku)))
     in
-    selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
+    Utils.selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
   and ext_keyusage_timestamping =
     let ca_exts =
       let ku = [ `Key_cert_sign ; `CRL_sign ] in
@@ -55,21 +53,21 @@ let invalid_cas =
                    (add Basic_constraints (true, (true, None))
                       (singleton Key_usage (true, ku))))
     in
-    selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
+    Utils.selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
   and expired =
     let ca_exts =
       let ku = [ `Key_cert_sign ; `CRL_sign ] in
       Extension.(add Basic_constraints (true, (false, None))
                    (singleton Key_usage (true, ku)))
     in
-    selfsigned ~now:an_hour_ago ~priv:ca_key ~serial ~name:ca_name ca_exts
+    Utils.selfsigned ~now:an_hour_ago ~priv:ca_key ~serial ~name:ca_name ca_exts
   and not_yet_valid =
     let ca_exts =
       let ku = [ `Key_cert_sign ; `CRL_sign ] in
       Extension.(add Basic_constraints (true, (false, None))
                    (singleton Key_usage (true, ku)))
     in
-    selfsigned ~now:an_hour_ahead ~priv:ca_key ~serial ~name:ca_name ca_exts
+    Utils.selfsigned ~now:an_hour_ahead ~priv:ca_key ~serial ~name:ca_name ca_exts
   in
   [ ca_false ; unknown_critical_ext ; keyusage_crlsign ; ext_keyusage_timestamping ; expired ; not_yet_valid ]
 
@@ -88,7 +86,7 @@ let cacert =
     Extension.(add Basic_constraints (true, (true, Some 100))
                  (singleton Key_usage (true, ku)))
   in
-  selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
+  Utils.selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
 
 let cacert_pathlen0 =
   let ca_exts =
@@ -96,7 +94,7 @@ let cacert_pathlen0 =
     Extension.(add Basic_constraints (true, (true, Some 0))
                  (singleton Key_usage (true, ku)))
   in
-  selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
+  Utils.selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
 
 let cacert_ext =
   let ca_exts =
@@ -106,7 +104,7 @@ let cacert_ext =
                  (add Basic_constraints (true, (true, None))
                     (singleton Key_usage (true, ku))))
   in
-  selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
+  Utils.selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
 
 let cacert_ext_ku =
   let ca_exts =
@@ -116,7 +114,7 @@ let cacert_ext_ku =
                  (add Basic_constraints (true, (true, None))
                     (singleton Key_usage (true, ku))))
   in
-  selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
+  Utils.selfsigned ~now ~priv:ca_key ~serial ~name:ca_name ca_exts
 
 let test_valid_ca c () =
   Alcotest.(check int "CA is valid" 1
@@ -161,21 +159,21 @@ MC4CAQAwBQYDK2VwBCIEIBCBOR2Olzdb/2ddbpWD3z+n53Qzn7xWcJLkBAmZHNLV
 (* ok, now some real certificates *)
 let first_certs =
   let sign ?(now = now) name exts =
-    cert ~now ~ca_key ~priv:first_priv ~serial ~name exts ca_name
+    Utils.cert ~now ~ca_key ~priv:first_priv ~serial ~name exts ca_name
   in
   [
     ( "first", true,
       exts
         ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
         ~names:[ "foo.foobar.com" ; "foobar.com" ] () |>
-      sign (cn "bar.foobar.com"),
+      sign (Utils.cn "bar.foobar.com"),
       [ "foo.foobar.com" ; "foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       None );
     ( "first-no-san", true,
       exts
         ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ] () |>
-      sign (cn "no-san.foobar.com"),
+      sign (Utils.cn "no-san.foobar.com"),
       [ "no-san.foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       None );
@@ -184,7 +182,7 @@ let first_certs =
         ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
         ~more:(Extension.B (Basic_constraints, (false, (true, None))))
         ~names:[ "ca.foobar.com" ] () |>
-      sign (cn "ca.foobar.com"),
+      sign (Utils.cn "ca.foobar.com"),
       [ "ca.foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       None );
@@ -193,7 +191,7 @@ let first_certs =
         ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
         ~names:[ "ext.foobar.com" ]
         ~eku:[`Time_stamping] () |>
-      sign (cn "ext.foobar.com"),
+      sign (Utils.cn "ext.foobar.com"),
       [ "ext.foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       Some [ `Time_stamping ] );
@@ -202,7 +200,7 @@ let first_certs =
         ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
         ~names:[ "any.foobar.com" ]
         ~eku:[`Time_stamping ; `Any] () |>
-      sign (cn "any.foobar.com"),
+      sign (Utils.cn "any.foobar.com"),
       [ "any.foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       Some [ `Time_stamping ; `Any ] );
@@ -210,7 +208,7 @@ let first_certs =
       exts
         ~ku:[ `Content_commitment ]
         ~names:[ "key.foobar.com" ] () |>
-      sign (cn "key.foobar.com"),
+      sign (Utils.cn "key.foobar.com"),
       [ "key.foobar.com" ],
       [ `Content_commitment ],
       None );
@@ -219,7 +217,7 @@ let first_certs =
         ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
         ~names:[ "foo.foobar.com" ; "foobar.com" ]
         ~more:(Extension.B (Unsupported (Option.get (Asn.OID.of_string "1.2.3.4")), (true, "Some random data"))) () |>
-      sign (cn "blafasel.com"),
+      sign (Utils.cn "blafasel.com"),
       [ "foo.foobar.com" ; "foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       None );
@@ -229,7 +227,7 @@ let first_certs =
         ~names:[ "foobar.com" ]
         ~more:(Extension.B (Unsupported (Option.get (Asn.OID.of_string "1.2.3.4")), (false, "Some random data")))
         () |>
-      sign (cn "blafasel.com"),
+      sign (Utils.cn "blafasel.com"),
       [ "foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       None );
@@ -238,7 +236,7 @@ let first_certs =
         ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
         ~names:[ "foobar.com" ]
         () |>
-      sign ~now:an_hour_ago (cn "foobar.com"),
+      sign ~now:an_hour_ago (Utils.cn "foobar.com"),
       [ "foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       None );
@@ -247,7 +245,7 @@ let first_certs =
         ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
         ~names:[ "foobar.com" ]
         () |>
-      sign ~now:an_hour_ahead (cn "foobar.com"),
+      sign ~now:an_hour_ahead (Utils.cn "foobar.com"),
       [ "foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       None );
@@ -314,19 +312,19 @@ let ca_tests f =
 
 let first_wildcard_certs =
   let sign name exts =
-    cert ~now ~ca_key ~priv:first_priv ~serial ~name exts ca_name
+    Utils.cert ~now ~ca_key ~priv:first_priv ~serial ~name exts ca_name
   in
   [
   ( "first-wildcard-subjaltname",
     exts
       ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
       ~names:[ "*.foobar.com" ] () |>
-    sign (cn "wildcard.foobar.com"),
+    sign (Utils.cn "wildcard.foobar.com"),
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
   ( "first-wildcard",
     exts
       ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ] () |>
-    sign (cn "*.foobar.com"),
+    sign (Utils.cn "*.foobar.com"),
     [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 
@@ -361,9 +359,9 @@ MC4CAQAwBQYDK2VwBCIEICXhHhrw5qaoj8EbY37Hzi5ni6nXa2kIGNinCvjT4rhM
 -----END PRIVATE KEY-----|})
 
 let intermediate_cas =
-  let name = cn "signing CA" in
+  let name = Utils.cn "signing CA" in
   let sign ?(now = now) exts =
-    cert ~now ~ca_key ~priv:im_priv ~serial ~name exts ca_name
+    Utils.cert ~now ~ca_key ~priv:im_priv ~serial ~name exts ca_name
   in
   [
     (true, sign Extension.(add Basic_constraints (true, (true, None)) (singleton Key_usage (false, [`Key_cert_sign; `CRL_sign])))) ;
@@ -387,7 +385,7 @@ MC4CAQAwBQYDK2VwBCIEID1tIgjIqM2gFu+7kNfu+8TW+5Vug0nAHtuyMgPkKnT+
 -----END PRIVATE KEY-----|})
   in
   let sign ?(now = now) name exts =
-    cert ~now ~ca_key:im_priv ~priv:second_priv ~serial ~name exts im_name
+    Utils.cert ~now ~ca_key:im_priv ~priv:second_priv ~serial ~name exts im_name
   in
   let other_name = [ Distinguished_name.(Relative_distinguished_name.singleton (O (Organization_name.v "tada"))) ] in
   [
@@ -395,14 +393,14 @@ MC4CAQAwBQYDK2VwBCIEID1tIgjIqM2gFu+7kNfu+8TW+5Vug0nAHtuyMgPkKnT+
      exts
        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        ~names:[ "second.foobar.com" ] ()
-     |> sign (cn "second.foobar.com"),
+     |> sign (Utils.cn "second.foobar.com"),
      [ "second.foobar.com" ],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
      None ) ;
     ("second-no-san", true,
      exts
        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
-       () |> sign (cn "second.foobar.com"),
+       () |> sign (Utils.cn "second.foobar.com"),
      [ "second.foobar.com" ],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
      None ) ;
@@ -411,7 +409,7 @@ MC4CAQAwBQYDK2VwBCIEID1tIgjIqM2gFu+7kNfu+8TW+5Vug0nAHtuyMgPkKnT+
        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        ~names:[ "second.foobar.com" ]
        ~eku:[ `Any ] () |>
-     sign (cn "second.foobar.com"),
+     sign (Utils.cn "second.foobar.com"),
      [ "second.foobar.com" ],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
      Some [ `Any ] ) ;
@@ -419,7 +417,7 @@ MC4CAQAwBQYDK2VwBCIEID1tIgjIqM2gFu+7kNfu+8TW+5Vug0nAHtuyMgPkKnT+
      exts
        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        ~names:[ "foobar.com" ; "foo.foobar.com" ] () |>
-     sign (cn "second.foobar.com"),
+     sign (Utils.cn "second.foobar.com"),
      [ "foobar.com" ; "foo.foobar.com" ],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
      None ) ;
@@ -429,33 +427,33 @@ MC4CAQAwBQYDK2VwBCIEID1tIgjIqM2gFu+7kNfu+8TW+5Vug0nAHtuyMgPkKnT+
        ~names:[ "second.foobar.com" ]
        ~more:(Extension.B (Unsupported (Option.get (Asn.OID.of_string "1.2.3.4")), (false, "Some random data")))
        () |>
-     sign (cn "second.foobar.com"),
+     sign (Utils.cn "second.foobar.com"),
      [ "second.foobar.com" ],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
     ("second-nonrepud", true,
      exts ~ku:[ `Content_commitment ] ~names:[ "second.foobar.com" ] () |>
-     sign (cn "second.foobar.com"),
+     sign (Utils.cn "second.foobar.com"),
      [ "second.foobar.com" ], [ `Content_commitment ], None ) ;
     ("second-time", true,
      exts
        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        ~eku:[ `Time_stamping ]
        ~names:[ "second.foobar.com" ]
-       () |> sign (cn "second.foobar.com"),
+       () |> sign (Utils.cn "second.foobar.com"),
        [ "second.foobar.com" ],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
      Some [ `Time_stamping ]) ;
     ("second-subj-wild", true,
      exts ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        ~names:[ "*.foobar.com" ; "foo.foobar.com" ]
-       () |> sign (cn "second.foobar.com"),
+       () |> sign (Utils.cn "second.foobar.com"),
      [ "foo.foobar.com" ; "bar.foobar.com" ; "baz.foobar.com" ],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
     ("second-bc-true", false,
      exts ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        ~names:[ "second.foobar.com" ]
        ~more:(Extension.B (Basic_constraints, (true, (true, None)))) () |>
-     sign (cn "second.foobar.com"),
+     sign (Utils.cn "second.foobar.com"),
      [ "second.foobar.com" ],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
     ("second-unknown", false,
@@ -464,7 +462,7 @@ MC4CAQAwBQYDK2VwBCIEID1tIgjIqM2gFu+7kNfu+8TW+5Vug0nAHtuyMgPkKnT+
        ~names:[ "second.foobar.com" ]
        ~more:(Extension.B (Unsupported (Option.get (Asn.OID.of_string "1.2.3.4")), (true, "Some random data")))
        () |>
-     sign (cn "second.foobar.com"),
+     sign (Utils.cn "second.foobar.com"),
      [ "second.foobar.com" ],
      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
     ("second-no-cn", false,
@@ -478,19 +476,19 @@ MC4CAQAwBQYDK2VwBCIEID1tIgjIqM2gFu+7kNfu+8TW+5Vug0nAHtuyMgPkKnT+
        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        ~more:(Extension.B (Subject_alt_name, (false, General_name.(singleton Rfc_822 [ "foobar.com" ]))))
        () |>
-     sign (cn "second.foobar.com"),
+     sign (Utils.cn "second.foobar.com"),
      [], [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
     ("second-expired", false,
      exts
        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        () |>
-     sign ~now:an_hour_ago (cn "second.foobar.com"),
+     sign ~now:an_hour_ago (Utils.cn "second.foobar.com"),
      [], [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
     ("second-not-yet-valid", false,
      exts
        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
        () |>
-     sign ~now:an_hour_ahead (cn "second.foobar.com"),
+     sign ~now:an_hour_ahead (Utils.cn "second.foobar.com"),
      [], [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 

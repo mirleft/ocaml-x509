@@ -1,28 +1,26 @@
 open X509
 
-open Utils
-
 let time () = None
 
 (* some revocation scenarios to convince myself *)
 let verify () =
   let now = Ptime_clock.now () in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv (ca_exts ()) in
-  let _, priv = key () in
-  let cert = cert ~now ~ca_key:capriv ~priv leaf_exts (Certificate.subject ca) in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv (Utils.ca_exts ()) in
+  let _, priv = Utils.key () in
+  let cert = Utils.cert ~now ~ca_key:capriv ~priv Utils.leaf_exts (Certificate.subject ca) in
   match Validation.verify_chain ~host:None ~time ~anchors:[ca] [cert] with
   | Ok _ -> ()
   | Error _ -> Alcotest.fail "expected verification to succeed"
 
 let crl () =
   let now = Ptime_clock.now () in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv (ca_exts ()) in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv (Utils.ca_exts ()) in
   let serial = "\x42" in
   let issuer = Certificate.subject ca in
-  let _, priv = key () in
-  let cert = cert ~now ~ca_key:capriv ~priv ~serial leaf_exts issuer in
+  let _, priv = Utils.key () in
+  let cert = Utils.cert ~now ~ca_key:capriv ~priv ~serial Utils.leaf_exts issuer in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] capriv with
@@ -36,28 +34,28 @@ let crl () =
 
 let verify' () =
   let now = Ptime_clock.now () in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv (ca_exts ()) in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv (Utils.ca_exts ()) in
   let serial = "\x42" in
   let issuer = Certificate.subject ca in
-  let _, impriv = key () in
-  let ica = cert ~now ~ca_key:capriv ~priv:impriv ~name:(cn "subCA") ~serial (ca_exts ()) issuer in
-  let _, priv = key () in
-  let cert = cert ~now ~ca_key:impriv ~priv leaf_exts (Certificate.subject ica) in
+  let _, impriv = Utils.key () in
+  let ica = Utils.cert ~now ~ca_key:capriv ~priv:impriv ~name:(Utils.cn "subCA") ~serial (Utils.ca_exts ()) issuer in
+  let _, priv = Utils.key () in
+  let cert = Utils.cert ~now ~ca_key:impriv ~priv Utils.leaf_exts (Certificate.subject ica) in
   match Validation.verify_chain ~host:None ~time ~anchors:[ca] [cert ; ica] with
   | Ok _ -> ()
   | Error _ -> Alcotest.fail "expected verification!"
 
 let crl' () =
   let now = Ptime_clock.now () in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv (ca_exts ()) in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv (Utils.ca_exts ()) in
   let serial = "\x42" in
   let issuer = Certificate.subject ca in
-  let _, impriv = key () in
-  let ica = cert ~now ~ca_key:capriv ~priv:impriv ~name:(cn "subCA") ~serial (ca_exts ()) issuer in
-  let _, priv = key () in
-  let cert = cert ~now ~ca_key:impriv ~priv leaf_exts (Certificate.subject ica) in
+  let _, impriv = Utils.key () in
+  let ica = Utils.cert ~now ~ca_key:capriv ~priv:impriv ~name:(Utils.cn "subCA") ~serial (Utils.ca_exts ()) issuer in
+  let _, priv = Utils.key () in
+  let cert = Utils.cert ~now ~ca_key:impriv ~priv Utils.leaf_exts (Certificate.subject ica) in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] capriv with
@@ -71,14 +69,14 @@ let crl' () =
 
 let crl'leaf () =
   let now = Ptime_clock.now () in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv (ca_exts ()) in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv (Utils.ca_exts ()) in
   let serial = "\x42" in
-  let _, impriv = key () in
-  let ica = cert ~now ~ca_key:capriv ~priv:impriv ~name:(cn "subCA") (ca_exts ()) (Certificate.subject ca) in
+  let _, impriv = Utils.key () in
+  let ica = Utils.cert ~now ~ca_key:capriv ~priv:impriv ~name:(Utils.cn "subCA") (Utils.ca_exts ()) (Certificate.subject ca) in
   let issuer = Certificate.subject ica in
-  let _, priv = key () in
-  let cert = cert ~now ~ca_key:impriv ~priv ~serial leaf_exts issuer in
+  let _, priv = Utils.key () in
+  let cert = Utils.cert ~now ~ca_key:impriv ~priv ~serial Utils.leaf_exts issuer in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] impriv with
@@ -92,14 +90,14 @@ let crl'leaf () =
 
 let crl'leaf'wrong () =
   let now = Ptime_clock.now () in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv (ca_exts ()) in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv (Utils.ca_exts ()) in
   let serial = "\x42" in
   let issuer = Certificate.subject ca in
-  let _, impriv = key () in
-  let ica = cert ~now ~ca_key:capriv ~priv:impriv ~name:(cn "subCA") (ca_exts ()) issuer in
-  let _, priv = key () in
-  let cert = cert ~now ~ca_key:impriv ~priv ~serial leaf_exts (Certificate.subject ica) in
+  let _, impriv = Utils.key () in
+  let ica = Utils.cert ~now ~ca_key:capriv ~priv:impriv ~name:(Utils.cn "subCA") (Utils.ca_exts ()) issuer in
+  let _, priv = Utils.key () in
+  let cert = Utils.cert ~now ~ca_key:impriv ~priv ~serial Utils.leaf_exts (Certificate.subject ica) in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] impriv with
@@ -112,14 +110,14 @@ let crl'leaf'wrong () =
 
 let verify'' () =
   let now = Ptime_clock.now () in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv (ca_exts ()) in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv (Utils.ca_exts ()) in
   let serial = "\x42" in
   let issuer = Certificate.subject ca in
-  let _, impriv = key () in
-  let ica = cert ~now ~ca_key:capriv ~priv:impriv ~name:(cn "subCA") (ca_exts ()) issuer in
-  let _, priv = key () in
-  let cert = cert ~now ~ca_key:impriv ~priv leaf_exts (Certificate.subject ica) in
+  let _, impriv = Utils.key () in
+  let ica = Utils.cert ~now ~ca_key:capriv ~priv:impriv ~name:(Utils.cn "subCA") (Utils.ca_exts ()) issuer in
+  let _, priv = Utils.key () in
+  let cert = Utils.cert ~now ~ca_key:impriv ~priv Utils.leaf_exts (Certificate.subject ica) in
   let revoked = { CRL.serial ; date = now ; extensions = Extension.empty } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in
   match CRL.revoke ~issuer ~this_update:now ~extensions [revoked] capriv with
@@ -132,14 +130,14 @@ let verify'' () =
 
 let crl'' () =
   let now = Ptime_clock.now () in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv (ca_exts ()) in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv (Utils.ca_exts ()) in
   let serial = "\x42" in
   let issuer = Certificate.subject ca in
-  let _, impriv = key () in
-  let ica = cert ~now ~ca_key:capriv ~priv:impriv ~name:(cn "subCA") ~serial (ca_exts ()) issuer in
-  let _, priv = key () in
-  let cert = cert ~now ~ca_key:impriv ~priv leaf_exts (Certificate.subject ica) in
+  let _, impriv = Utils.key () in
+  let ica = Utils.cert ~now ~ca_key:capriv ~priv:impriv ~name:(Utils.cn "subCA") ~serial (Utils.ca_exts ()) issuer in
+  let _, priv = Utils.key () in
+  let cert = Utils.cert ~now ~ca_key:impriv ~priv Utils.leaf_exts (Certificate.subject ica) in
   let extensions = Extension.(singleton Reason (false, `Remove_from_CRL)) in
   let revoked = { CRL.serial ; date = now ; extensions } in
   let extensions = Extension.(singleton CRL_number (false, 1)) in

@@ -1,7 +1,5 @@
 open X509
 
-open Utils
-
 let mmap file =
   let ic = open_in file in
   let ln = in_channel_length ic in
@@ -668,33 +666,33 @@ let hostname_tests = [
 
 let dns_subject_alt_names names =
   let names = General_name.singleton General_name.DNS names in
-  Extension.add Extension.Subject_alt_name (false, names) leaf_exts
+  Extension.add Extension.Subject_alt_name (false, names) Utils.leaf_exts
 
 let dns_name_constraints ~permitted ~excluded =
   let subtrees names =
     List.map (fun name -> General_name.B (General_name.DNS, [name]), 0, None) names
   in
   Extension.add Extension.Name_constraints
-    (true, (subtrees permitted, subtrees excluded)) (ca_exts ())
+    (true, (subtrees permitted, subtrees excluded)) (Utils.ca_exts ())
 
 let name_constraints_union () =
   let now = Ptime_clock.now () in
   let extensions =
     dns_name_constraints ~permitted:["example.com" ; "example.net"] ~excluded:[]
   in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv extensions in
-  let _, priv = key () in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv extensions in
+  let _, priv = Utils.key () in
   List.iter (fun name ->
       let example =
-        cert ~now ~ca_key:capriv ~priv ~name:(cn name) leaf_exts (Certificate.subject ca)
+        Utils.cert ~now ~ca_key:capriv ~priv ~name:(Utils.cn name) Utils.leaf_exts (Certificate.subject ca)
       in
       match Validation.verify_chain ~host:None ~time ~anchors:[ca] [example] with
       | Ok _ -> ()
       | Error _ -> Alcotest.fail "expected permitted name to validate")
     ["www.example.com" ; "www.example.net"] ;
   let other =
-    cert ~now ~ca_key:capriv ~priv ~name:(cn "www.other.org") leaf_exts (Certificate.subject ca)
+    Utils.cert ~now ~ca_key:capriv ~priv ~name:(Utils.cn "www.other.org") Utils.leaf_exts (Certificate.subject ca)
   in
   match Validation.verify_chain ~host:None ~time ~anchors:[ca] [other] with
   | Error (`Msg "domain name is not permitted") -> ()
@@ -706,14 +704,14 @@ let name_constraints_all_dns_names () =
   let extensions =
     dns_name_constraints ~permitted:["example.com" ; "example.net"] ~excluded:[]
   in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv extensions in
-  let _, priv = key () in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv extensions in
+  let _, priv = Utils.key () in
   List.iter (fun (names, allowed) ->
       let extensions = dns_subject_alt_names names in
       let leaf =
-        cert ~now ~ca_key:capriv ~priv ~name:(cn "unused.invalid") extensions
-          (Certificate.subject ca)
+        Utils.cert ~now ~ca_key:capriv ~priv ~name:(Utils.cn "unused.invalid")
+          extensions (Certificate.subject ca)
       in
       match Validation.verify_chain ~host:None ~time ~anchors:[ca] [leaf], allowed with
       | Ok _, true -> ()
@@ -731,13 +729,13 @@ let name_constraints_excluded () =
     dns_name_constraints ~permitted:["example.com" ; "example.net"]
       ~excluded:["blocked.example.com"]
   in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv extensions in
-  let _, priv = key () in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv extensions in
+  let _, priv = Utils.key () in
   List.iter (fun (name, allowed) ->
       let extensions = dns_subject_alt_names [name] in
       let leaf =
-        cert ~now ~ca_key:capriv ~priv extensions (Certificate.subject ca)
+        Utils.cert ~now ~ca_key:capriv ~priv extensions (Certificate.subject ca)
       in
       match Validation.verify_chain ~host:None ~time ~anchors:[ca] [leaf], allowed with
       | Ok _, true -> ()
@@ -755,21 +753,21 @@ let name_constraints_chain () =
   and intermediate_extensions =
     dns_name_constraints ~permitted:["example.com" ; "example.org"] ~excluded:[]
   in
-  let _, root_priv = key () in
+  let _, root_priv = Utils.key () in
   let root =
-    selfsigned ~now ~priv:root_priv ~name:(cn "root") root_extensions
+    Utils.selfsigned ~now ~priv:root_priv ~name:(Utils.cn "root") root_extensions
   in
-  let _, intermediate_priv = key () in
+  let _, intermediate_priv = Utils.key () in
   let intermediate =
-    cert ~now ~ca_key:root_priv ~priv:intermediate_priv
-      ~name:(cn "intermediate") intermediate_extensions
+    Utils.cert ~now ~ca_key:root_priv ~priv:intermediate_priv
+      ~name:(Utils.cn "intermediate") intermediate_extensions
       (Certificate.subject root)
   in
-  let _, priv = key () in
+  let _, priv = Utils.key () in
   List.iter (fun (name, allowed) ->
       let extensions = dns_subject_alt_names [name] in
       let leaf =
-        cert ~now ~ca_key:intermediate_priv ~priv extensions
+        Utils.cert ~now ~ca_key:intermediate_priv ~priv extensions
           (Certificate.subject intermediate)
       in
       match Validation.verify_chain ~host:None ~time ~anchors:[root]
@@ -790,16 +788,16 @@ let ip_name_constraints_union () =
       ["c0000200ffffff00" ; "c6336400ffffff00"]
   in
   let extensions =
-    Extension.add Extension.Name_constraints (true, (permitted, [])) (ca_exts ())
+    Extension.add Extension.Name_constraints (true, (permitted, [])) (Utils.ca_exts ())
   in
-  let _, capriv = key () in
-  let ca = selfsigned ~now ~priv:capriv extensions in
-  let _, priv = key () in
+  let _, capriv = Utils.key () in
+  let ca = Utils.selfsigned ~now ~priv:capriv extensions in
+  let _, priv = Utils.key () in
   let verify addresses =
     let names = General_name.singleton General_name.IP (List.map Ohex.decode addresses) in
-    let extensions = Extension.add Extension.Subject_alt_name (false, names) leaf_exts in
+    let extensions = Extension.add Extension.Subject_alt_name (false, names) Utils.leaf_exts in
     let leaf =
-      cert ~now ~ca_key:capriv ~priv extensions (Certificate.subject ca)
+      Utils.cert ~now ~ca_key:capriv ~priv extensions (Certificate.subject ca)
     in
     Validation.verify_chain ~host:None ~time ~anchors:[ca] [leaf]
   in
