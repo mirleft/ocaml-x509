@@ -218,29 +218,14 @@ let supports_keytype c t =
 
 let extensions { asn = cert ; _ } = cert.tbs_cert.extensions
 
-(* RFC 6125, 6.4.4:
-   Therefore, if and only if the presented identifiers do not include a
-   DNS-ID, SRV-ID, URI-ID, or any application-specific identifier types
-   supported by the client, then the client MAY as a last resort check
-   for a string whose form matches that of a fully qualified DNS domain
-   name in a Common Name field of the subject field (i.e., a CN-ID).  If
-   the client chooses to compare a reference identifier of type CN-ID
-   against that string, it MUST follow the comparison rules for the DNS
-   domain name portion of an identifier of type DNS-ID, SRV-ID, or
-   URI-ID, as described under Section 6.4.1, Section 6.4.2, and
-   Section 6.4.3. *)
+(* RFC 9525, Section 2:
+
+   The Common Name RDN MUST NOT be used to identify a service because it is not
+   strongly typed (it is essentially free-form text) and therefore suffers from
+   ambiguities in interpretation. *)
 let hostnames { asn = cert ; _ } =
-  let subj =
-    match Distinguished_name.common_name cert.tbs_cert.subject with
-    | None -> Host.Set.empty
-    | Some x ->
-      match Host.host (Distinguished_name.Common_name.to_string x) with
-      | Some (wild, d) -> Host.Set.singleton (wild, d)
-      | None -> Host.Set.empty
-  in
-  match Extension.hostnames cert.tbs_cert.extensions with
-  | Some names -> names
-  | None -> subj
+  Option.value ~default:Host.Set.empty
+    (Extension.hostnames cert.tbs_cert.extensions)
 
 let supports_hostname cert name =
   let names = hostnames cert in

@@ -662,10 +662,9 @@ module Certificate : sig
     (Key_type.signature_scheme * Digestif.hash') option
 
   (** [hostnames certficate] is the set of domain names this
-      [certificate] is valid for.  Currently, these are the DNS names of the
+      [certificate] is valid for. These are the DNS names of the
       {{:https://tools.ietf.org/html/rfc5280#section-4.2.1.6}Subject Alternative Name}
-      extension, if present, or otherwise the singleton set containing the common
-      name of the certificate subject. *)
+      extension. *)
   val hostnames : t -> Host.Set.t
 
   (** [supports_hostname certificate hostname] is [result], whether the
