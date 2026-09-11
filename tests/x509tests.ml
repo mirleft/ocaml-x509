@@ -1,10 +1,14 @@
 open X509
 
-let time () = None
-
 let host name = Domain_name.host_exn (Domain_name.of_string_exn name)
 
 let now = Ptime_clock.now ()
+
+let an_hour_ago = Option.get (Ptime.sub_span now (Ptime.Span.of_int_s 3600))
+
+let an_hour_ahead = Option.get (Ptime.add_span now (Ptime.Span.of_int_s 3600))
+
+let time () = Some now
 
 let ca_key =
   Result.get_ok
@@ -17,9 +21,8 @@ let ca_name =
   [ Distinguished_name.(Relative_distinguished_name.singleton (CN (Common_name.v "cacert"))) ]
 
 let validity now =
-  match Ptime.add_span now (Ptime.Span.of_int_s 3600) with
-  | Some fut -> (now, fut)
-  | None -> invalid_arg "couldn't add 3600 seconds to now"
+  Option.get (Ptime.sub_span now (Ptime.Span.of_int_s 10)),
+  Option.get (Ptime.add_span now (Ptime.Span.of_int_s 10))
 
 let ca_exts ?pathlen () =
   let ku =
@@ -28,7 +31,7 @@ let ca_exts ?pathlen () =
   Extension.(add Basic_constraints (true, (true, pathlen))
                (singleton Key_usage (true, ku)))
 
-let selfsigned ?(priv = ca_key) ?(name = ca_name) extensions =
+let selfsigned ?(priv = ca_key) ?(name = ca_name) ?(now = now) extensions =
   match Signing_request.create name priv with
   | Error _ -> assert false
   | Ok req ->
@@ -37,7 +40,7 @@ let selfsigned ?(priv = ca_key) ?(name = ca_name) extensions =
     | Ok cacert -> cacert
     | Error _ -> assert false
 
-let signed ?(ca_key = ca_key) ?(ca_name = ca_name) priv name extensions =
+let signed ?(now = now) ?(ca_key = ca_key) ?(ca_name = ca_name) priv name extensions =
   let name = [ Distinguished_name.(Relative_distinguished_name.singleton (CN (Common_name.v name))) ] in
   match Signing_request.create name priv with
   | Error _ -> assert false
@@ -85,8 +88,22 @@ let invalid_cas =
                       (singleton Key_usage (true, ku))))
     in
     selfsigned ca_exts
+  and expired =
+    let ca_exts =
+      let ku = [ `Key_cert_sign ; `CRL_sign ] in
+      Extension.(add Basic_constraints (true, (false, None))
+                   (singleton Key_usage (true, ku)))
+    in
+    selfsigned ~now:an_hour_ago ca_exts
+  and not_yet_valid =
+    let ca_exts =
+      let ku = [ `Key_cert_sign ; `CRL_sign ] in
+      Extension.(add Basic_constraints (true, (false, None))
+                   (singleton Key_usage (true, ku)))
+    in
+    selfsigned ~now:an_hour_ahead ca_exts
   in
-  [ ca_false ; unknown_critical_ext ; keyusage_crlsign ; ext_keyusage_timestamping ]
+  [ ca_false ; unknown_critical_ext ; keyusage_crlsign ; ext_keyusage_timestamping ; expired ; not_yet_valid ]
 
 let test_invalid_ca c () =
   Alcotest.(check int "CA list is empty" 0
@@ -133,9 +150,6 @@ let cacert_ext_ku =
   in
   selfsigned ca_exts
 
-(*let cacert_v1 () =
-  selfsigned ~name:"cacert v1" ~extensions:Extension.empty now *)
-
 let test_valid_ca c () =
   Alcotest.(check int "CA is valid" 1
               (List.length (Validation.valid_cas [c])))
@@ -144,7 +158,6 @@ let valid_ca_tests = [
   "valid CA cacert", `Quick, test_valid_ca cacert;
   "valid CA cacert_pathlen0", `Quick, test_valid_ca cacert_pathlen0;
   "valid CA cacert_ext", `Quick, test_valid_ca cacert_ext;
-  (*  "valid CA cacert_v1", `Quick, test_valid_ca (cacert_v1 ()) *)
 ]
 
 let exts ?ku ?eku ?names ?more () =
@@ -250,6 +263,24 @@ let first_certs =
       [ "foobar.com" ],
       [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
       None );
+    ( "first-expired", false,
+      exts
+        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
+        ~names:[ "foobar.com" ]
+        () |>
+      signed ~now:an_hour_ago first_priv "foobar.com",
+      [ "foobar.com" ],
+      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
+      None );
+    ( "first-not-yet-valid", false,
+      exts
+        ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
+        ~names:[ "foobar.com" ]
+        () |>
+      signed ~now:an_hour_ahead first_priv "foobar.com",
+      [ "foobar.com" ],
+      [ `Digital_signature ; `Content_commitment ; `Key_encipherment ],
+      None );
   ]
 
 let allowed_hashes = [ `MD5 ; `SHA1 ; `SHA224 ; `SHA256 ; `SHA384 ; `SHA512 ]
@@ -309,8 +340,7 @@ let ca_tests f =
                          [ (cacert, "cacert") ;
                            (cacert_pathlen0, "cacert_pathlen0") ;
                            (cacert_ext, "cacert_ext") ;
-                           (cacert_ext_ku, "cacert_ext_ku") ;
-                           (*(cacert_v1, "cacert_v1") *) ])
+                           (cacert_ext_ku, "cacert_ext_ku") ])
 
 let first_wildcard_certs = [
   ( "first-wildcard-subjaltname",
@@ -358,17 +388,18 @@ MC4CAQAwBQYDK2VwBCIEICXhHhrw5qaoj8EbY37Hzi5ni6nXa2kIGNinCvjT4rhM
 
 let intermediate_cas =
   let name = "signing CA" in
-  let signed exts = signed im_priv name exts in
+  let sign exts = signed im_priv name exts in
   [
-    (true, signed Extension.(add Basic_constraints (true, (true, None)) (singleton Key_usage (false, [`Key_cert_sign])))) ;
-    (true, signed Extension.(add Ext_key_usage (false, [`Any]) (add Basic_constraints (true, (true, None)) (singleton Key_usage (false, [`Key_cert_sign ; `CRL_sign]))))) ;
-    (false, signed Extension.(add Basic_constraints (true, (false, None)) (singleton Key_usage (false, [`Key_cert_sign; `CRL_sign])))) ;
-    (false, signed Extension.(singleton Key_usage (false, [`Key_cert_sign; `CRL_sign]))) ;
-    (false, signed Extension.(singleton Basic_constraints (true, (true, None)))) ;
-    (true, signed Extension.(add Basic_constraints (true, (true, None)) (singleton Key_usage (true, [`Key_cert_sign; `CRL_sign])))) ;
-    (false, signed Extension.(add Basic_constraints (true, (true, None)) (add Key_usage (false, [`Key_cert_sign; `CRL_sign]) (singleton Ext_key_usage (false, [`Time_stamping]))))) ;
-    (false, signed Extension.(add Basic_constraints (true, (true, None)) (add Key_usage (false, [`Key_cert_sign; `CRL_sign]) (singleton (Unsupported (Option.get (Asn.OID.of_string "1.2.3.4"))) (true, "Some random data")))))
-    (*  (false, "cacert-v1") *)
+    (true, sign Extension.(add Basic_constraints (true, (true, None)) (singleton Key_usage (false, [`Key_cert_sign; `CRL_sign])))) ;
+    (true, sign Extension.(add Ext_key_usage (false, [`Any]) (add Basic_constraints (true, (true, None)) (singleton Key_usage (false, [`Key_cert_sign ; `CRL_sign]))))) ;
+    (false, sign Extension.(add Basic_constraints (true, (false, None)) (singleton Key_usage (false, [`Key_cert_sign; `CRL_sign])))) ;
+    (false, sign Extension.(singleton Key_usage (false, [`Key_cert_sign; `CRL_sign]))) ;
+    (false, sign Extension.(singleton Basic_constraints (true, (true, None)))) ;
+    (true, sign Extension.(add Basic_constraints (true, (true, None)) (singleton Key_usage (true, [`Key_cert_sign; `CRL_sign])))) ;
+    (false, sign Extension.(add Basic_constraints (true, (true, None)) (add Key_usage (false, [`Key_cert_sign; `CRL_sign]) (singleton Ext_key_usage (false, [`Time_stamping]))))) ;
+    (false, sign Extension.(add Basic_constraints (true, (true, None)) (add Key_usage (false, [`Key_cert_sign; `CRL_sign]) (singleton (Unsupported (Option.get (Asn.OID.of_string "1.2.3.4"))) (true, "Some random data")))));
+    (false, signed ~now:an_hour_ago im_priv name Extension.(add Basic_constraints (true, (true, None)) (singleton Key_usage (false, [`Key_cert_sign; `CRL_sign])))) ;
+    (false, signed ~now:an_hour_ahead im_priv name Extension.(add Basic_constraints (true, (true, None)) (singleton Key_usage (false, [`Key_cert_sign; `CRL_sign])))) ;
 ]
 
 let second_certs =
@@ -471,6 +502,18 @@ MC4CAQAwBQYDK2VwBCIEID1tIgjIqM2gFu+7kNfu+8TW+5Vug0nAHtuyMgPkKnT+
        () |>
      sign "second.foobar.com",
      [], [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
+    ("second-expired", false,
+     exts
+       ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
+       () |>
+     signed ~now:an_hour_ago ~ca_key:im_priv ~ca_name:im_name second_priv "second.foobar.com",
+     [], [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
+    ("second-not-yet-valid", false,
+     exts
+       ~ku:[ `Digital_signature ; `Content_commitment ; `Key_encipherment ]
+       () |>
+     signed ~now:an_hour_ahead ~ca_key:im_priv ~ca_name:im_name second_priv "second.foobar.com",
+     [], [ `Digital_signature ; `Content_commitment ; `Key_encipherment ], None ) ;
 ]
 
 let second_cert_tests =
@@ -500,7 +543,6 @@ let im_ca_tests f =
                          [ (true, cacert, "cacert") ;
                            (true, cacert_ext, "cacert_ext") ;
                            (true, cacert_ext_ku, "cacert_ext_ku") ;
-                           (*(true, cacert_v1, "cacert_v1") ;*)
                            (false, cacert_pathlen0, "cacert_pathlen0") ])
 
 let second_wildcard_cert_ca_test (cavalid, ca, x) =
