@@ -11,20 +11,14 @@ open Asn_grammars
  * that handles unsupported algos anyway.
  *)
 
-type ec_curve =
-  [ `SECP256R1 | `SECP384R1 | `SECP521R1 ]
-
-let ec_curve_to_string = function
-  | `SECP256R1 -> "SECP256R1"
-  | `SECP384R1 -> "SECP384R1"
-  | `SECP521R1 -> "SECP521R1"
+let ec_curve_to_string = Dsa_curves.get_name
 
 type t =
 
   (* pk algos *)
   (* any more? is the universe big enough? ramsey's theorem for pk cyphers? *)
   | RSA
-  | EC_pub of ec_curve
+  | EC_pub of Dsa_curves.t
 
   (* sig algos *)
   | MD5_RSA
@@ -198,18 +192,12 @@ and of_signature_algorithm public_key_algorithm digest =
    Section 2.3.1 specifies rsaEncryption (for RSA public keys) requires null.
 *)
 
-let curve_of_oid, curve_to_oid =
-  let open Registry.ANSI_X9_62 in
-  (let default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid) in
-   case_of_oid ~default [
-     (secp256r1, `SECP256R1) ;
-     (secp384r1, `SECP384R1) ;
-     (secp521r1, `SECP521R1) ;
-   ]),
-  (function
-    | `SECP256R1 -> secp256r1
-    | `SECP384R1 -> secp384r1
-    | `SECP521R1 -> secp521r1)
+let curve_of_oid oid =
+  match Dsa_curves.find oid with
+  | Some c -> c
+  | None -> Asn.(S.parse_error "Unknown algorithm with OID %a" OID.pp oid)
+
+let curve_to_oid = Dsa_curves.get_oid
 
 let identifier =
   let open Registry in
@@ -239,7 +227,7 @@ let identifier =
     and octets f = function
       | Some (`C4 salt) -> f salt
       | _               -> parse_error "Algorithm: expected parameter octet_string"
-    and default oid = Asn.(S.parse_error "Unknown algorithm %a" OID.pp oid)
+    and default oid = Asn.(S.parse_error "Unknown algorithm with OID %a" OID.pp oid)
     in
 
     case_of_oid_f ~default [

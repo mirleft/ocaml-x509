@@ -1,23 +1,22 @@
 let ( let* ) = Result.bind
 
-type ecdsa = [
-  | `P256 of Mirage_crypto_ec.P256.Dsa.priv
-  | `P384 of Mirage_crypto_ec.P384.Dsa.priv
-  | `P521 of Mirage_crypto_ec.P521.Dsa.priv
-]
+type ecdsa = Ecdsa : {
+  curve : (module Dsa_curves.S with type Dsa.priv = 'priv);
+  priv : 'priv
+} -> ecdsa
 
 type t = [
-  ecdsa
   | `RSA of Mirage_crypto_pk.Rsa.priv
   | `ED25519 of Mirage_crypto_ec.Ed25519.priv
+  | `ECDSA of ecdsa
 ]
 
 let key_type = function
   | `RSA _ -> `RSA
   | `ED25519 _ -> `ED25519
-  | `P256 _ -> `P256
-  | `P384 _ -> `P384
-  | `P521 _ -> `P521
+  | `ECDSA Ecdsa k ->
+    let (module C) = k.curve in
+    `ECDSA ((module C) : Dsa_curves.t)
 
 let generate ?seed ?(bits = 4096) typ =
   let g = match seed with
@@ -27,9 +26,12 @@ let generate ?seed ?(bits = 4096) typ =
   match typ with
   | `RSA -> `RSA (Mirage_crypto_pk.Rsa.generate ?g ~bits ())
   | `ED25519 -> `ED25519 (fst (Mirage_crypto_ec.Ed25519.generate ?g ()))
-  | `P256 -> `P256 (fst (Mirage_crypto_ec.P256.Dsa.generate ?g ()))
-  | `P384 -> `P384 (fst (Mirage_crypto_ec.P384.Dsa.generate ?g ()))
-  | `P521 -> `P521 (fst (Mirage_crypto_ec.P521.Dsa.generate ?g ()))
+  | `ECDSA (module C : Dsa_curves.S) ->
+    let priv = Ecdsa {
+      curve = (module C);
+      priv = (fst (C.Dsa.generate ?g ()))
+     } in
+    `ECDSA priv
 
 let of_octets data =
   let open Mirage_crypto_ec in
@@ -43,15 +45,13 @@ let of_octets data =
   | `ED25519 ->
     let* k = ec_err (Ed25519.priv_of_octets data) in
     Ok (`ED25519 k)
-  | `P256 ->
-    let* k = ec_err (P256.Dsa.priv_of_octets data) in
-    Ok (`P256 k)
-  | `P384 ->
-    let* k = ec_err (P384.Dsa.priv_of_octets data) in
-    Ok (`P384 k)
-  | `P521 ->
-    let* k = ec_err (P521.Dsa.priv_of_octets data) in
-    Ok (`P521 k)
+  | `ECDSA (module C : Dsa_curves.S) ->
+    let* k = ec_err (C.Dsa.priv_of_octets data) in
+    let priv = Ecdsa {
+      curve = (module C);
+      priv = k
+    } in
+    Ok (`ECDSA priv)
 
 let of_string ?seed_or_data ?bits typ data =
   match seed_or_data with
@@ -71,9 +71,13 @@ let of_string ?seed_or_data ?bits typ data =
 let public = function
   | `RSA priv -> `RSA (Mirage_crypto_pk.Rsa.pub_of_priv priv)
   | `ED25519 priv -> `ED25519 (Mirage_crypto_ec.Ed25519.pub_of_priv priv)
-  | `P256 priv -> `P256 (Mirage_crypto_ec.P256.Dsa.pub_of_priv priv)
-  | `P384 priv -> `P384 (Mirage_crypto_ec.P384.Dsa.pub_of_priv priv)
-  | `P521 priv -> `P521 (Mirage_crypto_ec.P521.Dsa.pub_of_priv priv)
+  | `ECDSA Ecdsa k  ->
+    let (module Curve) = k.curve in
+    let pub = Public_key.Ecdsa {
+      curve = (module Curve);
+      pub = Curve.Dsa.pub_of_priv k.priv
+     } in
+    `ECDSA pub
 
 let sign hash ?scheme key data =
   let open Mirage_crypto_ec in
@@ -96,12 +100,11 @@ let sign hash ?scheme key data =
         | `Message m -> Ok (Ed25519.sign ~key m)
         | `Digest _ -> Error (`Msg "Ed25519 only suitable with raw message")
       end
-    | #ecdsa as key, `ECDSA ->
+    | `ECDSA (Ecdsa k), `ECDSA ->
       let* d = hashed () in
-      Ok (ecdsa_to_str (match key with
-          | `P256 key -> P256.Dsa.(sign ~key (Public_key.trunc byte_length d))
-          | `P384 key -> P384.Dsa.(sign ~key (Public_key.trunc byte_length d))
-          | `P521 key -> P521.Dsa.(sign ~key (Public_key.trunc byte_length d))))
+      let (module Curve) = k.curve in
+      let key = k.priv in
+      Ok (ecdsa_to_str (Curve.Dsa.(sign ~key (Public_key.trunc byte_length d))))
     | _ -> Error (`Msg "invalid key and signature scheme combination")
   with
   | Mirage_crypto_pk.Rsa.Insufficient_key ->
@@ -187,12 +190,14 @@ module Asn = struct
   let ec_of_str, ec_to_str =
     Asn_grammars.project_exn ec_private_key
 
-  let reparse_ec_private curve priv =
-    let open Mirage_crypto_ec in
-    match curve with
-    | `SECP256R1 -> let* p = P256.Dsa.priv_of_octets priv in Ok (`P256 p)
-    | `SECP384R1 -> let* p = P384.Dsa.priv_of_octets priv in Ok (`P384 p)
-    | `SECP521R1 -> let* p = P521.Dsa.priv_of_octets priv in Ok (`P521 p)
+  let reparse_ec_private (curve : Dsa_curves.t) priv =
+    let (module Curve) = curve in
+    let* p = Curve.Dsa.priv_of_octets priv in
+    let k = Ecdsa {
+      curve = (module Curve);
+      priv = p
+     } in
+    Ok (`ECDSA k)
 
   (* external use (result) *)
   let ec_priv_of_str =
@@ -235,9 +240,9 @@ module Asn = struct
       match p with
       | `RSA pk -> RSA, rsa_priv_to_str pk
       | `ED25519 pk -> ED25519, ed25519_to_str (Ed25519.priv_to_octets pk)
-      | `P256 pk -> EC_pub `SECP256R1, ec_to_str (P256.Dsa.priv_to_octets pk)
-      | `P384 pk -> EC_pub `SECP384R1, ec_to_str (P384.Dsa.priv_to_octets pk)
-      | `P521 pk -> EC_pub `SECP521R1, ec_to_str (P521.Dsa.priv_to_octets pk)
+      | `ECDSA Ecdsa k ->
+        let (module Curve) = k.curve in
+        EC_pub (module Curve), ec_to_str (Curve.Dsa.priv_to_octets k.priv)
     in
     (0, alg, cs)
 

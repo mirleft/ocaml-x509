@@ -1,5 +1,7 @@
 module Host = Host
 
+module Dsa_curves = Dsa_curves
+
 module Key_type = Key_type
 
 module Public_key = Public_key
