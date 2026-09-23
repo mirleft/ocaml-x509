@@ -334,6 +334,7 @@ type validation_error = [
   | fingerprint_validation_error
   | `EmptyCertificateChain
   | `InvalidChain
+  | `ChainTooDeep
 ]
 
 let pp_validation_error ppf = function
@@ -343,6 +344,7 @@ let pp_validation_error ppf = function
   | `EmptyCertificateChain ->
     Fmt.string ppf "provided certificate chain is empty"
   | `InvalidChain -> Fmt.string ppf "invalid certificate chain"
+  | `ChainTooDeep -> Fmt.string ppf "chain too deep"
 
 type r = ((Certificate.t list * Certificate.t) option, validation_error) result
 
@@ -552,19 +554,22 @@ let rec any_m e f = function
     | Ok ta -> Ok (Some (c, ta))
     | Error _ -> any_m e f cs
 
-let verify_chain_of_trust ?ip ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = function
+let verify_chain_of_trust ?(max_depth = 10) ?ip ~host ~time ?revoked ?(allowed_hashes = sha2) ~anchors = function
   | [] -> Error `EmptyCertificateChain
   | server :: certs ->
-    let now = time () in
-    (* verify server! *)
-    let* () = is_server_cert_valid ip host now server in
-    let hosts, ips = Certificate.hostnames server, Certificate.ips server in
-    (* build all paths *)
-    let paths = build_paths server certs
-    and anchors = List.filter (validate_time now) anchors
-    in
-    (* exists there one which is good? *)
-    any_m `InvalidChain (verify_single_chain now ?revoked allowed_hashes hosts ips anchors) paths
+    if List.length certs >= max_depth then
+      Error `ChainTooDeep
+    else
+      let now = time () in
+      (* verify server! *)
+      let* () = is_server_cert_valid ip host now server in
+      let hosts, ips = Certificate.hostnames server, Certificate.ips server in
+      (* build all paths *)
+      let paths = build_paths server certs
+      and anchors = List.filter (validate_time now) anchors
+      in
+      (* exists there one which is good? *)
+      any_m `InvalidChain (verify_single_chain now ?revoked allowed_hashes hosts ips anchors) paths
 
 let valid_cas ?(allowed_hashes = all_hashes) ?time cas =
   List.filter (fun cert ->
