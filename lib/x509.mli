@@ -1224,9 +1224,11 @@ module PKCS12 : sig
   (** [encode_der t] is [buf], the PKCS12 encoded archive of [t]. *)
   val encode_der : t -> string
 
-  (** [verify password t] verifies and decrypts the PKCS12 archive [t]. The
-      result is the contents of the archive. *)
-  val verify : string -> t ->
+  (** [verify ~max_iterations password t] verifies and decrypts the PKCS12
+      archive [t]. The result is the contents of the archive. The number of
+      iterations can be limited by [max_iterations] to limit CPU usage. By
+      default, the limit is 100_000. Use Int.max_int for it being unlimited. *)
+  val verify : ?max_iterations:int -> string -> t ->
     ([ `Certificate of Certificate.t | `Crl of CRL.t
      | `Private_key of Private_key.t | `Decrypted_private_key of Private_key.t ]
        list, [> `Msg of string ]) result
@@ -1235,7 +1237,7 @@ module PKCS12 : sig
       constructs a PKCS12 archive with [certificates] and [private_key]. They
       are encrypted with [algorithm] (using PBES2, PKCS5v2) and integrity
       protected using [mac]. A [local key id] is always embedded in the private
-      key and matching certificate. *)
+      key and matching certificate. The [iterations] defaults to 2048. *)
   val create : ?mac:[`SHA1 | `SHA224 | `SHA256 | `SHA384 | `SHA512 ] ->
     ?algorithm:[ `AES128_CBC | `AES192_CBC | `AES256_CBC ] ->
     ?iterations:int ->

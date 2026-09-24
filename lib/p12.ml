@@ -389,11 +389,19 @@ let password_decrypt password (algo, data) =
   | None -> Error (`Msg "no data to decrypt")
   | Some data -> decrypt algo password data
 
-let verify password (data, ((algorithm, digest), salt, iterations)) =
+let verify ?(max_iterations = 100_000) password (data, ((algorithm, digest), salt, iterations)) =
   let* hash =
     Option.to_result
       ~none:(`Msg "unsupported hash algorithm")
       (Algorithm.to_hash algorithm)
+  in
+  let* () =
+    if max_iterations >= iterations then
+      Ok ()
+    else
+      Error (`Msg ("iterations (" ^ string_of_int iterations ^
+                   ") exceeds maximum iterations (" ^
+                   string_of_int max_iterations ^ ")"))
   in
   let module Hash = (val (Digestif.module_of_hash' (hash :> Digestif.hash'))) in
   let key =
