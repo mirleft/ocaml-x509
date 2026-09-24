@@ -426,8 +426,21 @@ module Asn = struct
     map (List.map f) (List.map g) @@ sequence_of oid
 
   let basic_constraints =
-    map (fun (a, b) -> (Option.value ~default:false a, b))
-        (fun (a, b) -> ((if a = false then None else Some a), b))
+    map
+      (fun (a, b) ->
+         (match b with
+          | Some x when x < 0 -> parse_error "pathLen constraint must be non-negative"
+          | _ -> ());
+         Option.value ~default:false a, b)
+      (fun (a, b) ->
+         let b =
+           match b with
+           | Some x when x < 0 ->
+             Log.warn (fun m -> m "pathLen is negative %u, adjusting to None" x);
+             None
+           | x -> x
+         in
+         (if a = false then None else Some a), b)
     @@
     sequence2
       (optional ~label:"cA"      bool)
