@@ -60,11 +60,18 @@ module Asn = struct
   let tBSCertificate =
     let f = fun (a, (b, (c, (d, (e, (f, (g, (h, (i, j))))))))) ->
       let extn = match j with None -> Extension.empty | Some xs -> xs in
-      { version    = Option.value ~default:`V1 a ; serial     = b ;
-        signature  = c         ; issuer     = d ;
-        validity   = e         ; subject    = f ;
-        pk_info    = g         ; issuer_id  = h ;
-        subject_id = i         ; extensions = extn }
+      let version = Option.value ~default:`V1 a in
+      (match version, j with
+        | (`V1 | `V2), None -> ()
+        | `V3, _ -> ()
+        | (`V1 | `V2), Some _ ->
+          parse_error "version %u with extensions, must be version 3"
+            (match version with `V1 -> 1 | `V2 -> 2 | `V3 -> 3));
+      { version    = version ; serial     = b ;
+        signature  = c       ; issuer     = d ;
+        validity   = e       ; subject    = f ;
+        pk_info    = g       ; issuer_id  = h ;
+        subject_id = i       ; extensions = extn }
     and g = fun
       { version    = a ; serial     = b ;
         signature  = c ; issuer     = d ;
@@ -72,6 +79,14 @@ module Asn = struct
         pk_info    = g ; issuer_id  = h ;
         subject_id = i ; extensions = j } ->
       let extn = if Extension.is_empty j then None else Some j in
+      let extn = match a, extn with
+        | (`V1 | `V2), None -> None
+        | `V3, x -> x
+        | (`V1 | `V2), Some _ ->
+          Log.warn (fun m -> m "certificate with version %u, dropping extensions"
+                       (match a with `V1 -> 1 | `V2 -> 2 | `V3 -> 3));
+          None
+      in
       ((if a = `V1 then None else Some a),
        (b, (c, (d, (e, (f, (g, (h, (i, extn)))))))))
     in
