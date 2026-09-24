@@ -843,7 +843,6 @@ module Validation : sig
     | fingerprint_validation_error
     | `EmptyCertificateChain
     | `InvalidChain
-    | `ChainTooDeep
   ]
 
   (** [pp_validation_error ppf validation_error] pretty-prints the
@@ -852,20 +851,19 @@ module Validation : sig
 
   type r = ((Certificate.t list * Certificate.t) option, validation_error) result
 
-  (** [verify_chain_of_trust ~max_depth ~ip ~host ~time ~revoked ~allowed_hashes ~anchors certificates]
+  (** [verify_chain_of_trust ~ip ~host ~time ~revoked ~allowed_hashes ~anchors certificates]
       is [result].  First, all possible paths are constructed using the
       {!build_paths} function, the first certificate of the chain is verified to
       be a valid leaf certificate (no BasicConstraints extension) and contains
       the given [host] (using {!Certificate.hostnames}) or [ip] if specified
       (using {!Certificate.ips}; if some path is valid, using
       {!verify_chain}, the result will be [Ok] and contain the actual
-      certificate chain and the trust anchor. If the depth of the chain is above
-      [max_depth] (defaults to 10), the [`ChainTooDeep] error is returned.
+      certificate chain and the trust anchor.
 
       Note that the KeyUsage and ExtendedKeyUsage extensions are not restricted
       - they need to be checked by the client of the API! *)
   val verify_chain_of_trust :
-    ?max_depth:int -> ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
+    ?ip:Ipaddr.t -> host:[`host] Domain_name.t option ->
     time:(unit -> Ptime.t option) ->
     ?revoked:(issuer:Certificate.t -> cert:Certificate.t -> bool) ->
     ?allowed_hashes:Digestif.hash' list ->
